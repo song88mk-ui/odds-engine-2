@@ -1,12 +1,11 @@
 ﻿using Microsoft.Extensions.Hosting;
 using OE.Shared.Constants;
-using OE.Shared.Messages.OutgoingReceiverMessages;
-using OE.Shared.Utilities;
-using RabbitMQ.Client.Events;
-using System.Text.Json;
-using System.Text;
-using OE.Sportsbook.Service.Repositories;
 using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Utilities;
+using OE.Sportsbook.Service.Repositories;
+using RabbitMQ.Client.Events;
+using System.Text;
+using System.Text.Json;
 
 namespace OE.Sportsbook.Service
 {
@@ -67,11 +66,11 @@ namespace OE.Sportsbook.Service
                 {
                     case MessageType.ON_FIXTURE_CHANGE:
                         var onFixtureChangeMessage = JsonSerializer.Deserialize<OnFixtureChangeMessage>(payload);
-                        _sportsbookRepository.ProcessOnFixtureSetMessage(_messageBroker, onFixtureChangeMessage, correlationId);
+                        _sportsbookRepository.ProcessOnFixtureChangeMessage(_messageBroker, onFixtureChangeMessage, correlationId);
                         break;
                     case MessageType.ON_MARKET_CHANGE:
                         var onMarketChangeMessage = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
-                        _sportsbookRepository.ProcessOnMarketSetMessage(_messageBroker, onMarketChangeMessage, correlationId);
+                        _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, onMarketChangeMessage, correlationId);
                         break;
                 }
             }

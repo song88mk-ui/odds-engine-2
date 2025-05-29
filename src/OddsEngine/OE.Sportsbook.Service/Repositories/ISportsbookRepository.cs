@@ -5,7 +5,7 @@ namespace OE.Sportsbook.Service.Repositories
 {
     public interface ISportsbookRepository
     {
-        void ProcessOnFixtureSetMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId);
-        void ProcessOnMarketSetMessage(IMessageBroker messageBroker, OnMarketChangeMessage message, string correlationId);
+        void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId);
+        void ProcessOnMarketChangeMessage(IMessageBroker messageBroker, OnMarketChangeMessage message, string correlationId);
     }
 }
