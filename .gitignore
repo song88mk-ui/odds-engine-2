@@ -1,0 +1,11 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs
+/src/OddsEngine/.vs/OddsEngine/v17
+/src/OddsEngine/.vs/OddsEngine/FileContentIndex
+/src/OddsEngine/OE.Adapter.Service/obj
+/src/OddsEngine/OE.Shared/obj
+/src/OddsEngine/.vs
+/src/OddsEngine/OE.Sportsbook.Service/obj
