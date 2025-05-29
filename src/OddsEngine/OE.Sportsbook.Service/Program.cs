@@ -16,6 +16,7 @@ namespace OE.Sportsbook.Service
             Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
+                    services.AddSingleton<IMemCache, MemCache>();
                     services.AddSingleton<IMessageBroker, MessageBroker>();
                     services.AddSingleton<ISportsbookRepository, SportsbookRepository>();
 

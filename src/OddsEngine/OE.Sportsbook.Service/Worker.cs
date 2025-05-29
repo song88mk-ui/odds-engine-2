@@ -6,6 +6,7 @@ using RabbitMQ.Client.Events;
 using System.Text.Json;
 using System.Text;
 using OE.Sportsbook.Service.Repositories;
+using OE.Shared.Messages.OutgoingAdapterMessages;
 
 namespace OE.Sportsbook.Service
 {
@@ -64,13 +65,13 @@ namespace OE.Sportsbook.Service
 
                 switch (messageType)
                 {
-                    case MessageType.ON_FIXTURE_SET:
-                        var onFixtureSetMessage = JsonSerializer.Deserialize<OnFixtureSetMessage>(payload);
-                        _tradingRepository.ProcessOnFixtureSetMessage(_messageBroker, onFixtureSetMessage, correlationId);
+                    case MessageType.ON_FIXTURE_CHANGE:
+                        var onFixtureChangeMessage = JsonSerializer.Deserialize<OnFixtureChangeMessage>(payload);
+                        _sportsbookRepository.ProcessOnFixtureSetMessage(_messageBroker, onFixtureChangeMessage, correlationId);
                         break;
-                    case MessageType.ON_MARKET_SET:
-                        var onMarketSetMessage = JsonSerializer.Deserialize<OnMarketSetMessage>(payload);
-                        _tradingRepository.ProcessOnMarketSetMessage(_messageBroker, onMarketSetMessage, correlationId);
+                    case MessageType.ON_MARKET_CHANGE:
+                        var onMarketChangeMessage = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
+                        _sportsbookRepository.ProcessOnMarketSetMessage(_messageBroker, onMarketChangeMessage, correlationId);
                         break;
                 }
             }

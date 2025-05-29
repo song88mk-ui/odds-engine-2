@@ -5,7 +5,7 @@ namespace OE.Adapter.Service.Repositories
 {
     public interface ITradingRepository
     {
-        void ProcessOnFixtureSetMessage(IMessageBroker messageBroker, OnFixtureSetMessage payload, string correlationId);
-        void ProcessOnMarketSetMessage(IMessageBroker messageBroker, OnMarketSetMessage payload, string correlationId);
+        void ProcessOnFixtureSetMessage(IMessageBroker messageBroker, OnFixtureSetMessage message, string correlationId);
+        void ProcessOnMarketSetMessage(IMessageBroker messageBroker, OnMarketSetMessage message, string correlationId);
     }
 }
