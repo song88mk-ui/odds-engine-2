@@ -5,7 +5,6 @@ using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Data.Sportsbook.MongoDB.Projections;
 using OE.Shared.Enums;
 using OE.Shared.Messages.OutgoingAdapterMessages;
-using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
 
 namespace OE.Sportsbook.Service.Repositories
@@ -22,14 +21,12 @@ namespace OE.Sportsbook.Service.Repositories
 
         private IMongoCollection<BettingStatus> _bettingStatusCollection;
         private IMongoCollection<Fixture> _fixtureCollection;
-        private IMongoCollection<FixtureMapping> _fixtureMappingCollection;
         private IMongoCollection<Market> _marketCollection;
         private IMongoCollection<MarketMapping> _marketMappingCollection;
         private IMongoCollection<Selection> _selectionCollection;
         private IMongoCollection<SelectionMapping> _selectionMappingCollection;
 
-        private const string FIXTURE_PREFIX = "fima";
-        private const string FIXTURE_MAPPING_PREFIX = "fima";
+        private const string FIXTURE_PREFIX = "fi";
         private const string MARKET_MAPPING_PREFIX = "mama";
         private const string SELECTION_MAPPING_PREFIX = "sema";
 
@@ -54,14 +51,13 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
-            PreloadMapping(message.PrFiId);
+            PreloadMapping(message.ChTyId, message.PrFiId);
 
-            var fixtureGeneration = GetFixtureId(message.PrFiId);
+            var fixtureGeneration = GetFixtureId(message.ChTyId, message.PrFiId);
 
             message.FiId = fixtureGeneration.Item1;
             message.IsIn = fixtureGeneration.Item2;
 
-            BulkWrite(_fixtureMappingCollection, ToFixtureMapping(message));
             BulkWrite(_fixtureCollection, ToFixture(message));
         }
 
@@ -70,14 +66,14 @@ namespace OE.Sportsbook.Service.Repositories
             if (!message.Ma.Any())
                 return;
 
-            PreloadMapping(message.PrFiId);
+            PreloadMapping(message.ChTyId, message.PrFiId);
 
             foreach (var market in message.Ma)
             {
                 if (IsMarketInsertAndHasNoSelections(message.PrFiId, market.MaTeId, market.MaSp, market.Se))
                     continue;
 
-                var marketGeneration = GetMarketId(message.PrFiId, market.MaTeId, market.MaSp);
+                var marketGeneration = GetMarketId(message.ChTyId, message.PrFiId, market.MaTeId, market.MaSp);
 
                 market.MaId = marketGeneration.Item1;
                 market.IsIn = marketGeneration.Item2;
@@ -86,11 +82,13 @@ namespace OE.Sportsbook.Service.Repositories
 
                 foreach (var selection in market.Se)
                 {
-                    var selectionGeneration = GetSelectionId(message.PrFiId, market.MaTeId, selection.SeTeId, market.MaSp);
+                    var selectionGeneration = GetSelectionId(message.ChTyId, message.PrFiId, market.MaTeId, selection.SeTeId, market.MaSp);
 
                     selection.SeId = selectionGeneration.Item1;
                     selection.IsIn = selectionGeneration.Item2;
                 }
+
+                //TODO: ToMarketAndSelection
             }
 
             // TODO: Betstop Logic
@@ -109,7 +107,6 @@ namespace OE.Sportsbook.Service.Repositories
             var client = new MongoClient(_configuration["ConnectionStrings:MongoDB-Sportsbook"]);
             _db = client.GetDatabase("Sportsbook");
 
-            _fixtureMappingCollection = _db.GetCollection<FixtureMapping>("FixtureMapping");
             _marketMappingCollection = _db.GetCollection<MarketMapping>("MarketMapping");
             _selectionMappingCollection = _db.GetCollection<SelectionMapping>("SelectionMapping");
 
@@ -119,28 +116,29 @@ namespace OE.Sportsbook.Service.Repositories
             _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
         }
 
-        private void PreloadMapping(string providerFixtureId)
+        private void PreloadMapping(int chTyId, string providerFixtureId)
         {
             var expiration = DateTime.UtcNow.AddHours(6);
-            var fixtureMappingKey = $"{FIXTURE_MAPPING_PREFIX}:{providerFixtureId}";
+            var fixtureMappingKey = $"{FIXTURE_PREFIX}:{chTyId}:{providerFixtureId}";
 
-            var cache = _memCache.GetCache<FixtureMapping>(fixtureMappingKey);
+            var cache = _memCache.GetCache<Fixture>(fixtureMappingKey);
 
             if (cache != null)
                 return;
 
-            var fixtureMapping = GetFixtureMapping(providerFixtureId);
+            var fixtureMapping = GetFixtureMapping(chTyId, providerFixtureId);
 
             if (fixtureMapping == null)
                 return;
 
-            _memCache.AddOrUpdateCache(fixtureMappingKey, new FixtureMapping
+            _memCache.AddOrUpdateCache(fixtureMappingKey, new Fixture
             {
                 FiId = fixtureMapping.FiId,
-                PrFiId = providerFixtureId
+                PrFiId = providerFixtureId,
+                ChTyId = chTyId
             }, expiration);
 
-            var marketMappings = GetMarketMapping(providerFixtureId);
+            var marketMappings = GetMarketMapping(chTyId, providerFixtureId);
 
             foreach (var marketMapping in marketMappings)
             {
@@ -149,13 +147,14 @@ namespace OE.Sportsbook.Service.Repositories
                 _memCache.AddOrUpdateCache(marketMappingKey, new MarketMapping
                 {
                     MaId = marketMapping.MaId,
+                    ChTyId = chTyId,
                     PrFiId = providerFixtureId,
                     MaTeId = marketMapping.MaTeId,
                     MaSp = marketMapping.MaSp
                 }, expiration);
             }
 
-            var selectionMappings = GetSelectionMapping(providerFixtureId);
+            var selectionMappings = GetSelectionMapping(chTyId, providerFixtureId);
 
             foreach (var selection in selectionMappings)
             {
@@ -172,14 +171,14 @@ namespace OE.Sportsbook.Service.Repositories
             }
         }
 
-        private Tuple<long, bool> GetFixtureId(string providerFixtureId)
+        private Tuple<long, bool> GetFixtureId(int chTyId, string providerFixtureId)
         {
             var expiration = DateTime.UtcNow.AddHours(6);
-            var fixtureMappingKey = $"{FIXTURE_MAPPING_PREFIX}:{providerFixtureId}";
+            var fixtureMappingKey = $"{FIXTURE_PREFIX}:{chTyId}:{providerFixtureId}";
 
             Tuple<long, bool> fixture;
 
-            var cache = _memCache.GetCache<FixtureMapping>(fixtureMappingKey);
+            var cache = _memCache.GetCache<Fixture>(fixtureMappingKey);
 
             if (cache == null)
             {
@@ -187,10 +186,11 @@ namespace OE.Sportsbook.Service.Repositories
 
                 fixture = new Tuple<long, bool>(generatedId, true);
 
-                _memCache.AddOrUpdateCache(fixtureMappingKey, new FixtureMapping
+                _memCache.AddOrUpdateCache(fixtureMappingKey, new Fixture
                 {
                     FiId = generatedId,
-                    PrFiId = providerFixtureId
+                    PrFiId = providerFixtureId,
+                    ChTyId = chTyId
                 }, expiration);
             }
             else
@@ -201,10 +201,10 @@ namespace OE.Sportsbook.Service.Repositories
             return fixture;
         }
 
-        private Tuple<long, bool> GetMarketId(string providerFixtureId, string marketTemplateId, string marketSpecifier)
+        private Tuple<long, bool> GetMarketId(int chTyId, string providerFixtureId, string marketTemplateId, string marketSpecifier)
         {
             var expiration = DateTime.UtcNow.AddHours(6);
-            var marketMappingKey = $"{MARKET_MAPPING_PREFIX}:{providerFixtureId}:{marketTemplateId}:{marketSpecifier}";
+            var marketMappingKey = $"{MARKET_MAPPING_PREFIX}:{chTyId}:{providerFixtureId}:{marketTemplateId}:{marketSpecifier}";
 
             Tuple<long, bool> market;
 
@@ -231,10 +231,10 @@ namespace OE.Sportsbook.Service.Repositories
 
             return market;
         }
-        private Tuple<long, bool> GetSelectionId(string providerFixtureId, string marketTemplateId, string selectionTemplateId, string marketSpecifier)
+        private Tuple<long, bool> GetSelectionId(int chTyId, string providerFixtureId, string marketTemplateId, string selectionTemplateId, string marketSpecifier)
         {
             var expiration = DateTime.UtcNow.AddHours(6);
-            var selectionMappingKey = $"{SELECTION_MAPPING_PREFIX}:{providerFixtureId}:{marketTemplateId}:{selectionTemplateId}:{marketSpecifier}";
+            var selectionMappingKey = $"{SELECTION_MAPPING_PREFIX}:{chTyId}:{providerFixtureId}:{marketTemplateId}:{selectionTemplateId}:{marketSpecifier}";
 
             Tuple<long, bool> selection;
 
@@ -271,25 +271,28 @@ namespace OE.Sportsbook.Service.Repositories
             return _defaultIdGenerator.CreateId();
         }
 
-        private FixtureMapping GetFixtureMapping(string providerFixtureId)
+        private Fixture GetFixtureMapping(int chTyId, string providerFixtureId)
         {
-            var filter = Builders<FixtureMapping>.Filter.Eq("PrFiId", providerFixtureId);
-            var result = _fixtureMappingCollection.Find(filter).FirstOrDefault();
+            var filter = Builders<Fixture>.Filter.Eq(f => f.ChTyId, chTyId) &
+                         Builders<Fixture>.Filter.Eq(f => f.PrFiId, providerFixtureId);
+            var result = _fixtureCollection.Find(filter).FirstOrDefault();
 
             return result;
         }
 
-        private List<MarketMapping> GetMarketMapping(string providerFixtureId)
+        private List<MarketMapping> GetMarketMapping(int chTyId, string providerFixtureId)
         {
-            var filter = Builders<MarketMapping>.Filter.Eq("PrFiId", providerFixtureId);
+            var filter = Builders<MarketMapping>.Filter.Eq(f => f.ChTyId, chTyId) & 
+                         Builders<MarketMapping>.Filter.Eq("PrFiId", providerFixtureId);
             var result = _marketMappingCollection.Find(filter).ToList();
 
             return result;
         }
 
-        private List<SelectionMapping> GetSelectionMapping(string providerFixtureId)
+        private List<SelectionMapping> GetSelectionMapping(int chTyId, string providerFixtureId)
         {
-            var filter = Builders<SelectionMapping>.Filter.Eq("PrFiId", providerFixtureId);
+            var filter = Builders<SelectionMapping>.Filter.Eq(f => f.ChTyId, chTyId) & 
+                         Builders<SelectionMapping>.Filter.Eq("PrFiId", providerFixtureId);
             var result = _selectionMappingCollection.Find(filter).ToList();
 
             return result;
@@ -302,18 +305,6 @@ namespace OE.Sportsbook.Service.Repositories
             var result = _fixtureCollection.Find(filter).Project<FixtureProject>(project).FirstOrDefault();
 
             return result;
-        }
-
-        private WriteModel<FixtureMapping>[] ToFixtureMapping(OnFixtureChangeMessage message)
-        {
-            return new WriteModel<FixtureMapping>[]
-            {
-                new UpdateOneModel<FixtureMapping>(Builders<FixtureMapping>.Filter.Eq("FiId", message.FiId),
-                    Builders<FixtureMapping>.Update
-                        .Set(s => s.FiId, message.FiId)
-                        .Set(s => s.PrFiId, message.PrFiId))
-                { IsUpsert = true }
-            };
         }
 
         private WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)
@@ -359,71 +350,71 @@ namespace OE.Sportsbook.Service.Repositories
             };
         }
 
-        private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketChangeMessage message, string correlationId)
-        {
-            var markets = new List<WriteModel<Market>>();
-            var selections = new List<WriteModel<Selection>>();
+        //private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketChangeMessage message, string correlationId)
+        //{
+        //    var markets = new List<WriteModel<Market>>();
+        //    var selections = new List<WriteModel<Selection>>();
 
-            foreach (var market in message.Ma)
-            {
-                markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("MaId", market.MaId),
-                    Builders<Market>.Update
-                        .Set(s => s.MaId, market.MaId)
-                        .Set(s => s.SpId, message.SportId)
-                        .Set(s => s.SegId, message.SegmentId)
-                        .Set(s => s.LeId, message.LeagueId)
-                        .Set(s => s.FiId, message.FixtureId)
-                        .Set(s => s.MaTeId, market.MarketTemplateId)
-                        .Set(s => s.MaNa, market.MarketName)
-                        .Set(s => s.Li, market.Line)
-                        .Set(s => s.MaStId, (int)market.MarketStatus)
-                        .Set(s => s.MaStNa, market.MarketStatus.ToString())
-                        .Set(s => s.MaSoOr, market.SortOrder)
-                        .Set(s => s.FiStDa, message.FixtureStartDate)
-                        .Set(s => s.FiStId, message.FixtureStatusId)
-                        .Set(s => s.CaStId, (int)market.CashoutStatus)
-                        .Set(s => s.CaStNa, market.CashoutStatus.ToString())
-                        .Set(s => s.ClCo, market.ClientCodes)
-                        .Set(s => s.ClCoMa, market.ClientCodeMargin)
-                        .AddToSetEach(s => s.MaNaTr, market.MarketTranslations.Select(ss => new MarketTranslationMDB { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray()))
-                { IsUpsert = true });
+        //    foreach (var market in message.Ma)
+        //    {
+        //        markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("MaId", market.MaId),
+        //            Builders<Market>.Update
+        //                .Set(s => s.MaId, market.MaId)
+        //                .Set(s => s.SpId, message.SpId)
+        //                .Set(s => s.SegId, message.SegId)
+        //                .Set(s => s.LeId, message.LeId)
+        //                .Set(s => s.FiId, message.FixtureId)
+        //                .Set(s => s.MaTeId, market.MarketTemplateId)
+        //                .Set(s => s.MaNa, market.MarketName)
+        //                .Set(s => s.Li, market.Line)
+        //                .Set(s => s.MaStId, (int)market.MarketStatus)
+        //                .Set(s => s.MaStNa, market.MarketStatus.ToString())
+        //                .Set(s => s.MaSoOr, market.SortOrder)
+        //                .Set(s => s.FiStDa, message.FixtureStartDate)
+        //                .Set(s => s.FiStId, message.FixtureStatusId)
+        //                .Set(s => s.CaStId, (int)market.CashoutStatus)
+        //                .Set(s => s.CaStNa, market.CashoutStatus.ToString())
+        //                .Set(s => s.ClCo, market.ClientCodes)
+        //                .Set(s => s.ClCoMa, market.ClientCodeMargin)
+        //                .AddToSetEach(s => s.MaNaTr, market.MarketTranslations.Select(ss => new MarketTranslationMDB { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray()))
+        //        { IsUpsert = true });
 
-                foreach (var selection in market.Selections)
-                {
-                    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("SeId", selection.SelectionId),
-                        Builders<Selection>.Update
-                            .Set(s => s.SeId, selection.SelectionId)
-                            .Set(s => s.SpId, message.SportId)
-                            .Set(s => s.SegId, message.SegmentId)
-                            .Set(s => s.LeId, message.LeagueId)
-                            .Set(s => s.FiId, message.FixtureId)
-                            .Set(s => s.MaId, market.MarketId)
-                            .Set(s => s.MaTeId, market.MarketTemplateId)
-                            .Set(s => s.SeTeId, selection.SelectionTemplateId)
-                            .Set(s => s.SeNa, selection.SelectionName)
-                            .Set(s => s.Od, selection.Odds)
-                            .Set(s => s.IsAc, selection.IsActive)
-                            .Set(s => s.SeSoOr, selection.SortOrder)
-                            .Set(s => s.SeStId, 0)
-                            .Set(s => s.SeStNa, "Pending")
-                            .Set(s => s.SeSp, selection.SelectionSpecifier)
-                            .Set(s => s.FiStDa, message.FixtureStartDate)
-                            .Set(s => s.FiStId, message.FixtureStatusId)
-                            .Set(s => s.MaStId, (int)market.MarketStatus)
-                            .Set(s => s.CoId, correlationId)
-                            .Set(s => s.Pr, selection.Probability)
-                            .Set(s => s.WoPr, selection.WonProbability)
-                            .Set(s => s.LoPr, selection.LostProbability)
-                            .Set(s => s.VoPr, selection.VoidProbability)
-                            .Set(s => s.HaWoPr, selection.HalfWonProbability)
-                            .Set(s => s.HaLoPr, selection.HalfLostProbability)
-                            .AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray()))
-                    { IsUpsert = true });
-                }
-            }
+        //        foreach (var selection in market.Selections)
+        //        {
+        //            selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("SeId", selection.SelectionId),
+        //                Builders<Selection>.Update
+        //                    .Set(s => s.SeId, selection.SelectionId)
+        //                    .Set(s => s.SpId, message.SportId)
+        //                    .Set(s => s.SegId, message.SegmentId)
+        //                    .Set(s => s.LeId, message.LeagueId)
+        //                    .Set(s => s.FiId, message.FixtureId)
+        //                    .Set(s => s.MaId, market.MarketId)
+        //                    .Set(s => s.MaTeId, market.MarketTemplateId)
+        //                    .Set(s => s.SeTeId, selection.SelectionTemplateId)
+        //                    .Set(s => s.SeNa, selection.SelectionName)
+        //                    .Set(s => s.Od, selection.Odds)
+        //                    .Set(s => s.IsAc, selection.IsActive)
+        //                    .Set(s => s.SeSoOr, selection.SortOrder)
+        //                    .Set(s => s.SeStId, 0)
+        //                    .Set(s => s.SeStNa, "Pending")
+        //                    .Set(s => s.SeSp, selection.SelectionSpecifier)
+        //                    .Set(s => s.FiStDa, message.FixtureStartDate)
+        //                    .Set(s => s.FiStId, message.FixtureStatusId)
+        //                    .Set(s => s.MaStId, (int)market.MarketStatus)
+        //                    .Set(s => s.CoId, correlationId)
+        //                    .Set(s => s.Pr, selection.Probability)
+        //                    .Set(s => s.WoPr, selection.WonProbability)
+        //                    .Set(s => s.LoPr, selection.LostProbability)
+        //                    .Set(s => s.VoPr, selection.VoidProbability)
+        //                    .Set(s => s.HaWoPr, selection.HalfWonProbability)
+        //                    .Set(s => s.HaLoPr, selection.HalfLostProbability)
+        //                    .AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray()))
+        //            { IsUpsert = true });
+        //        }
+        //    }
 
-            return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
-        }
+        //    return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
+        //}
 
         private void BulkWrite<T>(IMongoCollection<T> collection, WriteModel<T>[] data)
         {

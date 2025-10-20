@@ -35,6 +35,7 @@ namespace OE.Adapter.Service.Repositories
         {
             var payload = new OnFixtureChangeMessage
             {
+                ChTyId = message.ChTyId,
                 PrFiId = message.FiId.ToString(),
                 SpId = message.SpId,
                 SpNa = message.SpNa,
