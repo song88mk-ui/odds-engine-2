@@ -65,12 +65,22 @@ namespace OE.Adapter.Service
                 switch (messageType)
                 {
                     case MessageType.ON_FIXTURE_SET:
-                        var onFixtureSetMessage = JsonSerializer.Deserialize<OnFixtureSetMessage>(payload);
-                        _tradingRepository.ProcessOnFixtureSetMessage(_messageBroker, onFixtureSetMessage, correlationId);
+                        ProcessMessage<OnFixtureSetMessage>(
+                            payload,
+                            (msg) => _tradingRepository.ProcessOnFixtureSetMessage(_messageBroker, msg, correlationId)
+                        );
                         break;
                     case MessageType.ON_MARKET_SET:
-                        var onMarketSetMessage = JsonSerializer.Deserialize<OnMarketSetMessage>(payload);
-                        _tradingRepository.ProcessOnMarketSetMessage(_messageBroker, onMarketSetMessage, correlationId);
+                        ProcessMessage<OnMarketSetMessage>(
+                            payload,
+                            (msg) => _tradingRepository.ProcessOnMarketSetMessage(_messageBroker, msg, correlationId)
+                        );
+                        break;
+                    case MessageType.ON_RESULT_SET:
+                        ProcessMessage<OnMarketSetMessage>(
+                            payload,
+                            (msg) => _tradingRepository.ProcessOnMarketSetMessage(_messageBroker, msg, correlationId)
+                        );
                         break;
                 }
             }
@@ -78,6 +88,17 @@ namespace OE.Adapter.Service
             {
                 Console.WriteLine(ex.Message);
                 Console.WriteLine(ex.StackTrace);
+            }
+        }
+
+        private void ProcessMessage<T>(string payload, Action<T> processor)
+        {
+            if (string.IsNullOrWhiteSpace(payload)) return;
+
+            var message = JsonSerializer.Deserialize<T>(payload);
+            if (message != null)
+            {
+                processor(message);
             }
         }
 
