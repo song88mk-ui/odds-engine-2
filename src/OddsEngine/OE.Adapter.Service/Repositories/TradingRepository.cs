@@ -93,12 +93,6 @@ namespace OE.Adapter.Service.Repositories
             {
                 PrFiId = providerFixtureId,
                 ChTyId = message.ChTyId,
-                SpId = message.SpId,
-                SpNa = message.SpNa,
-                SegId = message.SegId,
-                SegNa = message.SegNa,
-                LeId = message.LeId,
-                LeNa = message.LeNa,
                 Ma = message.Ma.Select(s => new ResultMarket()
                 {
                     MaId = s.MaId,
