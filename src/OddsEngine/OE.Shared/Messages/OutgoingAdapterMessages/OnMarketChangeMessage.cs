@@ -1,4 +1,5 @@
-﻿using OE.Shared.Messages.OutgoingAdapterMessages.Base;
+﻿using OE.Shared.Data.Sportsbook.MongoDB.Collections;
+using OE.Shared.Messages.OutgoingAdapterMessages.Base;
 using System.Collections.Generic;
 
 namespace OE.Shared.Messages.OutgoingAdapterMessages
@@ -22,7 +23,6 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string MaSp { get; set; }
         public string MaNa { get; set; }
         public int SoOr { get; set; }
-        public bool IsIn { get; set; }
         public string ClCo { get; set; }
         public string ClCoMa { get; set; }
         public List<SelectionMessage> Se { get; set; } = new List<SelectionMessage>();
@@ -46,7 +46,6 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string SeSp { get; set; }
         public string SeNa { get; set; }
         public int SoOr { get; set; }
-        public bool IsIn { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; } = new List<ClientOddsMessage>();
     }
 

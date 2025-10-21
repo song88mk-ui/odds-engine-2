@@ -1,7 +1,6 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
-using MongoDB.Driver.Core.Misc;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Data.Sportsbook.MongoDB.Projections;
 using OE.Shared.Enums;
@@ -52,11 +51,28 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
-            var fixtureMapping = PreloadMapping(message.ChTyId, message.PrFiId);
+            var expiration = DateTime.UtcNow.AddHours(6);
+            var fixtureMappingKey = $"{FIXTURE_PREFIX}:{message.ChTyId}:{message.PrFiId}";
 
-            if (fixtureMapping == null) return;
+            var (fixture, updateCache) = PreloadFixture(
+                message.ChTyId, 
+                message.PrFiId, 
+                fixtureMappingKey, 
+                expiration);
 
-            message.FiId = fixtureMapping.FiId;
+            if (fixture == null) return;
+
+            if (updateCache)
+            {
+                fixture.SpId = message.SpId;
+                fixture.SegId = message.SegId;
+                fixture.LeId = message.LeId;
+                fixture.FiStDa = message.FiStDa;
+
+                _memCache.AddOrUpdateCache(fixtureMappingKey, fixture, expiration);
+            }
+
+            message.FiId = fixture.FiId;
 
             BulkWrite(_fixtureCollection, ToFixture(message));
         }
@@ -66,34 +82,45 @@ namespace OE.Sportsbook.Service.Repositories
             if (!message.Ma.Any())
                 return;
 
-            PreloadMapping(message.ChTyId, message.PrFiId);
+            var expiration = DateTime.UtcNow.AddHours(6);
+            var fixtureMappingKey = $"{FIXTURE_PREFIX}:{message.ChTyId}:{message.PrFiId}";
+
+            var (fixture, updateCache) = PreloadFixture(
+                message.ChTyId, 
+                message.PrFiId,
+                fixtureMappingKey,
+                expiration, true);
+
+            if(fixture == null) return;
 
             foreach (var market in message.Ma)
             {
-                if (IsMarketInsertAndHasNoSelections(message.PrFiId, market.MaTeId, market.MaSp, market.Se))
+                var marketGeneration = GetMarketId(message.ChTyId, message.PrFiId, market.MaTeId, market.MaSp);
+                
+                if (marketGeneration.Item2 && market.Se.Count == 0)
                     continue;
 
-                var marketGeneration = GetMarketId(message.ChTyId, message.PrFiId, market.MaTeId, market.MaSp);
-
                 market.MaId = marketGeneration.Item1;
-                market.IsIn = marketGeneration.Item2;
 
                 var favorite = GetFavoriteTeam();
 
                 foreach (var selection in market.Se)
                 {
-                    var selectionGeneration = GetSelectionId(message.ChTyId, message.PrFiId, market.MaTeId, selection.SeTeId, market.MaSp);
-
-                    selection.SeId = selectionGeneration.Item1;
-                    selection.IsIn = selectionGeneration.Item2;
+                    selection.SeId = GetSelectionId(message.ChTyId, message.PrFiId, market.MaTeId, selection.SeTeId, market.MaSp);
                 }
-
-                //TODO: ToMarketAndSelection
             }
+
+            var data = ToMarketAndSelection(fixture, message, correlationId);
+
+            if (data.Item1.Length > 0)
+                BulkWrite(_marketCollection, data.Item1);
+
+            if (data.Item2.Length > 0)
+                BulkWrite(_selectionCollection, data.Item2);
 
             // TODO: Betstop Logic
 
-            var fixture = _memCache.GetCache($"{FIXTURE_PREFIX}:{message.PrFiId}", () => GetFixtureProject(message.PrFiId), 24);
+            //var fixture = _memCache.GetCache($"{FIXTURE_PREFIX}:{message.PrFiId}", () => GetFixtureProject(message.PrFiId), 24);
 
             // TODO: MongoDB Upsert
         }
@@ -116,105 +143,60 @@ namespace OE.Sportsbook.Service.Repositories
             _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
         }
 
-        private Fixture? PreloadMapping(int chTyId, string providerFixtureId)
-        {
-            var expiration = DateTime.UtcNow.AddHours(6);
-            var fixtureMappingKey = $"{FIXTURE_PREFIX}:{chTyId}:{providerFixtureId}";
-
-            var cache = _memCache.GetCache<Fixture>(fixtureMappingKey);
+        private (FixtureProject?, bool) PreloadFixture(int chTyId, string prFiId, string fixtureMappingKey, DateTime expiration, bool isPreloadOnly = false)
+        {            
+            var cache = _memCache.GetCache<FixtureProject>(fixtureMappingKey);
 
             if (cache != null)
-                return cache;
+                return (cache, false);
 
-            var fixtureMapping = GetFixtureMapping(chTyId, providerFixtureId);
+            var fixture = GetFixtureProject(chTyId, prFiId);
 
-            if (fixtureMapping == null)
+            if (fixture == null)
             {
-                var generatedId = GenerateId(providerFixtureId);
+                if(isPreloadOnly)
+                    return (null, false);
 
-                fixtureMapping = new Fixture
+                var generatedId = GenerateId(prFiId);
+
+                fixture = new FixtureProject
                 {
                     FiId = generatedId,
-                    PrFiId = providerFixtureId,
+                    PrFiId = prFiId,
                     ChTyId = chTyId
                 };
 
-                _memCache.AddOrUpdateCache(fixtureMappingKey, fixtureMapping, expiration);
-                return fixtureMapping;
+                return (fixture, true);
             }
 
-            _memCache.AddOrUpdateCache(fixtureMappingKey, fixtureMapping, expiration);
+            _memCache.AddOrUpdateCache(fixtureMappingKey, fixture, expiration);
 
+            return (fixture, false);
+        }
+
+        private void PreloadMapping(int chTyId, string providerFixtureId)
+        {
+            var expiration = DateTime.UtcNow.AddHours(6);
             var marketMappings = GetMarketMapping(chTyId, providerFixtureId);
 
             foreach (var marketMapping in marketMappings)
             {
-                var marketMappingKey = $"{MARKET_MAPPING_PREFIX}:{providerFixtureId}:{marketMapping.MaTeId}:{marketMapping.MaSp}";
-
-                _memCache.AddOrUpdateCache(marketMappingKey, new MarketMapping
-                {
-                    MaId = marketMapping.MaId,
-                    ChTyId = chTyId,
-                    PrFiId = providerFixtureId,
-                    MaTeId = marketMapping.MaTeId,
-                    MaSp = marketMapping.MaSp
-                }, expiration);
+                var marketMappingKey = $"{MARKET_MAPPING_PREFIX}:{chTyId}:{providerFixtureId}:{marketMapping.MaTeId}:{marketMapping.MaSp}";
+                _memCache.AddOrUpdateCache(marketMappingKey, marketMapping, expiration);
             }
 
             var selectionMappings = GetSelectionMapping(chTyId, providerFixtureId);
 
             foreach (var selection in selectionMappings)
             {
-                var selectionMappingKey = $"{SELECTION_MAPPING_PREFIX}:{providerFixtureId}:{selection.MaTeId}:{selection.SeTeId}:{selection.MaSp}";
-
-                _memCache.AddOrUpdateCache(selectionMappingKey, new SelectionMapping
-                {
-                    SeId = selection.SeId,
-                    PrFiId = providerFixtureId,
-                    MaTeId = selection.MaTeId,
-                    SeTeId = selection.SeTeId,
-                    MaSp = selection.MaSp
-                }, expiration);
+                var selectionMappingKey = $"{SELECTION_MAPPING_PREFIX}:{chTyId}:{providerFixtureId}:{selection.MaTeId}:{selection.SeTeId}:{selection.MaSp}";
+                _memCache.AddOrUpdateCache(selectionMappingKey, selection, expiration);
             }
-
-            return fixtureMapping;
-        }
-
-        private Tuple<long, bool> GetFixtureId(int chTyId, string providerFixtureId)
-        {
-            var expiration = DateTime.UtcNow.AddHours(6);
-            var fixtureMappingKey = $"{FIXTURE_PREFIX}:{chTyId}:{providerFixtureId}";
-
-            Tuple<long, bool> fixture;
-
-            var cache = _memCache.GetCache<Fixture>(fixtureMappingKey);
-
-            if (cache == null)
-            {
-                var generatedId = GenerateId(providerFixtureId);
-
-                fixture = new Tuple<long, bool>(generatedId, true);
-
-                _memCache.AddOrUpdateCache(fixtureMappingKey, new Fixture
-                {
-                    FiId = generatedId,
-                    PrFiId = providerFixtureId,
-                    ChTyId = chTyId
-                }, expiration);
-            }
-            else
-            {
-                fixture = new Tuple<long, bool>(cache.FiId, false);
-            }
-
-            return fixture;
         }
 
         private Tuple<long, bool> GetMarketId(int chTyId, string providerFixtureId, string marketTemplateId, string marketSpecifier)
         {
-            var expiration = DateTime.UtcNow.AddHours(6);
             var marketMappingKey = $"{MARKET_MAPPING_PREFIX}:{chTyId}:{providerFixtureId}:{marketTemplateId}:{marketSpecifier}";
-
             Tuple<long, bool> market;
 
             var result = _memCache.GetCache<MarketMapping>(marketMappingKey);
@@ -222,6 +204,7 @@ namespace OE.Sportsbook.Service.Repositories
             if (result == null)
             {
                 var generatedId = GenerateId(providerFixtureId);
+                var expiration = DateTime.UtcNow.AddHours(6);
 
                 market = new Tuple<long, bool>(generatedId, true);
 
@@ -240,20 +223,17 @@ namespace OE.Sportsbook.Service.Repositories
 
             return market;
         }
-        private Tuple<long, bool> GetSelectionId(int chTyId, string providerFixtureId, string marketTemplateId, string selectionTemplateId, string marketSpecifier)
+
+        private long GetSelectionId(int chTyId, string providerFixtureId, string marketTemplateId, string selectionTemplateId, string marketSpecifier)
         {
             var expiration = DateTime.UtcNow.AddHours(6);
             var selectionMappingKey = $"{SELECTION_MAPPING_PREFIX}:{chTyId}:{providerFixtureId}:{marketTemplateId}:{selectionTemplateId}:{marketSpecifier}";
-
-            Tuple<long, bool> selection;
 
             var result = _memCache.GetCache<SelectionMapping>(selectionMappingKey);
 
             if (result == null)
             {
                 var generatedId = GenerateId(providerFixtureId);
-
-                selection = new Tuple<long, bool>(generatedId, true);
 
                 _memCache.AddOrUpdateCache(selectionMappingKey, new SelectionMapping
                 {
@@ -263,13 +243,13 @@ namespace OE.Sportsbook.Service.Repositories
                     SeTeId = selectionTemplateId,
                     MaSp = marketSpecifier
                 }, expiration);
+
+                return generatedId;
             }
             else
             {
-                selection = new Tuple<long, bool>(result.SeId, false);
+                return result.SeId;
             }
-
-            return selection;
         }
 
         private long GenerateId(string providerFixtureId)
@@ -280,11 +260,21 @@ namespace OE.Sportsbook.Service.Repositories
             return _defaultIdGenerator.CreateId();
         }
 
-        private Fixture GetFixtureMapping(int chTyId, string providerFixtureId)
+        private FixtureProject GetFixtureProject(int chTyId, string providerFixtureId)
         {
             var filter = Builders<Fixture>.Filter.Eq(f => f.ChTyId, chTyId) &
                          Builders<Fixture>.Filter.Eq(f => f.PrFiId, providerFixtureId);
-            var result = _fixtureCollection.Find(filter).FirstOrDefault();
+            var project = Builders<Fixture>.Projection
+                            .Include(c => c.FiId)
+                            .Include(c => c.ChTyId)
+                            .Include(c => c.PrFiId)
+                            .Include(c => c.SpId)
+                            .Include(c => c.SegId)
+                            .Include(c => c.LeId)
+                            .Include(c => c.FiStDa)
+                            .Include(c => c.FiStId);
+
+            var result = _fixtureCollection.Find(filter).Project<FixtureProject>(project).FirstOrDefault();
 
             return result;
         }
@@ -303,15 +293,6 @@ namespace OE.Sportsbook.Service.Repositories
             var filter = Builders<SelectionMapping>.Filter.Eq(f => f.ChTyId, chTyId) & 
                          Builders<SelectionMapping>.Filter.Eq("PrFiId", providerFixtureId);
             var result = _selectionMappingCollection.Find(filter).ToList();
-
-            return result;
-        }
-
-        private FixtureProject GetFixtureProject(string providerFixtureId)
-        {
-            var filter = Builders<Fixture>.Filter.Eq("PrFiId", providerFixtureId);
-            var project = Builders<Fixture>.Projection.Include(c => c.PrFiId).Include(c => c.SpId).Include(c => c.SegId).Include(c => c.LeId);
-            var result = _fixtureCollection.Find(filter).Project<FixtureProject>(project).FirstOrDefault();
 
             return result;
         }
@@ -382,87 +363,82 @@ namespace OE.Sportsbook.Service.Repositories
             };
         }
 
-        //private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketChangeMessage message, string correlationId)
-        //{
-        //    var markets = new List<WriteModel<Market>>();
-        //    var selections = new List<WriteModel<Selection>>();
+        private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(FixtureProject fixture, OnMarketChangeMessage message, string correlationId)
+        {
+            var markets = new List<WriteModel<Market>>();
+            var selections = new List<WriteModel<Selection>>();
 
-        //    foreach (var market in message.Ma)
-        //    {
-        //        markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("MaId", market.MaId),
-        //            Builders<Market>.Update
-        //                .Set(s => s.MaId, market.MaId)
-        //                .Set(s => s.SpId, message.SpId)
-        //                .Set(s => s.SegId, message.SegId)
-        //                .Set(s => s.LeId, message.LeId)
-        //                .Set(s => s.FiId, message.FixtureId)
-        //                .Set(s => s.MaTeId, market.MarketTemplateId)
-        //                .Set(s => s.MaNa, market.MarketName)
-        //                .Set(s => s.Li, market.Line)
-        //                .Set(s => s.MaStId, (int)market.MarketStatus)
-        //                .Set(s => s.MaStNa, market.MarketStatus.ToString())
-        //                .Set(s => s.MaSoOr, market.SortOrder)
-        //                .Set(s => s.FiStDa, message.FixtureStartDate)
-        //                .Set(s => s.FiStId, message.FixtureStatusId)
-        //                .Set(s => s.CaStId, (int)market.CashoutStatus)
-        //                .Set(s => s.CaStNa, market.CashoutStatus.ToString())
-        //                .Set(s => s.ClCo, market.ClientCodes)
-        //                .Set(s => s.ClCoMa, market.ClientCodeMargin)
-        //                .AddToSetEach(s => s.MaNaTr, market.MarketTranslations.Select(ss => new MarketTranslationMDB { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray()))
-        //        { IsUpsert = true });
+            foreach (var market in message.Ma)
+            {
+                markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("MaId", market.MaId),
+                    Builders<Market>.Update
+                        .Set(s => s.MaId, market.MaId)
+                        .Set(s => s.ChTyId, message.ChTyId)
+                        .Set(s => s.SpId, fixture.SpId)
+                        .Set(s => s.SegId, fixture.SegId)
+                        .Set(s => s.LeId, fixture.LeId)
+                        .Set(s => s.FiId, fixture.FiId)
+                        .Set(s => s.MaTeId, market.MaTeId)
+                        .Set(s => s.MaNa, market.MaNa)
+                        .Set(s => s.Li, market.Li)
+                        .Set(s => s.MaStId, market.MaStId)
+                        .Set(s => s.MaStNa, market.MaStNa)
+                        .Set(s => s.MaSoOr, market.SoOr)
+                        .Set(s => s.FiStDa, fixture.FiStDa)
+                        .Set(s => s.FiStId, fixture.FiStId)
+                        .Set(s => s.CaStId, market.CaStId)
+                        .Set(s => s.CaStNa, market.CaStNa)
+                        .Set(s => s.ClCo, market.ClCo)
+                        .Set(s => s.ClCoMa, market.ClCoMa)
+                        //TODO
+                        //.AddToSetEach(s => s.MaNaTr, 
+                        //    market.MarketTranslations.Select(
+                        //        ss => new MarketTranslationMDB 
+                        //            { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray())
+                ) { IsUpsert = true });
 
-        //        foreach (var selection in market.Selections)
-        //        {
-        //            selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("SeId", selection.SelectionId),
-        //                Builders<Selection>.Update
-        //                    .Set(s => s.SeId, selection.SelectionId)
-        //                    .Set(s => s.SpId, message.SportId)
-        //                    .Set(s => s.SegId, message.SegmentId)
-        //                    .Set(s => s.LeId, message.LeagueId)
-        //                    .Set(s => s.FiId, message.FixtureId)
-        //                    .Set(s => s.MaId, market.MarketId)
-        //                    .Set(s => s.MaTeId, market.MarketTemplateId)
-        //                    .Set(s => s.SeTeId, selection.SelectionTemplateId)
-        //                    .Set(s => s.SeNa, selection.SelectionName)
-        //                    .Set(s => s.Od, selection.Odds)
-        //                    .Set(s => s.IsAc, selection.IsActive)
-        //                    .Set(s => s.SeSoOr, selection.SortOrder)
-        //                    .Set(s => s.SeStId, 0)
-        //                    .Set(s => s.SeStNa, "Pending")
-        //                    .Set(s => s.SeSp, selection.SelectionSpecifier)
-        //                    .Set(s => s.FiStDa, message.FixtureStartDate)
-        //                    .Set(s => s.FiStId, message.FixtureStatusId)
-        //                    .Set(s => s.MaStId, (int)market.MarketStatus)
-        //                    .Set(s => s.CoId, correlationId)
-        //                    .Set(s => s.Pr, selection.Probability)
-        //                    .Set(s => s.WoPr, selection.WonProbability)
-        //                    .Set(s => s.LoPr, selection.LostProbability)
-        //                    .Set(s => s.VoPr, selection.VoidProbability)
-        //                    .Set(s => s.HaWoPr, selection.HalfWonProbability)
-        //                    .Set(s => s.HaLoPr, selection.HalfLostProbability)
-        //                    .AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray()))
-        //            { IsUpsert = true });
-        //        }
-        //    }
+                foreach (var selection in market.Se)
+                {
+                    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("SeId", selection.SeId),
+                        Builders<Selection>.Update
+                            .Set(s => s.SeId, selection.SeId)
+                            .Set(s => s.ChTyId, message.ChTyId)
+                            .Set(s => s.SpId, fixture.SpId)
+                            .Set(s => s.SegId, fixture.SegId)
+                            .Set(s => s.LeId, fixture.LeId)
+                            .Set(s => s.FiId, fixture.FiId)
+                            .Set(s => s.MaId, market.MaId)
+                            .Set(s => s.MaTeId, market.MaTeId)
+                            .Set(s => s.SeTeId, selection.SeTeId)
+                            .Set(s => s.SeNa, selection.SeNa)
+                            .Set(s => s.Od, selection.Od)
+                            .Set(s => s.IsAc, selection.IsAc)
+                            //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
+                            //.Set(s => s.SeStId, 0)  TODO
+                            //.Set(s => s.SeStNa, "Pending")  TODO
+                            .Set(s => s.SeSp, selection.SeSp)
+                            .Set(s => s.FiStDa, fixture.FiStDa)
+                            .Set(s => s.FiStId, fixture.FiStId)
+                            .Set(s => s.MaStId, market.MaStId)
+                            .Set(s => s.CoId, correlationId)
+                            .Set(s => s.Pr, selection.Pr)
+                            .Set(s => s.WoPr, selection.WoPr)
+                            .Set(s => s.LoPr, selection.LoPr)
+                            .Set(s => s.VoPr, selection.VoPr)
+                            .Set(s => s.HaWoPr, selection.HaWoPr)
+                            .Set(s => s.HaLoPr, selection.HaLoPr)
+                            //TODO
+                            //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
+                    ) { IsUpsert = true });
+                }
+            }
 
-        //    return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
-        //}
+            return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
+        }
 
         private void BulkWrite<T>(IMongoCollection<T> collection, WriteModel<T>[] data)
         {
             collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
-        }
-
-        private bool IsMarketInsertAndHasNoSelections(string providerFixtureId, string marketTemplateId, string marketSpecifier, List<SelectionMessage> selections)
-        {
-            var marketMappingKey = $"{MARKET_MAPPING_PREFIX}:{providerFixtureId}:{marketTemplateId}:{marketSpecifier}";
-
-            var result = _memCache.GetCache<MarketMapping>(marketMappingKey);
-
-            if (result == null && selections.Count == 0)
-                return true;
-            else
-                return false;
         }
 
         private string GetFavoriteTeam()

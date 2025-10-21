@@ -66,8 +66,7 @@ namespace OE.Adapter.Service.Repositories
                 ClCo = "",
                 CoId = correlationId,
                 IsSu = message.IsSu,
-                IsBo = false,
-                IsIn = false
+                IsBo = false
             };
 
             PublishMessage(messageBroker, payload, MessageType.ON_FIXTURE_CHANGE, correlationId);
@@ -114,7 +113,6 @@ namespace OE.Adapter.Service.Repositories
                     SoOr = ma.MaTyId,
                     ClCo = "",
                     ClCoMa = "",
-                    IsIn = false,
                     Se = PrepareSelections(ma, providerFixtureId, marketTemplateId)
                 };
 
@@ -143,8 +141,7 @@ namespace OE.Adapter.Service.Repositories
                 IsAc = se.IsAc,
                 SeSp = "",
                 SeNa = se.SeNa,
-                SoOr = se.SeTeId,
-                IsIn = false
+                SoOr = se.SeTeId
             }).ToList();
         }
 

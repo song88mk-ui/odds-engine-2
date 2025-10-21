@@ -8,6 +8,7 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
     {
         [BsonId]
         public long SeId { get; set; }
+        public int ChTyId { get; set; }
         public int SpId { get; set; }
         public int SegId { get; set; }
         public int LeId { get; set; }
