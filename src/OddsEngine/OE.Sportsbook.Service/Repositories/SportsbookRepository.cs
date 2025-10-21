@@ -124,7 +124,12 @@ namespace OE.Sportsbook.Service.Repositories
 
             // TODO: MongoDB Upsert
         }
-
+        public void ProcessOnSettlementMessage(IMessageBroker messageBroker, OnSettlementChangeMessage message, string correlationId)
+        {
+            // Todo: update mongodb market status and selection status based on settlement message
+            
+            throw new NotImplementedException();
+        }
         #endregion
 
         #region Utilities

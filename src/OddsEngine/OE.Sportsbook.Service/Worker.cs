@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Hosting;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Messages.OutgoingReceiverMessages;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Repositories;
 using RabbitMQ.Client.Events;
@@ -65,22 +66,39 @@ namespace OE.Sportsbook.Service
                 switch (messageType)
                 {
                     case MessageType.ON_FIXTURE_CHANGE:
-                        var onFixtureChangeMessage = JsonSerializer.Deserialize<OnFixtureChangeMessage>(payload);
-                        _sportsbookRepository.ProcessOnFixtureChangeMessage(_messageBroker, onFixtureChangeMessage, correlationId);
+                        ProcessMessage<OnFixtureChangeMessage>(
+                            payload,
+                            (msg) => _sportsbookRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
+                        ); 
                         break;
                     case MessageType.ON_MARKET_CHANGE:
-                        var onMarketChangeMessage = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
-                        _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, onMarketChangeMessage, correlationId);
+                        ProcessMessage<OnMarketChangeMessage>(
+                            payload,
+                            (msg) => _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
+                        );
                         break;
-                        //TODO: case MessageType.ON_SETTLEMENT:
-                        //BASED ON OnResultSet
-
+                    case MessageType.ON_SETTLEMENT:
+                        ProcessMessage<OnSettlementChangeMessage>(
+                            payload,
+                            (msg) => _sportsbookRepository.ProcessOnSettlementMessage(_messageBroker, msg, correlationId)
+                        );
+                        break;
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
                 Console.WriteLine(ex.StackTrace);
+            }
+        }
+        private void ProcessMessage<T>(string payload, Action<T> processor)
+        {
+            if (string.IsNullOrWhiteSpace(payload)) return;
+
+            var message = JsonSerializer.Deserialize<T>(payload);
+            if (message != null)
+            {
+                processor(message);
             }
         }
 
