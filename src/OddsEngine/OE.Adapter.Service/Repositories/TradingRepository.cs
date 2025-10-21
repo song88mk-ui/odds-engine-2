@@ -35,6 +35,7 @@ namespace OE.Adapter.Service.Repositories
         {
             var payload = new OnFixtureChangeMessage
             {
+                ChTyId = message.ChTyId,
                 PrFiId = message.FiId.ToString(),
                 SpId = message.SpId,
                 SpNa = message.SpNa,
@@ -89,10 +90,16 @@ namespace OE.Adapter.Service.Repositories
         {
             var providerFixtureId = message.FiId.ToString();
 
-            var payload = new OnResultChangeMessage()
+            var payload = new OnSettlementChangeMessage()
             {
                 PrFiId = providerFixtureId,
                 ChTyId = message.ChTyId,
+                SpId = message.SpId,
+                SpNa = message.SpNa,
+                SegId = message.SegId,
+                SegNa = message.SegNa,
+                LeId = message.LeId,
+                LeNa = message.LeNa,
                 Ma = message.Ma.Select(s => new ResultMarket()
                 {
                     MaId = s.MaId,
@@ -106,7 +113,7 @@ namespace OE.Adapter.Service.Repositories
                 }).ToList()
             };
 
-            PublishMessage(messageBroker, payload, MessageType.ON_RESULT_CHANGE, correlationId);
+            PublishMessage(messageBroker, payload, MessageType.ON_SETTLEMENT, correlationId);
         }
 
         #endregion

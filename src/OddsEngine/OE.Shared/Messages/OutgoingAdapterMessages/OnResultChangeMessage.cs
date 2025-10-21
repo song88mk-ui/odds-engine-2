@@ -4,9 +4,8 @@ using System.Collections.Generic;
 
 namespace OE.Shared.Messages.OutgoingAdapterMessages
 {
-    public class OnResultChangeMessage : OutgoingAdapterMessageBase
+    public class OnSettlementChangeMessage : OutgoingAdapterMessageBase
     {
-        public int ChTyId { get; set; }
         public List<ResultMarket> Ma { get; set; }
     }
 }
