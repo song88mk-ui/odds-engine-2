@@ -7,6 +7,6 @@ namespace OE.Adapter.Service.Repositories
     {
         void ProcessOnFixtureSetMessage(IMessageBroker messageBroker, OnFixtureSetMessage message, string correlationId);
         void ProcessOnMarketSetMessage(IMessageBroker messageBroker, OnMarketSetMessage message, string correlationId);
-        //void ProcessOnResultSetMessage(IMessageBroker messageBroker, OnMarketSetMessage message, string correlationId);
+        void ProcessOnResultSetMessage(IMessageBroker messageBroker, OnResultSetMessage message, string correlationId);
     }
 }

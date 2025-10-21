@@ -77,9 +77,9 @@ namespace OE.Adapter.Service
                         );
                         break;
                     case MessageType.ON_RESULT_SET:
-                        ProcessMessage<OnMarketSetMessage>(
+                        ProcessMessage<OnResultSetMessage>(
                             payload,
-                            (msg) => _tradingRepository.ProcessOnMarketSetMessage(_messageBroker, msg, correlationId)
+                            (msg) => _tradingRepository.ProcessOnResultSetMessage(_messageBroker, msg, correlationId)
                         );
                         break;
                 }

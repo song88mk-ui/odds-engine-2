@@ -76,13 +76,37 @@ namespace OE.Adapter.Service.Repositories
         {
             var providerFixtureId = message.FiId.ToString();
 
-            var payload = new OnMarketChangeMessage
+            var payload = new OnMarketChangeMessage()
             {
                 PrFiId = providerFixtureId,
                 Ma = PrepareMarkets(message, providerFixtureId),
             };
 
             PublishMessage(messageBroker, payload, MessageType.ON_MARKET_CHANGE, correlationId);
+        }
+
+        public void ProcessOnResultSetMessage(IMessageBroker messageBroker, OnResultSetMessage message, string correlationId)
+        {
+            var providerFixtureId = message.FiId.ToString();
+
+            var payload = new OnResultChangeMessage()
+            {
+                PrFiId = providerFixtureId,
+                ChTyId = message.ChTyId,
+                Ma = message.Ma.Select(s => new ResultMarket()
+                {
+                    MaId = s.MaId,
+                    MaStId = s.MaStId,
+                    Se = s.Se.Select(se => new ResultSelection()
+                    {
+                        MaId = se.MaId,
+                        SeId = se.SeId,
+                        SeStId = se.SeStId
+                    }).ToList()
+                }).ToList()
+            };
+
+            PublishMessage(messageBroker, payload, MessageType.ON_RESULT_CHANGE, correlationId);
         }
 
         #endregion

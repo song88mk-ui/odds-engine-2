@@ -8,5 +8,6 @@
 
         public const string ON_FIXTURE_CHANGE = "OnFixtureChange";
         public const string ON_MARKET_CHANGE = "OnMarketChange";
+        public const string ON_RESULT_CHANGE = "OnResultChange";
     }
 }
