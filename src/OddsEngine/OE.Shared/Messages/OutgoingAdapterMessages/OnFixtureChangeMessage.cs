@@ -35,6 +35,5 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string CoId { get; set; }
         public bool IsSu { get; set; }
         public bool? IsBo { get; set; }
-        public bool IsIn { get; set; }
     }
 }

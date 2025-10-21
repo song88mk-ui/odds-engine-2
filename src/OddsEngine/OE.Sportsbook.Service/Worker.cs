@@ -72,6 +72,9 @@ namespace OE.Sportsbook.Service
                         var onMarketChangeMessage = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
                         _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, onMarketChangeMessage, correlationId);
                         break;
+                        //TODO: case MessageType.ON_SETTLEMENT:
+                        //BASED ON OnResultSet
+
                 }
             }
             catch (Exception ex)

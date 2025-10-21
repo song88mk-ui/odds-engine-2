@@ -1,6 +1,7 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Misc;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Data.Sportsbook.MongoDB.Projections;
 using OE.Shared.Enums;
@@ -51,12 +52,11 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
-            PreloadMapping(message.ChTyId, message.PrFiId);
+            var fixtureMapping = PreloadMapping(message.ChTyId, message.PrFiId);
 
-            var fixtureGeneration = GetFixtureId(message.ChTyId, message.PrFiId);
+            if (fixtureMapping == null) return;
 
-            message.FiId = fixtureGeneration.Item1;
-            message.IsIn = fixtureGeneration.Item2;
+            message.FiId = fixtureMapping.FiId;
 
             BulkWrite(_fixtureCollection, ToFixture(message));
         }
@@ -116,7 +116,7 @@ namespace OE.Sportsbook.Service.Repositories
             _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
         }
 
-        private void PreloadMapping(int chTyId, string providerFixtureId)
+        private Fixture? PreloadMapping(int chTyId, string providerFixtureId)
         {
             var expiration = DateTime.UtcNow.AddHours(6);
             var fixtureMappingKey = $"{FIXTURE_PREFIX}:{chTyId}:{providerFixtureId}";
@@ -124,19 +124,26 @@ namespace OE.Sportsbook.Service.Repositories
             var cache = _memCache.GetCache<Fixture>(fixtureMappingKey);
 
             if (cache != null)
-                return;
+                return cache;
 
             var fixtureMapping = GetFixtureMapping(chTyId, providerFixtureId);
 
             if (fixtureMapping == null)
-                return;
-
-            _memCache.AddOrUpdateCache(fixtureMappingKey, new Fixture
             {
-                FiId = fixtureMapping.FiId,
-                PrFiId = providerFixtureId,
-                ChTyId = chTyId
-            }, expiration);
+                var generatedId = GenerateId(providerFixtureId);
+
+                fixtureMapping = new Fixture
+                {
+                    FiId = generatedId,
+                    PrFiId = providerFixtureId,
+                    ChTyId = chTyId
+                };
+
+                _memCache.AddOrUpdateCache(fixtureMappingKey, fixtureMapping, expiration);
+                return fixtureMapping;
+            }
+
+            _memCache.AddOrUpdateCache(fixtureMappingKey, fixtureMapping, expiration);
 
             var marketMappings = GetMarketMapping(chTyId, providerFixtureId);
 
@@ -169,6 +176,8 @@ namespace OE.Sportsbook.Service.Repositories
                     MaSp = selection.MaSp
                 }, expiration);
             }
+
+            return fixtureMapping;
         }
 
         private Tuple<long, bool> GetFixtureId(int chTyId, string providerFixtureId)
@@ -309,43 +318,66 @@ namespace OE.Sportsbook.Service.Repositories
 
         private WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)
         {
-            UpdateDefinition<Fixture> updateFixture = Builders<Fixture>.Update
-                            .Set(s => s.FiId, message.FiId)
-                            .Set(s => s.PrFiId, message.PrFiId)
-                            .Set(s => s.SpId, message.SpId)
-                            .Set(s => s.SpNa, message.SpNa)
-                            .Set(s => s.SegId, message.SegId)
-                            .Set(s => s.SegNa, message.SegNa)
-                            .Set(s => s.LeId, message.LeId)
-                            .Set(s => s.LeNa, message.LeNa)
-                            .Set(s => s.FiNa, message.FiNa)
-                            .Set(s => s.FiStDa, message.FiStDa)
-                            .Set(s => s.FiStId, message.FiStId)
-                            .Set(s => s.FiStNa, message.FiStNa)
-                            .Set(s => s.FiTyId, message.FiTyId)
-                            .Set(s => s.FiTyNa, message.FiTyNa)
-                            .Set(s => s.Sc, message.Sc)
-                            .Set(s => s.IsOfLi, message.IsOfLi)
-                            .Set(s => s.HoReCa, message.HoReCa)
-                            .Set(s => s.AwReCa, message.AwReCa)
-                            .Set(s => s.CuPe, message.CuPeId)
-                            .Set(s => s.CuMi, message.CuMi)
-                            .Set(s => s.FiSp, message.FiSp)
-                            .Set(s => s.FiSoOr, message.SoOr)
-                            .Set(s => s.ToTi, message.ToTi)
-                            .Set(s => s.IsSu, message.IsSu)
-                            .Set(s => s.ClCo, message.ClCo)
-                            .Set(s => s.HoId, message.HoId)
-                            .Set(s => s.AwId, message.AwId);
+            var filter = Builders<Fixture>.Filter.And(
+                Builders<Fixture>.Filter.Eq(f => f.ChTyId, message.ChTyId),
+                Builders<Fixture>.Filter.Eq(f => f.PrFiId, message.PrFiId)
+            );
+
+            var updateFixture = Builders<Fixture>.Update
+                .Set(s => s.FiId, message.FiId)
+                .Set(s => s.ChTyId, message.ChTyId)
+                .Set(s => s.PrFiId, message.PrFiId)
+                .Set(s => s.SpId, message.SpId)
+                .Set(s => s.SpNa, message.SpNa)
+                .Set(s => s.SegId, message.SegId)
+                .Set(s => s.SegNa, message.SegNa)
+                .Set(s => s.LeId, message.LeId)
+                .Set(s => s.LeNa, message.LeNa)
+                .Set(s => s.FiNa, message.FiNa)
+                .Set(s => s.FiStDa, message.FiStDa)
+                .Set(s => s.FiStId, message.FiStId)
+                .Set(s => s.FiStNa, message.FiStNa)
+                .Set(s => s.FiTyId, message.FiTyId)
+                .Set(s => s.FiTyNa, message.FiTyNa)
+                .Set(s => s.Sc, message.Sc)
+                .Set(s => s.IsOfLi, message.IsOfLi)
+                .Set(s => s.HoReCa, message.HoReCa)
+                .Set(s => s.AwReCa, message.AwReCa)
+                .Set(s => s.CuPe, message.CuPeId)
+                .Set(s => s.CuMi, message.CuMi)
+                .Set(s => s.FiSp, message.FiSp)
+                .Set(s => s.FiSoOr, message.SoOr)
+                .Set(s => s.ToTi, message.ToTi)
+                .Set(s => s.IsSu, message.IsSu)
+                .Set(s => s.ClCo, message.ClCo)
+                .Set(s => s.HoId, message.HoId)
+                .Set(s => s.AwId, message.AwId);
+                //s.Set(s => s.LiId, message.LiId) TODO
+                //.Set(s => s.StUr, message.StUr) TODO
+                //.Set(s => s.ClMa, message.ClMa) TODO
+                //.Set(s => s.GeAl, message.GeAl) TODO
+                //.Set(s => s.IsBo, message.IsBo) TODO
+                //.Set(s => s.ClBo, message.ClBo) TODO
+                //.Set(s => s.SpNaTr, message.SpNaTr) TODO
+                //.Set(s => s.SegNaTr, message.SegNaTr) TODO
+                //.Set(s => s.LeNaTr, message.LeNaTr) TODO
+                //.Set(s => s.FiNaTr, message.FiNaTr) TODO
+                //.Set(s => s.HoBeId, message.HoBeId) TODO
+                //.Set(s => s.AwBeId, message.AwBeId) TODO
+                //.Set(s => s.LeBeId, message.LeBeId) TODO
+                //.Set(s => s.PeSc, message.PeSc) TODO
+                //.Set(s => s.CuSe, message.CuSe) TODO
 
             if (message.Fa != FavoriteSelection.None.ToString())
             {
-                updateFixture = updateFixture.Set(s => s.IsHoFa, message.Fa == FavoriteSelection.Home.ToString() ? true : false);
+                updateFixture = updateFixture.Set(
+                    s => s.IsHoFa, 
+                    message.Fa == FavoriteSelection.Home.ToString());
             }
 
             return new WriteModel<Fixture>[]
             {
-                    new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq("FiId", message.FiId), updateFixture)
+                    new UpdateOneModel<Fixture>(filter, updateFixture)
                     { IsUpsert = true }
             };
         }
