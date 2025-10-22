@@ -4,5 +4,6 @@
     {
         public int ChTyId { get; set; }
         public string PrFiId { get; set; }
+        public long FiId { get; set; }
     }
 }

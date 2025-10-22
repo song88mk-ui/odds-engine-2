@@ -106,7 +106,7 @@ namespace OE.Adapter.Service.Repositories
                 }).ToList()
             };
 
-            PublishMessage(messageBroker, payload, MessageType.ON_SETTLEMENT, correlationId);
+            PublishMessage(messageBroker, payload, MessageType.ON_MARKET_SETTLEMENT, correlationId);
         }
 
         #endregion

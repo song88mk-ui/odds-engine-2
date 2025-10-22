@@ -77,7 +77,7 @@ namespace OE.Sportsbook.Service
                             (msg) => _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
                         );
                         break;
-                    case MessageType.ON_SETTLEMENT:
+                    case MessageType.ON_MARKET_SETTLEMENT:
                         ProcessMessage<OnSettlementChangeMessage>(
                             payload,
                             (msg) => _sportsbookRepository.ProcessOnSettlementMessage(_messageBroker, msg, correlationId)

@@ -122,7 +122,7 @@ namespace OE.Sportsbook.Service.Repositories
 
             //var fixture = _memCache.GetCache($"{FIXTURE_PREFIX}:{message.PrFiId}", () => GetFixtureProject(message.PrFiId), 24);
 
-            // TODO: MongoDB Upsert
+            //TODO: Publish Message using OnInternalOddsChangeMessage
         }
         public void ProcessOnSettlementMessage(IMessageBroker messageBroker, OnSettlementChangeMessage message, string correlationId)
         {

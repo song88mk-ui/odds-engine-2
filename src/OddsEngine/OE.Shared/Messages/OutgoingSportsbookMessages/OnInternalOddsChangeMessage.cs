@@ -1,104 +1,92 @@
 ﻿using System.Collections.Generic;
 using System;
-using OE.Shared.Enums;
+using OE.Shared.Models;
 
 namespace OE.Shared.Messages.OutgoingSportsbookMessages
 {
     public class OnInternalOddsChangeMessage
     {
-        public int SportId { get; set; }
-        public string SportName { get; set; }
-        public int SegmentId { get; set; }
-        public string SegmentName { get; set; }
-        public int LeagueId { get; set; }
-        public string LeagueName { get; set; }
-        public long FixtureId { get; set; }
-        public string ProviderFixtureId { get; set; }
-        public string FixtureName { get; set; }
-        public DateTime FixtureStartDate { get; set; }
-        public int FixtureStatusId { get; set; }
-        public string FixtureStatusName { get; set; }
-        public string Score { get; set; }
-        public string FixtureSpecifier { get; set; }
-        public bool IsOfferedLive { get; set; }
-        public int HomeRedCards { get; set; }
-        public int AwayRedCards { get; set; }
-        public int CurrentPeriodId { get; set; }
-        public string CurrentPeriod { get; set; }
-        public int CurrentMinute { get; set; }
-        public int FixtureTypeId { get; set; }
-        public string FixtureTypeName { get; set; }
-        public int TotalTime { get; set; }
-        public string Favorite { get; set; }
-        public int SortOrder { get; set; }
-        public string ClientCodes { get; set; }
-        public string CorrelationId { get; set; }
-        public bool IsSuspended { get; set; }
-        public bool? IsBoosted { get; set; }
+        public int SpId { get; set; }
+        public string SpNa { get; set; }
+        public int SegId { get; set; }
+        public string SegNa { get; set; }
+        public int LeId { get; set; }
+        public string LeNa { get; set; }
+        public long FiId { get; set; }
+        public string PrFiId { get; set; }
+        public string FiNa { get; set; }
+        public DateTime FiStDa { get; set; }
+        public int FiStId { get; set; }
+        public string FiStNa { get; set; }
+        public string Sc { get; set; }
+        public string FiSp { get; set; }
+        public bool IsOfLi { get; set; }
+        public int HoReCa { get; set; }
+        public int AwReCa { get; set; }
+        public int CuPeId { get; set; }
+        public string CuPe { get; set; }
+        public int CuMi { get; set; }
+        public int FiTyId { get; set; }
+        public string FiTyNa { get; set; }
+        public int ToTi { get; set; }
+        public string Fa { get; set; }
+        public int SoOr { get; set; }
+        public string ClCo { get; set; }
+        public string CoId { get; set; }
+        public bool IsSu { get; set; }
+        public bool? IsBo { get; set; }
         //public List<SportTranslation> SportTranslations { get; set; }
         //public List<SegmentTranslation> SegmentTranslations { get; set; }
         //public List<LeagueTranslation> LeagueTranslations { get; set; }
         //public List<FixtureTranslation> FixtureTranslations { get; set; }
-        public List<InternalMarketMessage> Markets { get; set; } = new List<InternalMarketMessage>();
-        public string HomeId { get; set; }
-        public string AwayId { get; set; }
+        public List<InternalMarketMessage> Ma { get; set; } = new List<InternalMarketMessage>();
+        public string HoId { get; set; }
+        public string AwId { get; set; }
         //public List<InternalPeriodScore> PeriodScores { get; set; }
-        public int CurrentServer { get; set; }
-        public bool IsInsert { get; set; }
+        public int CuSec { get; set; }
+        public int CuSer { get; set; }
     }
 
     public class InternalMarketMessage
     {
-        public string ProviderFixtureId { get; set; }
-        public long MarketId { get; set; }
-        public string MarketTemplateId { get; set; }
-        public string ProviderMarketId { get; set; }
-        public string Line { get; set; }
-        public int MarketStatusId { get; set; }
-        public int MarketStatusName { get; set; }
-        public int CashoutStatusId { get; set; }
-        public int CashoutStatusName { get; set; }
-        public string MarketSpecifier { get; set; }
-        public string MarketName { get; set; }
-        public int SortOrder { get; set; }
-        public bool IsInsert { get; set; }
-        public string ClientCodes { get; set; }
-        public string ClientCodeMargin { get; set; }
+        public string PrFiId { get; set; }
+        public long MaId { get; set; }
+        public string MaTeId { get; set; }
+        public string PrMaId { get; set; }
+        public string Li { get; set; }
+        public int MaStId { get; set; }
+        public int MaStNa { get; set; }
+        public int CaStId { get; set; }
+        public int CaStNa { get; set; }
+        public string MaSp { get; set; }
+        public string MaNa { get; set; }
+        public int SoOr { get; set; }
+        public string ClCo { get; set; }
+        public string ClCoMa { get; set; }
         //public List<MarketTranslation> MarketTranslations { get; set; }
-        public List<InternalSelectionMessage> Selections { get; set; } = new List<InternalSelectionMessage>();
+        public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();
     }
 
     public class InternalSelectionMessage
     {
-        public string ProviderFixtureId { get; set; }
-        public string MarketTemplateId { get; set; }
-        public string SelectionTemplateId { get; set; }
-        public string MarketSpecifier { get; set; }
-        public long SelectionId { get; set; }
-        public decimal Odds { get; set; }
-        public double Probability { get; set; }
-        public double WonProbability { get; set; }
-        public double LostProbability { get; set; }
-        public double VoidProbability { get; set; }
-        public double HalfWonProbability { get; set; }
-        public double HalfLostProbability { get; set; }
-        public bool IsActive { get; set; }
-        public string SelectionSpecifier { get; set; }
-        public string SelectionName { get; set; }
-        public int SortOrder { get; set; }
-        public bool IsInsert { get; set; }
-        public List<InternalClientOdds> ClientOdds { get; set; }
+        public string PrFiId { get; set; }
+        public string MaTeId { get; set; }
+        public string SeTeId { get; set; }
+        public string MaSp { get; set; }
+        public long SeId { get; set; }
+        public decimal Od { get; set; }
+        public double Pr { get; set; }
+        public double WoPr { get; set; }
+        public double LoPr { get; set; }
+        public double VoPr { get; set; }
+        public double HaWoPr { get; set; }
+        public double HaLoPr { get; set; }
+        public bool IsAc { get; set; }
+        public string SeSp { get; set; }
+        public string SeNa { get; set; }
+        public int SoOr { get; set; }
+        public List<ClientOdds> ClOd { get; set; }
         //public List<SelectionTranslation> SelectionTranslations { get; set; }
     }
 
-    public class InternalClientOdds
-    {
-        public string ClientCode { get; set; }
-        public decimal DecimalOdds { get; set; }
-        public decimal MalaysianOdds { get; set; }
-        public decimal HongkongOdds { get; set; }
-        public decimal IndonesianOdds { get; set; }
-        public string SelectionTemplateId { get; set; }
-        public long SelectionId { get; set; }
-    }
 }

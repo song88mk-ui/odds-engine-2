@@ -12,3 +12,8 @@
 /src/OddsEngine/OE.Adapter.Service/bin/Debug/net8.0
 /src/OddsEngine/OE.Shared/bin/Debug/netstandard2.1
 /src/OddsEngine/OE.Sportsbook.Service/bin/Debug/net8.0
+/src/OddsEngine/**/bin/
+/src/OddsEngine/**/obj/
+
+**/appsettings.Development.json
+**/appsettings.Local.json

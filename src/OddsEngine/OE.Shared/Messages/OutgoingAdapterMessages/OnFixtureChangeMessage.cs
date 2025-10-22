@@ -11,7 +11,6 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string SegNa { get; set; }
         public int LeId { get; set; }
         public string LeNa { get; set; }
-        public long FiId { get; set; }
         public string FiNa { get; set; }
         public DateTime FiStDa { get; set; }
         public int FiStId { get; set; }
