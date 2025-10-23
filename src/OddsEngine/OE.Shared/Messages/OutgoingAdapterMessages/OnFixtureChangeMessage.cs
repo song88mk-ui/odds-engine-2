@@ -5,6 +5,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
 {
     public class OnFixtureChangeMessage : OutgoingAdapterMessageBase
     {
+        public string ClPr { get; set; }
         public int SpId { get; set; }
         public string SpNa { get; set; }
         public int SegId { get; set; }

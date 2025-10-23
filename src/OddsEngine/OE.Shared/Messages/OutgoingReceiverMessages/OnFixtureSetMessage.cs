@@ -5,7 +5,6 @@ namespace OE.Shared.Messages.OutgoingReceiverMessages
 {
     public class OnFixtureSetMessage : OutgoingReceiverMessageBase
     {
-        public int ChTyId { get; set; }
         public int SpId { get; set; }
         public string SpNa { get; set; }
         public int SegId { get; set; }

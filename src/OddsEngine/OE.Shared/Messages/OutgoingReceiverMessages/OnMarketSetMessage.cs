@@ -17,7 +17,7 @@ namespace OE.Shared.Messages.OutgoingReceiverMessages
 
     public class MarketMessage
     {
-        public int MaId { get; set; }
+        public string PrMaId { get; set; }
         public string MaNa { get; set; }
         public int MaTyId { get; set; }
         public string MaTyNa { get; set; }
@@ -33,8 +33,8 @@ namespace OE.Shared.Messages.OutgoingReceiverMessages
 
     public class SelectionMessage
     {
-        public int MaId { get; set; }
-        public int SeId { get; set; }
+        public string PrMaId { get; set; }
+        public string PrSeId { get; set; }
         public int SeTeId { get; set; }
         public string SeNa { get; set; }
         public bool IsAc { get; set; }

@@ -8,7 +8,6 @@ using OE.Shared.Utilities;
 using AdapterMarketMessage = OE.Shared.Messages.OutgoingAdapterMessages.MarketMessage;
 using AdapterSelectionMessage = OE.Shared.Messages.OutgoingAdapterMessages.SelectionMessage;
 using ReceiverMarketMessage = OE.Shared.Messages.OutgoingReceiverMessages.MarketMessage;
-using ReceiverSelectionMessage = OE.Shared.Messages.OutgoingReceiverMessages.SelectionMessage;
 
 namespace OE.Adapter.Service.Repositories
 {
@@ -17,6 +16,7 @@ namespace OE.Adapter.Service.Repositories
         #region Fields
 
         private readonly IHelper _helper;
+        private const ChannelType _bgProvider = ChannelType.BG;
 
         #endregion
 
@@ -35,15 +35,15 @@ namespace OE.Adapter.Service.Repositories
         {
             var payload = new OnFixtureChangeMessage
             {
-                ChTyId = message.ChTyId,
-                PrFiId = message.FiId.ToString(),
+                ChTyId = (int)_bgProvider,
+                PrFiId = message.PrFiId,
                 SpId = message.SpId,
                 SpNa = message.SpNa,
                 SegId = message.SegId,
                 SegNa = message.SegNa,
                 LeId = message.LeId,
                 LeNa = message.LeNa,
-                FiId = 0,
+                FiId = 0, //Internal Generated ID
                 FiNa = message.FiNa,
                 FiStDa = message.FiStDa,
                 FiStId = message.FiStId,
@@ -66,7 +66,8 @@ namespace OE.Adapter.Service.Repositories
                 ClCo = "",
                 CoId = correlationId,
                 IsSu = message.IsSu,
-                IsBo = false
+                IsBo = false,
+                ClPr = string.Empty,
             };
 
             PublishMessage(messageBroker, payload, MessageType.ON_FIXTURE_CHANGE, correlationId);
@@ -74,11 +75,13 @@ namespace OE.Adapter.Service.Repositories
 
         public void ProcessOnMarketSetMessage(IMessageBroker messageBroker, OnMarketSetMessage message, string correlationId)
         {
-            var providerFixtureId = message.FiId.ToString();
+            var providerFixtureId = message.PrFiId;
 
             var payload = new OnMarketChangeMessage()
             {
                 PrFiId = providerFixtureId,
+                ChTyId = (int)_bgProvider,
+                FiId = 0, //Internal Generated ID
                 Ma = PrepareMarkets(message, providerFixtureId),
             };
 
@@ -87,20 +90,21 @@ namespace OE.Adapter.Service.Repositories
 
         public void ProcessOnResultSetMessage(IMessageBroker messageBroker, OnResultSetMessage message, string correlationId)
         {
-            var providerFixtureId = message.FiId.ToString();
+            var providerFixtureId = message.PrFiId;
 
             var payload = new OnSettlementChangeMessage()
             {
                 PrFiId = providerFixtureId,
-                ChTyId = message.ChTyId,
+                ChTyId = (int)_bgProvider,
+                FiId = 0, //Internal Generated ID
                 Ma = message.Ma.Select(s => new ResultMarket()
                 {
-                    MaId = s.MaId,
+                    PrMaId = s.PrMaId,
                     MaStId = s.MaStId,
                     Se = s.Se.Select(se => new ResultSelection()
                     {
-                        MaId = se.MaId,
-                        SeId = se.SeId,
+                        PrMaId = se.PrMaId,
+                        PrSeId = se.PrSeId,
                         SeStId = se.SeStId
                     }).ToList()
                 }).ToList()
@@ -124,9 +128,9 @@ namespace OE.Adapter.Service.Repositories
                 var market = new AdapterMarketMessage
                 {
                     PrFiId = providerFixtureId,
-                    MaId = 0,
+                    MaId = 0, //Internal Generated ID
                     MaTeId = marketTemplateId,
-                    PrMaId = ma.MaId.ToString(),
+                    PrMaId = ma.PrMaId,
                     Li = ma.Ha.HasValue ? ma.Ha.ToString() : "",
                     MaStId = ma.MaStId,
                     MaStNa = GetMarketStatus(ma.MaStId).ToString(),
@@ -151,10 +155,12 @@ namespace OE.Adapter.Service.Repositories
             return message.Se.Select(se => new AdapterSelectionMessage
             {
                 PrFiId = providerFixtureId,
+                PrMaId = message.PrMaId,
+                PrSeId = se.PrSeId,
                 MaTeId = marketTemplateId,
                 SeTeId = se.SeTeId.ToString(),
                 MaSp = "",
-                SeId = 0,
+                SeId = 0, //Internal Generated ID
                 Od = se.Od,
                 Pr = 0,
                 WoPr = 0,

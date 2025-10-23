@@ -31,6 +31,8 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
     public class SelectionMessage
     {
         public string PrFiId { get; set; }
+        public string PrMaId { get; set; }
+        public string PrSeId { get; set; }
         public string MaTeId { get; set; }
         public string SeTeId { get; set; }
         public string MaSp { get; set; }

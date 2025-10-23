@@ -2,6 +2,6 @@
 {
     public class OutgoingReceiverMessageBase
     {
-        public int FiId { get; set; }
+        public string PrFiId { get; set; }
     }
 }
