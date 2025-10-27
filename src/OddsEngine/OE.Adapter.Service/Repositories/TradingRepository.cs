@@ -70,6 +70,7 @@ namespace OE.Adapter.Service.Repositories
                 ClPr = string.Empty,
             };
 
+
             PublishMessage(messageBroker, payload, MessageType.ON_FIXTURE_CHANGE, correlationId);
         }
 
@@ -88,6 +89,7 @@ namespace OE.Adapter.Service.Repositories
             PublishMessage(messageBroker, payload, MessageType.ON_MARKET_CHANGE, correlationId);
         }
 
+        // OnMarketSettlement
         public void ProcessOnResultSetMessage(IMessageBroker messageBroker, OnResultSetMessage message, string correlationId)
         {
             var providerFixtureId = message.PrFiId;
@@ -96,7 +98,7 @@ namespace OE.Adapter.Service.Repositories
             {
                 PrFiId = providerFixtureId,
                 ChTyId = (int)_bgProvider,
-                FiId = 0, //Internal Generated ID
+                FiId = 0, //Internal Generated ID - from message
                 Ma = message.Ma.Select(s => new ResultMarket()
                 {
                     PrMaId = s.PrMaId,
@@ -201,6 +203,8 @@ namespace OE.Adapter.Service.Repositories
 
             messageBroker.Publish(payload, messageType, $"r.oe.adapter.{messageType.ToLower()}.{instanceName}", correlationId);
         }
+
+        // Genereate songID
 
         #endregion
     }
