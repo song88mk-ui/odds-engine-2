@@ -1,20 +1,20 @@
-﻿using OE.Shared.Data.Sportsbook.MongoDB.Collections;
-using OE.Shared.Messages.OutgoingAdapterMessages.Base;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace OE.Shared.Messages.OutgoingAdapterMessages
 {
-    public class OnMarketChangeMessage : OutgoingAdapterMessageBase
+    public class OnMarketChangeMessage : OnFixtureChangeMessage
     {
         public List<MarketMessage> Ma { get; set; } = new List<MarketMessage>();
     }
 
     public class MarketMessage
     {
+        public string Id => $"{ChTyId}:{PrFiId}:{PrMaId}";
+        public int ChTyId { get; set; }
         public string PrFiId { get; set; }
+        public string PrMaId { get; set; }
         public long MaId { get; set; }
         public string MaTeId { get; set; }
-        public string PrMaId { get; set; }
         public string Li { get; set; }
         public int MaStId { get; set; }
         public string MaStNa { get; set; }
@@ -30,6 +30,8 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
 
     public class SelectionMessage
     {
+        public string Id => $"{ChTyId}:{PrFiId}:{PrMaId}:{PrSeId}";
+        public int ChTyId { get; set; }
         public string PrFiId { get; set; }
         public string PrMaId { get; set; }
         public string PrSeId { get; set; }

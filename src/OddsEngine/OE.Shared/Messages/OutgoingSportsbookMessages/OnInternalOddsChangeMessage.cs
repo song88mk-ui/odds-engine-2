@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System;
-using OE.Shared.Models;
+using OE.Shared.Messages.OutgoingAdapterMessages;
 
 namespace OE.Shared.Messages.OutgoingSportsbookMessages
 {
@@ -85,7 +85,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string SeSp { get; set; }
         public string SeNa { get; set; }
         public int SoOr { get; set; }
-        public List<ClientOdds> ClOd { get; set; }
+        public List<ClientOddsMessage> ClOd { get; set; }
         //public List<SelectionTranslation> SelectionTranslations { get; set; }
     }
 
