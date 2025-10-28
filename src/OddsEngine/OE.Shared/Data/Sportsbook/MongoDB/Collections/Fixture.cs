@@ -1,5 +1,4 @@
-﻿using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Attributes;
+﻿using MongoDB.Bson.Serialization.Attributes;
 using System;
 using System.Collections.Generic;
 
@@ -9,11 +8,10 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
     public class Fixture
     {
         [BsonId]
-        [BsonRepresentation(BsonType.ObjectId)]
-        public string? Id { get; set; }
-        public long FiId { get; set; }
+        public string Id { get; set; }
         public int ChTyId { get; set; }
         public string PrFiId { get; set; }
+        public long FiId { get; set; }
         public string ClCo { get; set; }
         public int SpId { get; set; }
         public string SpNa { get; set; }

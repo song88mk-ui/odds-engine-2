@@ -4,16 +4,21 @@ using System;
 
 namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
 {
+    [BsonIgnoreExtraElements]
     public class Selection
     {
         [BsonId]
-        public long SeId { get; set; }
+        public string Id { get; set; }
         public int ChTyId { get; set; }
+        public string PrFiId { get; set; }
+        public string PrMaId { get; set; }
+        public string PrSeId { get; set; }
+        public long FiId { get; set; }
+        public long MaId { get; set; }
+        public long SeId { get; set; }
         public int SpId { get; set; }
         public int SegId { get; set; }
         public int LeId { get; set; }
-        public long FiId { get; set; }
-        public long MaId { get; set; }
         public string MaTeId { get; set; }
         public string SeTeId { get; set; }
         public string SeNa { get; set; }
