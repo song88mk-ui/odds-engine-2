@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Hosting;
 using OE.Adapter.Service.Repositories;
 using OE.Shared.Constants;
-using OE.Shared.Messages.OutgoingReceiverMessages;
+using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Utilities;
 using RabbitMQ.Client.Events;
 using System.Text;
@@ -64,22 +64,22 @@ namespace OE.Adapter.Service
 
                 switch (messageType)
                 {
-                    case MessageType.ON_FIXTURE_SET:
-                        ProcessMessage<OnFixtureSetMessage>(
+                    case MessageType.ON_FIXTURE_CHANGE:
+                        ProcessMessage<OnFixtureChangeMessage>(
                             payload,
-                            (msg) => _tradingRepository.ProcessOnFixtureSetMessage(_messageBroker, msg, correlationId)
+                            (msg) => _tradingRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
                         );
                         break;
-                    case MessageType.ON_MARKET_SET:
-                        ProcessMessage<OnMarketSetMessage>(
+                    case MessageType.ON_MARKET_CHANGE:
+                        ProcessMessage<OnMarketChangeMessage>(
                             payload,
-                            (msg) => _tradingRepository.ProcessOnMarketSetMessage(_messageBroker, msg, correlationId)
+                            (msg) => _tradingRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
                         );
                         break;
-                    case MessageType.ON_RESULT_SET:
-                        ProcessMessage<OnResultSetMessage>(
+                    case MessageType.ON_MARKET_SETTLEMENT:
+                        ProcessMessage<OnMarketSettlementMessage>(
                             payload,
-                            (msg) => _tradingRepository.ProcessOnResultSetMessage(_messageBroker, msg, correlationId)
+                            (msg) => _tradingRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
                         );
                         break;
                 }

@@ -87,7 +87,7 @@ namespace OE.Sportsbook.Service.Repositories
 
         }
 
-        public void ProcessOnSettlementMessage(IMessageBroker messageBroker, OnSettlementChangeMessage message, string correlationId)
+        public void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId)
         {
             // Todo: update mongodb market status and selection status based on settlement message
 

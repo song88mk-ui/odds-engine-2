@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Hosting;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
-using OE.Shared.Messages.OutgoingReceiverMessages;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Repositories;
 using RabbitMQ.Client.Events;
@@ -78,9 +77,9 @@ namespace OE.Sportsbook.Service
                         );
                         break;
                     case MessageType.ON_MARKET_SETTLEMENT:
-                        ProcessMessage<OnSettlementChangeMessage>(
+                        ProcessMessage<OnMarketSettlementMessage>(
                             payload,
-                            (msg) => _sportsbookRepository.ProcessOnSettlementMessage(_messageBroker, msg, correlationId)
+                            (msg) => _sportsbookRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
                         );
                         break;
                 }
