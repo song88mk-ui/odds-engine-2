@@ -1,12 +1,12 @@
-﻿using OE.Shared.Messages.OutgoingReceiverMessages;
+﻿using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Utilities;
 
 namespace OE.Adapter.Service.Repositories
 {
     public interface ITradingRepository
     {
-        void ProcessOnFixtureSetMessage(IMessageBroker messageBroker, OnFixtureSetMessage message, string correlationId);
-        void ProcessOnMarketSetMessage(IMessageBroker messageBroker, OnMarketSetMessage message, string correlationId);
-        void ProcessOnResultSetMessage(IMessageBroker messageBroker, OnResultSetMessage message, string correlationId);
+        void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId);
+        void ProcessOnMarketChangeMessage(IMessageBroker messageBroker, OnMarketChangeMessage message, string correlationId);
+        void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId);
     }
 }
