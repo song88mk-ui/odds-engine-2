@@ -18,5 +18,10 @@ namespace OE.Shared.Extensions
             long ts = (date.Ticks - EpochTicks) / TicksPeriodMs;
             return ts;
         }
+
+        public static DateTime ConvertToDateTime(this long unixTimeMilliSeconds)
+        {
+            return DateTimeOffset.FromUnixTimeMilliseconds(unixTimeMilliSeconds).DateTime;
+        }
     }
 }

@@ -2,6 +2,8 @@
 {
     public static class MessageType
     {
+        public const string ON_BG_PROCESS_MESSAGE = "OnProcessMessage";
+
         public const string ON_FIXTURE_CHANGE = "OnFixtureChange";
         public const string ON_MARKET_CHANGE = "OnMarketChange";
         public const string ON_MARKET_SETTLEMENT = "OnMarketSettlement";
