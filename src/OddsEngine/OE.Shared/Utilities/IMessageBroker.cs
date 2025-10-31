@@ -1,21 +1,22 @@
-﻿using RabbitMQ.Client.Events;
+﻿using OE.Shared.Models;
+using RabbitMQ.Client.Events;
 using System;
-using System.Threading.Tasks;
 
-namespace OE.Shared.Utilities
+namespace OE.Shared.Utility
 {
     public interface IMessageBroker
     {
         event EventHandler<BasicDeliverEventArgs> MessageReceived;
-        Task Connect();
-        Task ExternalConnect();
-        Task ConnectWithManualAck();
-        Task Acknowledge(BasicDeliverEventArgs e);
-        Task NAcknowledge(BasicDeliverEventArgs e);
-        Task ExternalPublish<T>(T payload, string messageType, string routingKey, string correlationId);
-        Task ExternalPublish(string payload, string messageType, string routingKey, string correlationId);
-        Task Publish<T>(T payload, string messageType, string routingKey, string correlationId);
-        Task Publish(string payload, string messageType, string routingKey, string correlationId);
+        void ExternalConnect();
+        void ExternalConnect(MessageBrokerModel model);
+        void Connect();
+        void ConnectWithManualAck();
+        void Acknowledge(BasicDeliverEventArgs e);
+        void NAcknowledge(BasicDeliverEventArgs e);
+        void ExternalPublish<T>(T payload, string messageType, string routingKey, string correlationId);
+        void ExternalPublish(string payload, string messageType, string routingKey, string correlationId);
+        void Publish<T>(T payload, string messageType, string routingKey, string correlationId);
+        void Publish(string payload, string messageType, string routingKey, string correlationId);
         void Dispose();
     }
 }
