@@ -2,7 +2,7 @@
 using RabbitMQ.Client.Events;
 using System;
 
-namespace OE.Shared.Utility
+namespace OE.Shared.Utilities
 {
     public interface IMessageBroker
     {

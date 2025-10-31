@@ -10,7 +10,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
-namespace OE.Shared.Utility
+namespace OE.Shared.Utilities
 {
     public class MessageBroker : IDisposable, IMessageBroker
     {

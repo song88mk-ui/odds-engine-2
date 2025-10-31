@@ -46,7 +46,7 @@ namespace OE.Sportsbook.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await _messageBroker.Connect();
+            _messageBroker.Connect();
             _messageBroker.MessageReceived += MessageReceivedEvent;
         }
 
