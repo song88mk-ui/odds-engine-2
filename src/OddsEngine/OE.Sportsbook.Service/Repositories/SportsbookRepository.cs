@@ -1,5 +1,6 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
+using MongoDB.Bson.IO;
 using MongoDB.Driver;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
@@ -89,9 +90,40 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId)
         {
-            // Todo: update mongodb market status and selection status based on settlement message
+            if (!message.Ma.Any())
+                return;
 
             var timestamp = DateTime.UtcNow.ToEpochTimestamp();
+            var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
+
+            var data = ToMarketAndSelection(message, correlationId);
+
+
+            if (data.Item1.Length > 0)
+                BulkWrite(_marketCollection, data.Item1);
+
+            if (data.Item2.Length > 0)
+                BulkWrite(_selectionCollection, data.Item2);
+
+            foreach (var market in message.Ma)
+            {
+                var payload = new
+                {
+                    market.Id,
+                    market.MaId,
+                    market.MaStId,
+                    Se = market.Se.Select(selection => new
+                    {
+                        selection.Id,
+                        selection.SeId,
+                        selection.SeStId
+                    })
+
+                };
+
+                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
+            }
+        }
             var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
 
             var data = ToMarketAndSelection(message, correlationId);
@@ -296,6 +328,43 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.VoPr, selection.VoPr)
                             .Set(s => s.HaWoPr, selection.HaWoPr)
                             .Set(s => s.HaLoPr, selection.HaLoPr)
+                    //TODO
+                    //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
+                    )
+                    { IsUpsert = true });
+                }
+            }
+
+            return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
+        }
+        private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketSettlementMessage message, string correlationId)
+        {
+            var markets = new List<WriteModel<Market>>();
+            var selections = new List<WriteModel<Selection>>();
+
+            foreach (var market in message.Ma)
+            {
+                markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id),
+                    Builders<Market>.Update
+                        .Set(s => s.MaStId, market.MaStId)
+                        .Set(s => s.MaStNa, "")
+                //TODO
+                //.AddToSetEach(s => s.MaNaTr, 
+                //    market.MarketTranslations.Select(
+                //        ss => new MarketTranslationMDB 
+                //            { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray())
+                )
+                { IsUpsert = true });
+
+                foreach (var selection in market.Se)
+                {
+                    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
+                        Builders<Selection>.Update
+                            //.Set(s => s.Od, selection.Od)
+                            //.Set(s => s.IsAc, selection.IsAc)
+                            //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
+                            .Set(s => s.SeStId, selection.SeStId)
+                            .Set(s => s.SeStNa, "Pending")
                     //TODO
                     //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
                     )
