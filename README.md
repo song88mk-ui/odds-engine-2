@@ -1,2 +1,3 @@
-# odds-engine-2
-bet genius odds feed provider
+# OddsEngine
+
+Odds Engine based from Bet Genius Odds Feed Provider Integration
