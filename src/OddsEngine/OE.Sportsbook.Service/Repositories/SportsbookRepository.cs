@@ -3,8 +3,8 @@ using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
-using OE.Shared.Data.Sportsbook.MongoDB.Projections;
 using OE.Shared.Enums;
+using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
@@ -91,7 +91,36 @@ namespace OE.Sportsbook.Service.Repositories
         {
             // Todo: update mongodb market status and selection status based on settlement message
 
-            throw new NotImplementedException();
+            var timestamp = DateTime.UtcNow.ToEpochTimestamp();
+            var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
+
+            var data = ToMarketAndSelection(message, correlationId);
+
+
+            if (data.Item1.Length > 0)
+                BulkWrite(_marketCollection, data.Item1);
+
+            if (data.Item2.Length > 0)
+                BulkWrite(_selectionCollection, data.Item2);
+
+            foreach (var market in message.Ma)
+            {
+                var payload = new
+                {
+                    market.Id,
+                    market.MaId,
+                    market.MaStId,
+                    Se = market.Se.Select(selection => new
+                    {
+                        selection.Id,
+                        selection.SeId,
+                        selection.SeStId
+                    })
+
+                };
+
+                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
+            }
         }
         #endregion
 
