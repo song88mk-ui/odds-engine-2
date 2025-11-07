@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OE.Adapter.Service.Repositories;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
@@ -13,6 +14,7 @@ namespace OE.Adapter.Service
     {
         #region Fields
 
+        private readonly ILogger<Worker> _logger;
         private readonly IMessageBroker _messageBroker;
         private readonly ITradingRepository _tradingRepository;
 
@@ -20,8 +22,9 @@ namespace OE.Adapter.Service
 
         #region Ctor
 
-        public Worker(IMessageBroker messageBroker, ITradingRepository tradingRepository)
+        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository)
         {
+            _logger = logger;
             _messageBroker = messageBroker;
             _tradingRepository = tradingRepository;
         }
@@ -38,7 +41,7 @@ namespace OE.Adapter.Service
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                _logger.LogError($"caught exception on stop: {ex.Message}");
             }
 
             return base.StopAsync(cancellationToken);
@@ -86,8 +89,8 @@ namespace OE.Adapter.Service
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
+                _logger.LogError($"caught exception: {ex.Message}");
+                _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
             }
         }
 
