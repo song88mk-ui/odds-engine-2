@@ -124,36 +124,6 @@ namespace OE.Sportsbook.Service.Repositories
                 messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
             }
         }
-            var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
-
-            var data = ToMarketAndSelection(message, correlationId);
-
-
-            if (data.Item1.Length > 0)
-                BulkWrite(_marketCollection, data.Item1);
-
-            if (data.Item2.Length > 0)
-                BulkWrite(_selectionCollection, data.Item2);
-
-            foreach (var market in message.Ma)
-            {
-                var payload = new
-                {
-                    market.Id,
-                    market.MaId,
-                    market.MaStId,
-                    Se = market.Se.Select(selection => new
-                    {
-                        selection.Id,
-                        selection.SeId,
-                        selection.SeStId
-                    })
-
-                };
-
-                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
-            }
-        }
         #endregion
 
         #region Utilities
