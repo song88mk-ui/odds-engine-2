@@ -25,6 +25,8 @@ jobs:
         app:
           - path: OE.Adapter.Service
             image: oev2-adapter-service
+          - path: OE.Sportsbook.Service
+            image: oev2-sportsbook-service
 
     steps:
       - name: Checkout

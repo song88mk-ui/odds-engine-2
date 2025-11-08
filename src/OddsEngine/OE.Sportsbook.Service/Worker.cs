@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Utilities;
@@ -13,6 +14,7 @@ namespace OE.Sportsbook.Service
     {
         #region Fields
 
+        private readonly ILogger<Worker> _logger;
         private readonly IMessageBroker _messageBroker;
         private readonly ISportsbookRepository _sportsbookRepository;
 
@@ -20,8 +22,9 @@ namespace OE.Sportsbook.Service
 
         #region Ctor
 
-        public Worker(IMessageBroker messageBroker, ISportsbookRepository sportsbookRepository)
+        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ISportsbookRepository sportsbookRepository)
         {
+            _logger = logger;
             _messageBroker = messageBroker;
             _sportsbookRepository = sportsbookRepository;
         }
@@ -38,7 +41,7 @@ namespace OE.Sportsbook.Service
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
+                _logger.LogError($"caught exception on stop: {ex.Message}");
             }
 
             return base.StopAsync(cancellationToken);
@@ -68,7 +71,7 @@ namespace OE.Sportsbook.Service
                         ProcessMessage<OnFixtureChangeMessage>(
                             payload,
                             (msg) => _sportsbookRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
-                        ); 
+                        );
                         break;
                     case MessageType.ON_MARKET_CHANGE:
                         ProcessMessage<OnMarketChangeMessage>(
@@ -86,8 +89,8 @@ namespace OE.Sportsbook.Service
             }
             catch (Exception ex)
             {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
+                _logger.LogError($"caught exception: {ex.Message}");
+                _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
             }
         }
         private void ProcessMessage<T>(string payload, Action<T> processor)

@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Repositories;
 
@@ -14,6 +15,11 @@ namespace OE.Sportsbook.Service
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .ConfigureLogging(logging =>
+                {
+                    logging.ClearProviders();
+                    logging.AddSimpleConsole(console => { console.SingleLine = true; });
+                })
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.AddSingleton<IMemCache, MemCache>();
@@ -21,6 +27,6 @@ namespace OE.Sportsbook.Service
                     services.AddSingleton<ISportsbookRepository, SportsbookRepository>();
 
                     services.AddHostedService<Worker>();
-                }).UseWindowsService();
+                });
     }
 }
