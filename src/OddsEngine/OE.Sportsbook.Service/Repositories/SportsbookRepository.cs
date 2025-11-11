@@ -1,5 +1,6 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
@@ -21,6 +22,7 @@ namespace OE.Sportsbook.Service.Repositories
 
         private IMongoDatabase _db;
 
+        private readonly ILogger<SportsbookRepository> _logger;
         private IMongoCollection<BettingStatus> _bettingStatusCollection;
         private IMongoCollection<Fixture> _fixtureCollection;
         private IMongoCollection<Market> _marketCollection;
@@ -36,11 +38,12 @@ namespace OE.Sportsbook.Service.Repositories
 
         #region Ctor
 
-        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper)
+        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper, ILogger<SportsbookRepository> logger)
         {
             _configuration = configuration;
             _memCache = memCache;
             _helper = helper;
+            _logger = logger;
 
             PrepareDatabaseConnection();
         }
@@ -89,43 +92,51 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId)
         {
-            if (!message.Ma.Any())
-                return;
-
-            var timestamp = DateTime.UtcNow.ToEpochTimestamp();
-
-            var data = ToMarketAndSelection(message, correlationId);
-
-
-            if (data.Item1.Length > 0)
-                BulkWrite(_marketCollection, data.Item1);
-
-            if (data.Item2.Length > 0)
-                BulkWrite(_selectionCollection, data.Item2);
-
-            foreach (var market in message.Ma)
+            try
             {
-                var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
-                var fixtureSpecifier = ""; // TODO: Aries;
+                if (!message.Ma.Any())
+                    return;
 
-                var payload = new
+                var timestamp = DateTime.UtcNow.ToEpochTimestamp();
+
+                var data = ToMarketAndSelection(message, correlationId);
+
+
+                if (data.Item1.Length > 0)
+                    BulkWrite(_marketCollection, data.Item1);
+
+                if (data.Item2.Length > 0)
+                    BulkWrite(_selectionCollection, data.Item2);
+
+                foreach (var market in message.Ma)
                 {
-                    market.Id,
-                    market.MaId,
-                    SpId = marketColection?.SpId ?? 0,
-                    market.MaStId,
-                    Se = market.Se.Select(selection => new
+                    var marketColection = _marketCollection.Find(f => f.PrMaId == market.PrMaId).FirstOrDefault();
+                    var fixtureSpecifier = ""; // TODO: Aries;
+
+                    var payload = new
                     {
-                        selection.Id,
-                        selection.SeId,
-                        selection.SeStId
-                    }),
-                    market.TiSe,
-                    market.TiRe
+                        market.Id,
+                        market.MaId,
+                        SpId = marketColection?.SpId ?? 0,
+                        market.MaStId,
+                        Se = market.Se.Select(selection => new
+                        {
+                            selection.Id,
+                            selection.SeId,
+                            selection.SeStId
+                        }),
+                        market.TiSe,
+                        market.TiRe
 
-                };
+                    };
 
-                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
+                    messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"caught exception: {ex.Message}");
+                _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
             }
         }
         #endregion
