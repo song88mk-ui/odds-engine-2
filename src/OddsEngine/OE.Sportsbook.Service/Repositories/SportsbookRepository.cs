@@ -112,7 +112,7 @@ namespace OE.Sportsbook.Service.Repositories
                 {
                     market.Id,
                     market.MaId,
-                    marketColection.SpId,
+                    SpId = marketColection?.SpId ?? 0,
                     market.MaStId,
                     Se = market.Se.Select(selection => new
                     {
