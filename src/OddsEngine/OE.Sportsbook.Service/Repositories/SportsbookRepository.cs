@@ -1,6 +1,5 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
-using MongoDB.Bson.IO;
 using MongoDB.Driver;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
@@ -94,7 +93,6 @@ namespace OE.Sportsbook.Service.Repositories
                 return;
 
             var timestamp = DateTime.UtcNow.ToEpochTimestamp();
-            var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
 
             var data = ToMarketAndSelection(message, correlationId);
 
@@ -107,17 +105,23 @@ namespace OE.Sportsbook.Service.Repositories
 
             foreach (var market in message.Ma)
             {
+                var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
+                var fixtureSpecifier = ""; // TODO: Aries;
+
                 var payload = new
                 {
                     market.Id,
                     market.MaId,
+                    marketColection.SpId,
                     market.MaStId,
                     Se = market.Se.Select(selection => new
                     {
                         selection.Id,
                         selection.SeId,
                         selection.SeStId
-                    })
+                    }),
+                    market.TiSe,
+                    market.TiRe
 
                 };
 
