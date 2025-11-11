@@ -59,9 +59,10 @@ namespace OE.Sportsbook.Service
 
         private void MessageReceivedEvent(object? sender, BasicDeliverEventArgs ea)
         {
+            var payload = Encoding.UTF8.GetString(ea.Body.ToArray());
+
             try
             {
-                var payload = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var messageType = ea.BasicProperties.Type;
                 var correlationId = ea.BasicProperties.CorrelationId;
 
@@ -91,6 +92,7 @@ namespace OE.Sportsbook.Service
             {
                 _logger.LogError($"caught exception: {ex.Message}");
                 _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
+                _logger.LogError($"--> payload  : {payload}");
             }
         }
         private void ProcessMessage<T>(string payload, Action<T> processor)
