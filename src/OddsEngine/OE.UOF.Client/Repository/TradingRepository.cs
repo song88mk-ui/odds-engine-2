@@ -17,7 +17,7 @@ namespace OE.UOF.Client.Repository
         {
             var result = new List<ClientConfigurationModel>();
 
-            var optionsBuilder = new DbContextOptionsBuilder<TradingContext>().UseSqlServer(_configuration["ConnectionStrings:Trading"]);
+            var optionsBuilder = new DbContextOptionsBuilder<TradingContext>().UseSqlServer(_configuration["Customer:Trading"]);
 
             using (var context = new TradingContext(optionsBuilder.Options))
             {
@@ -47,7 +47,7 @@ namespace OE.UOF.Client.Repository
         {
             var result = new List<ClientLiveFixtureModel>();
 
-            var optionsBuilder = new DbContextOptionsBuilder<TradingContext>().UseSqlServer(_configuration["ConnectionStrings:Trading"]);
+            var optionsBuilder = new DbContextOptionsBuilder<TradingContext>().UseSqlServer(_configuration["Custom:Trading"]);
 
             using (var context = new TradingContext(optionsBuilder.Options))
             {
