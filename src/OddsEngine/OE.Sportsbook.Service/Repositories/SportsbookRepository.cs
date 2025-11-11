@@ -134,7 +134,7 @@ namespace OE.Sportsbook.Service.Repositories
 
         private void PrepareDatabaseConnection()
         {
-            var client = new MongoClient(_configuration["ConnectionStrings:MongoDB-Sportsbook"]);
+            var client = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
             _db = client.GetDatabase("Sportsbook");
 
             _fixtureCollection = _db.GetCollection<Fixture>("Fixture");
