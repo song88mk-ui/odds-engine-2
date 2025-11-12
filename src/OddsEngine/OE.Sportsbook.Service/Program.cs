@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Repositories;
+using OE.Sportsbook.Service.Extensions;
 
 namespace OE.Sportsbook.Service
 {
@@ -16,6 +17,8 @@ namespace OE.Sportsbook.Service
             Host.CreateDefaultBuilder(args)
                 .ConfigureServices((hostContext, services) =>
                 {
+                    services.AddTelemetry();
+
                     services.AddSingleton<IHelper, Helper>();
                     services.AddSingleton<IMemCache, MemCache>();
                     services.AddSingleton<IMessageBroker, MessageBroker>();
