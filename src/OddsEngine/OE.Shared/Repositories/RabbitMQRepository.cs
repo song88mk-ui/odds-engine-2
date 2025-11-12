@@ -45,7 +45,7 @@ namespace OE.Shared.Repositories
                 return new BaseResponseDTO<MessageResponseDTO>
                 {
                     StatusCode = StatusCode.Error,
-                    Message = $"{StatusCode.Error} ({ex.Message})"
+                    Message = $"{StatusCode.Error} ({ex.Message}) StackTrace:{ex.StackTrace}"
                 };
             }
         }
