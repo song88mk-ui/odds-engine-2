@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OE.Adapter.Service.Repositories;
+using OE.Adapter.Service.Extensions;
 using OE.Shared.Utilities;
 
 namespace OE.Adapter.Service
@@ -15,13 +16,9 @@ namespace OE.Adapter.Service
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .ConfigureLogging(logging =>
-                {
-                    logging.ClearProviders();
-                    logging.AddSimpleConsole(console => { console.SingleLine = true; });
-                })
                 .ConfigureServices((hostContext, services) =>
                 {
+                    services.AddTelemetry();
                     services.AddSingleton<IHelper, Helper>();
                     services.AddSingleton<IMessageBroker, MessageBroker>();
                     services.AddSingleton<ITradingRepository, TradingRepository>();

@@ -1,10 +1,12 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OE.Adapter.Service.Repositories;
+using OE.Adapter.Service.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Utilities;
 using RabbitMQ.Client.Events;
+using System.Diagnostics.Metrics;
 using System.Text;
 using System.Text.Json;
 
@@ -18,15 +20,18 @@ namespace OE.Adapter.Service
         private readonly IMessageBroker _messageBroker;
         private readonly ITradingRepository _tradingRepository;
 
+        private readonly Counter<long> _processedMessagesCounter;
+
         #endregion
 
         #region Ctor
 
-        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository)
+        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, Instrumentation instrumentation)
         {
             _logger = logger;
             _messageBroker = messageBroker;
             _tradingRepository = tradingRepository;
+            _processedMessagesCounter = instrumentation.ProcessedMessagesCounter;
         }
 
         #endregion
@@ -49,7 +54,15 @@ namespace OE.Adapter.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _messageBroker.Connect();
+            try {
+                _logger.LogInformation("Connecting to RabbitMQ Server");
+                _messageBroker.Connect();
+            }
+            catch (Exception e)
+            {
+                _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
+                throw e; // up to stack, so it can fail early
+            }
             _messageBroker.MessageReceived += MessageReceivedEvent;
         }
 
@@ -86,9 +99,15 @@ namespace OE.Adapter.Service
                         );
                         break;
                 }
+
+                if (_processedMessagesCounter.Enabled)
+                    _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
             }
             catch (Exception ex)
             {
+                if (_processedMessagesCounter.Enabled)
+                    _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
+
                 _logger.LogError($"caught exception: {ex.Message}");
                 _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
             }

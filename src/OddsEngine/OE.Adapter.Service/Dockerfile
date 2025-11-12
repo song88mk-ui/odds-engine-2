@@ -12,6 +12,7 @@ RUN dotnet publish -o /source/app --no-restore && \
   cd /source/app && rm -f appsettings.*.json
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
+EXPOSE 80 8080
 WORKDIR /app
 COPY --from=build /source/app .
 ENTRYPOINT ["dotnet", "OE.Adapter.Service.dll"]
