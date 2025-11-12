@@ -105,15 +105,19 @@ namespace OE.Sportsbook.Service.Repositories
 
             foreach (var market in message.Ma)
             {
-                var marketColection = _marketCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
+                var marketColection = _marketCollection.Find(f => f.Id == market.Id).FirstOrDefault();
                 var fixtureSpecifier = ""; // TODO: Aries;
+
+                if (marketColection is null)
+                    continue;
 
                 var payload = new
                 {
-                    market.Id,
-                    market.MaId,
-                    SpId = marketColection?.SpId ?? 0,
+                    marketColection.Id,
+                    marketColection.MaId,
+                    marketColection?.SpId,
                     market.MaStId,
+                    market.MaStNa,
                     Se = market.Se.Select(selection => new
                     {
                         selection.Id,
@@ -321,6 +325,7 @@ namespace OE.Sportsbook.Service.Repositories
                 markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id),
                     Builders<Market>.Update
                         .Set(s => s.MaStId, market.MaStId)
+                        .Set(s => s.MaStNa, market.MaStNa)
                         .Set(s => s.MaStNa, "")
                 //TODO
                 //.AddToSetEach(s => s.MaNaTr, 

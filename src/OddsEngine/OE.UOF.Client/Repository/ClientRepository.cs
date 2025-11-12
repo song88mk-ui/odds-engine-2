@@ -674,13 +674,13 @@ namespace OE.UOF.Client.Repository
             //TODO: see comments below
             return new OFFixtureMessage
             {
-                FixtureId = message.FiId,
                 SportId = message.SpId,
                 SportName = message.SpNa,
                 SegmentId = message.SegId,
                 SegmentName = message.SegNa,
                 LeagueId = message.LeId,
                 LeagueName = message.LeNa,
+                FixtureId = message.FiId,
                 //LeagueReference = GetReferences(message.LeagueBetradarId),
                 //LeagueRoundId = message.LeagueBetradarId,
                 //LeagueRoundName = message.LeagueBetradarName,
@@ -708,7 +708,7 @@ namespace OE.UOF.Client.Repository
                 CurrentPeriod = message.CuPeId,
                 CurrentMinute = message.CuMi,
                 CurrentSecond = message.CuSec,
-                CurrentServer = message.CuSer//,
+                CurrentServer = message.CuSer,
                 //PeriodScores = message.PeriodScores.Select(s => new PeriodScoreMessage
                 //{
                 //    Home = s.Home,
@@ -716,8 +716,8 @@ namespace OE.UOF.Client.Repository
                 //    MatchStatusCode = s.MatchStatusCode,
                 //    PeriodType = s.PeriodType
                 //}).ToList(),
-                //TimeStampSent = message.TimestampSent,
-                //TimeStampReceived = message.TimestampReceived,
+                TimeStampSent = message.TiSe,
+                TimeStampReceived = message.TiRe,
                 //TimeStampDispatched = message.TimestampDispatched,
                 //SportNameTranslations = message.SportTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
                 //    .Select(sport => new OFSportTranslation

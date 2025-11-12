@@ -1,4 +1,6 @@
-﻿using OE.Shared.Messages.OutgoingAdapterMessages.Base;
+﻿using OE.Shared.Enums;
+using OE.Shared.Messages.OutgoingAdapterMessages.Base;
+using System;
 using System.Collections.Generic;
 
 namespace OE.Shared.Messages.OutgoingAdapterMessages
@@ -16,6 +18,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string PrMaId { get; set; }
         public long MaId { get; set; }
         public int MaStId { get; set; } //MarketStatusId
+        public string MaStNa { get; set; } //MarketStatusName
         public List<SelectionResult> Se { get; set; }
         public long TiSe { get; set; } //Time message sent
         public long TiRe { get; set; } //Time message receivec

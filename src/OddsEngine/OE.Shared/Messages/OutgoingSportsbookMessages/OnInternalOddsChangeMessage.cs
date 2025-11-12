@@ -45,6 +45,8 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         //public List<InternalPeriodScore> PeriodScores { get; set; }
         public int CuSec { get; set; }
         public int CuSer { get; set; }
+        public long TiSe { get; set; }
+        public long TiRe { get; set; }
     }
 
     public class InternalMarketMessage
