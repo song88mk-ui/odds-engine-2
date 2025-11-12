@@ -12,7 +12,10 @@ RUN dotnet publish -o /source/app --no-restore && \
   cd /source/app && rm -f appsettings.*.json
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
-EXPOSE 80 8080
 WORKDIR /app
+RUN apt-get update -qq && \
+    apt-get install curl -y && \
+    apt-get clean && \
+    rm -fr /var/lib/apt/lists/*
 COPY --from=build /source/app .
 ENTRYPOINT ["dotnet", "OE.Sportsbook.Service.dll"]
