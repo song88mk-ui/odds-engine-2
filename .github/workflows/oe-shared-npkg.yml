@@ -24,7 +24,7 @@ jobs:
         name: Version
         run: |
           VERSION=$(grep -oP '<Version>\K[^\<]+' OE.Shared.csproj)
-          echo "version=${VERSION}-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+          echo "version=${VERSION}-${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
       - name: Install deps
         working-directory: src/OddsEngine/OE.Shared
         run: |
