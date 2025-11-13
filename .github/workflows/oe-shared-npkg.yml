@@ -20,6 +20,7 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - id: version
+        working-directory: src/OddsEngine/OE.Shared
         name: Version
         run: |
           VERSION=$(grep -oP '<Version>\K[^\<]+' OE.Shared.csproj)
