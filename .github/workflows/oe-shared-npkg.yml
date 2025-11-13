@@ -1,0 +1,67 @@
+name: OE.Shared Nuget Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+
+jobs:
+
+  build:
+    name: Build Nuget Package
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - id: version
+        name: Version
+        run: |
+          VERSION=$(grep -oP '<Version>\K[^\<]+' OE.Shared.csproj)
+          echo "version=${VERSION}-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+      - name: Install deps
+        working-directory: src/OddsEngine/OE.Shared
+        run: |
+          dotnet restore
+      - name: Build
+        working-directory: src/OddsEngine/OE.Shared
+        run: |
+          dotnet build \
+            --configuration Release \
+            --no-restore
+      - name: Test
+        working-directory: src/OddsEngine/OE.Shared
+        run: |
+          dotnet test \
+            --configuration Release \
+            --no-restore \
+            --verbosity normal
+      - name: Package
+        working-directory: src/OddsEngine/OE.Shared
+        run: |
+          dotnet pack \
+            --configuration Release \
+            --no-restore \
+            --output . \
+            --include-symbols \
+            -p:SymbolPackageFormat=snupkg \
+            -p:PackageVersion="${{ steps.version.outputs.version }}"
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: |
+            *.nupkg
+      - name: Publish
+        run: |
+          dotnet nuget add source \
+            --username FlyingCockatoo \
+            --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text \
+            --name github "https://nuget.pkg.github.com/FlyingCockatoo/index.json"
+          dotnet nuget push *.nupkg --source "github"
