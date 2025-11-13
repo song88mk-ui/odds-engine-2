@@ -1,6 +1,7 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
+using OE.Sportsbook.Service.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
@@ -8,6 +9,8 @@ using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace OE.Sportsbook.Service.Repositories
 {
@@ -18,6 +21,8 @@ namespace OE.Sportsbook.Service.Repositories
         private readonly IConfiguration _configuration;
         private readonly IMemCache _memCache;
         private readonly IHelper _helper;
+
+        private readonly Histogram<double> _bulkWriteDurationHistogram;
 
         private IMongoDatabase _db;
 
@@ -36,11 +41,12 @@ namespace OE.Sportsbook.Service.Repositories
 
         #region Ctor
 
-        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper)
+        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper, Instrumentation instrumentation)
         {
             _configuration = configuration;
             _memCache = memCache;
             _helper = helper;
+            _bulkWriteDurationHistogram = instrumentation.BulkWriteDurationHistogram;
 
             PrepareDatabaseConnection();
         }
@@ -356,7 +362,13 @@ namespace OE.Sportsbook.Service.Repositories
 
         private void BulkWrite<T>(IMongoCollection<T> collection, WriteModel<T>[] data)
         {
-            collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
+            Stopwatch sw = Stopwatch.StartNew();
+            try {
+                collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
+            } finally {
+                sw.Stop();
+                _bulkWriteDurationHistogram.Record(sw.Elapsed.TotalMilliseconds);
+            }
         }
 
 
