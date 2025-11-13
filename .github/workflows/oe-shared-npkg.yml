@@ -59,6 +59,7 @@ jobs:
           path: |
             src/OddsEngine/OE.Shared/*.nupkg
       - name: Publish
+        working-directory: src/OddsEngine/OE.Shared
         run: |
           dotnet nuget add source \
             --username FlyingCockatoo \
