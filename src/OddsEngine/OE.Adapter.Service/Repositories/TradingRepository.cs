@@ -1,8 +1,10 @@
-﻿using OE.Shared.Constants;
+﻿using OE.Adapter.Service.Telemetry;
+using OE.Shared.Constants;
 using OE.Shared.Enums;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingAdapterMessages.Base;
 using OE.Shared.Utilities;
+using System.Diagnostics;
 
 namespace OE.Adapter.Service.Repositories
 {
@@ -12,14 +14,16 @@ namespace OE.Adapter.Service.Repositories
 
         private readonly IHelper _helper;
         private const ChannelType _bgProvider = ChannelType.BG;
+        private readonly ActivitySource _activitySource;
 
         #endregion
 
         #region Ctor
 
-        public TradingRepository(IHelper helper)
+        public TradingRepository(IHelper helper, Instrumentation instrumentation)
         {
             _helper = helper;
+            _activitySource = instrumentation.ActivitySource;
         }
 
         #endregion
@@ -67,9 +71,13 @@ namespace OE.Adapter.Service.Repositories
 
         private void PublishMessage<T>(IMessageBroker messageBroker, T payload, string messageType, string correlationId) where T : OutgoingAdapterMessageBase
         {
-            var instanceName = _helper.GetInstanceName(payload.PrFiId);
+            using (var activity = _activitySource.StartActivity("publish.message"))
+            {
+                var instanceName = _helper.GetInstanceName(payload.PrFiId);
+                activity?.SetTag("sb.engine.service.id", instanceName);
 
-            messageBroker.Publish(payload, messageType, $"r.oe.adapter.{messageType.ToLower()}.{instanceName}", correlationId);
+                messageBroker.Publish(payload, messageType, $"r.oe.adapter.{messageType.ToLower()}.{instanceName}", correlationId);
+            }
         }
 
         #endregion
