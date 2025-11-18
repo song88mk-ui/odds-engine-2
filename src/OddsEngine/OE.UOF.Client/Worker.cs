@@ -1,13 +1,12 @@
-using RabbitMQ.Client.Events;
-using System.Diagnostics;
-using System.Text.Json;
-using System.Text;
-using OE.Shared.Utilities;
-using OE.UOF.Client.Repository;
-using OE.Shared.Models;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
-using OE.Shared.Messages.OutgoingSportsbookMessages;
+using OE.Shared.Models;
+using OE.Shared.Utilities;
+using OE.UOF.Client.Repository;
+using RabbitMQ.Client.Events;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
 namespace OE.UOF.Client
 {
@@ -94,12 +93,15 @@ namespace OE.UOF.Client
 
                 switch (messageType)
                 {
+
+                    // OnMarket Change == Odds Change
                     case MessageType.ON_FIXTURE_CHANGE:
                         var onOddsChangeSport = JsonSerializer.Deserialize<SportModel>(payload);
 
                         if (IsMessageValid(onOddsChangeSport))
                         {
-                            var message = JsonSerializer.Deserialize<OnInternalOddsChangeMessage>(payload);
+                            // Change model remove on internal oddschange
+                            var message = JsonSerializer.Deserialize<OnFixtureChangeMessage>(payload);
 
                             _clientRepository.ProcessFixtureChange(message, _messageBrokerExternal, correlationId, _fixtureConfigurations, _configurations);
 
