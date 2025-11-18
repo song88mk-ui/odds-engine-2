@@ -33,7 +33,7 @@ jobs:
 
       - name: Check Affected files
         id: app-changes
-        uses: tj-actions/changed-files@v4
+        uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62
         with:
           files: src/OddsEngine/${{ matrix.app.path }}/**
 
