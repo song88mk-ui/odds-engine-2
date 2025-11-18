@@ -35,15 +35,16 @@ jobs:
         id: app-changes
         uses: tj-actions/changed-files@24d32ffd492484c1d75e0c0b894501ddb9d30d62
         with:
-          files: src/OddsEngine/${{ matrix.app.path }}/**
+          files: 'src/OddsEngine/${{ matrix.app.path }}/**'
 
       - name: Changes Check
+        id: proceed
         if: steps.app-changes.outputs.any_changed == 'true'
         run: |
-          exit 1
+          echo "proceed=true" >> $GITHUB_OUTPUT
 
       - name: Docker meta
-        if: success()
+        if: steps.proceed.outputs.proceed == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -80,5 +81,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Logout to Amazon ECR
-        if: success()
+        if: always()
         run: docker logout ${{ steps.login-ecr.outputs.registry }}
