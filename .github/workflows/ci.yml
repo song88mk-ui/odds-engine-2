@@ -43,6 +43,7 @@ jobs:
           exit 1
 
       - name: Docker meta
+        if: success()
         id: meta
         uses: docker/metadata-action@v5
         with:
