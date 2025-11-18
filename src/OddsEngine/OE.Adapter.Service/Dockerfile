@@ -17,5 +17,6 @@ RUN apt-get update -qq && \
     apt-get install curl -y && \
     apt-get clean && \
     rm -fr /var/lib/apt/lists/*
+
 COPY --from=build /source/app .
 ENTRYPOINT ["dotnet", "OE.Adapter.Service.dll"]
