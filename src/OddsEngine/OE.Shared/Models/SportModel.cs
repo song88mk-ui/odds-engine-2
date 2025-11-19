@@ -2,8 +2,8 @@
 {
     public class SportModel
     {
-        public int SportId { get; set; }
-        public string FixtureSpecifier { get; set; }
-        public int ProducerId { get; set; }
+        public int SpId { get; set; }
+        public string FiSp { get; set; }
+        public int PrId { get; set; }
     }
 }
