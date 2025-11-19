@@ -59,66 +59,8 @@ namespace OE.UOF.Client.Repository
         #endregion
 
         #region Methods
-
-        //public void ProcessFixtureChange(OnFixtureChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
-        //{
-        //    //CheckDelay(message, "START");
-
-        //    var payloadStr = string.Empty;
-
-        //    var finalPayload = PrepareFixtureMessage(message);
-
-        //    finalPayload.Markets = message.Ma.Select(s => new OFMarketMessage
-        //    {
-        //        MarketTemplateId = s.MaTeId,
-        //        MarketName = s.MaNa,
-        //        Line = s.Li,
-        //        MarketStatusId = s.MaStId,
-        //        MarketStatusName = ((MarketStatus)s.MaStId).ToString(),
-        //        MarketSpecifier = s.MaSp,
-        //        //TODO: check the comment below
-        //        //NextBetStop = s.NextBetStop,
-        //        //StartTime = s.StartTime,
-        //        //EndTime = s.EndTime,
-        //        //MarketNameTranslations = s.MarketTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-        //        //    .Select(market => new OFMarketTranslation
-        //        //    {
-        //        //        LanguageCode = market.LanguageCode,
-        //        //        MarketName = market.MarketName
-        //        //    }).ToList(),
-        //        Selections = s.Se.Select(se => new OFSelectionMessage
-        //        {
-        //            SelectionTemplateId = se.SeTeId,
-        //            SelectionName = se.SeNa,
-        //            Odds = se.Od,
-        //            IsActive = se.IsAc,
-        //            Probability = se.Pr,
-        //            VoidProbability = se.VoPr,
-        //            WonProbability = se.WoPr,
-        //            LostProbability = se.LoPr,
-        //            HalfWonProbability = se.HaWoPr,
-        //            HalfLostProbability = se.HaLoPr,
-        //            SelectionSpecifier = se.SeSp,
-        //            //TODO: check the comment below
-        //            //SelectionNameTranslations = se.SelectionTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-        //            //    .Select(s => new OFSelectionTranslation
-        //            //    {
-        //            //        LanguageCode = s.LanguageCode,
-        //            //        SelectionName = s.SelectionName
-        //            //    }).ToList(),
-        //        }).ToList()
-        //    }).ToList();
-
-        //    if (message.Ma.Count > 0)
-        //    {
-        //        PublishBetStopMessage(messageBroker, message, correlationId);
-        //    }
-
-        //    payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-        //    PublishMessage(messageBroker, payloadStr, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
-        //}
-        public void ProcessFixtureChange(OnFixtureChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
+        
+        public void ProcessFixtureChange(OnFixtureChangeMessage message, IMessageBroker messageBroker, string correlationId)
         {
             //CheckDelay(message, "START");
 
@@ -139,7 +81,64 @@ namespace OE.UOF.Client.Repository
 
             PublishMessage(messageBroker, payload, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
+        public void ProcessMarketChange(OnMarketChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
+        {
+            //CheckDelay(message, "START");
 
+            var payloadStr = string.Empty;
+
+            var finalPayload = PrepareOddsChangeMessage(message);
+
+            finalPayload.Markets = message.Ma.Select(s => new OFMarketMessage
+            {
+                MarketTemplateId = s.MaTeId,
+                MarketName = s.MaNa,
+                Line = s.Li,
+                MarketStatusId = s.MaStId,
+                MarketStatusName = ((MarketStatus)s.MaStId).ToString(),
+                MarketSpecifier = s.MaSp,
+                //TODO: check the comment below
+                //NextBetStop = s.NextBetStop,
+                //StartTime = s.StartTime,
+                //EndTime = s.EndTime,
+                //MarketNameTranslations = s.MarketTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                //    .Select(market => new OFMarketTranslation
+                //    {
+                //        LanguageCode = market.LanguageCode,
+                //        MarketName = market.MarketName
+                //    }).ToList(),
+                Selections = s.Se.Select(se => new OFSelectionMessage
+                {
+                    SelectionTemplateId = se.SeTeId,
+                    SelectionName = se.SeNa,
+                    Odds = se.Od,
+                    IsActive = se.IsAc,
+                    Probability = se.Pr,
+                    VoidProbability = se.VoPr,
+                    WonProbability = se.WoPr,
+                    LostProbability = se.LoPr,
+                    HalfWonProbability = se.HaWoPr,
+                    HalfLostProbability = se.HaLoPr,
+                    SelectionSpecifier = se.SeSp,
+                    //TODO: check the comment below
+                    //SelectionNameTranslations = se.SelectionTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                    //    .Select(s => new OFSelectionTranslation
+                    //    {
+                    //        LanguageCode = s.LanguageCode,
+                    //        SelectionName = s.SelectionName
+                    //    }).ToList(),
+                }).ToList()
+            }).ToList();
+
+            if (message.Ma.Count > 0)
+            {
+                PublishBetStopMessage(messageBroker, message, correlationId);
+            }
+
+            payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+
+            PublishMessage(messageBroker, payloadStr, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+        }
         public void ProcessBetStop(string payload, IMessageBroker messageBroker, string correlationId)
         {
 
@@ -671,101 +670,101 @@ namespace OE.UOF.Client.Repository
             return references;
         }
 
-        //private OFFixtureMessage PrepareFixtureMessage(OnFixtureChangeMessage message)
-        //{
-        //    if (message.Ma.Count > 0 
-        //        && message.Ma.Count() == message.Ma.Where(
-        //            c => c.MaStId == (int)MarketStatus.Inactive).Count() 
-        //            && message.FiStId == (int)FixtureStatus.Prematch && message.FiStDa < DateTime.UtcNow)
-        //    {
-        //        message.FiStId = (int)FixtureStatus.Closed;
-        //    }
+        private OFOddsChangeMessage PrepareOddsChangeMessage(OnMarketChangeMessage message)
+        {
+            if (message.Ma.Count > 0
+                && message.Ma.Count() == message.Ma.Where(
+                    c => c.MaStId == (int)MarketStatus.Inactive).Count()
+                    && message.FiStId == (int)FixtureStatus.Prematch && message.FiStDa < DateTime.UtcNow)
+            {
+                message.FiStId = (int)FixtureStatus.Closed;
+            }
 
-        //    var homeScore = "0";
-        //    var awayScore = "0";
+            var homeScore = "0";
+            var awayScore = "0";
 
-        //    if (message.FiTyId == (int)FixtureType.Match)
-        //    {
-        //        var scoreSplit = message.Sc.Split('-');
+            if (message.FiTyId == (int)FixtureType.Match)
+            {
+                var scoreSplit = message.Sc.Split('-');
 
-        //        homeScore = scoreSplit.First().Trim();
-        //        awayScore = scoreSplit.Last().Trim();
-        //    }
-        //    //TODO: see comments below
-        //    return new OFFixtureMessage
-        //    {
-        //        SportId = message.SpId,
-        //        SportName = message.SpNa,
-        //        SegmentId = message.SegId,
-        //        SegmentName = message.SegNa,
-        //        LeagueId = message.LeId,
-        //        LeagueName = message.LeNa,
-        //        FixtureId = message.FiId,
-        //        //LeagueReference = GetReferences(message.LeagueBetradarId),
-        //        //LeagueRoundId = message.LeagueBetradarId,
-        //        //LeagueRoundName = message.LeagueBetradarName,
-        //        IsOfferedLive = message.IsOfLi,
-        //        FixtureSpecifier = message.FiSp,
-        //        FixtureProviderId = message.PrFiId,
-        //        FixtureName = message.FiNa,
-        //        FixtureStartDate = message.FiStDa.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss.fffffff"),
-        //        FixtureStatusId = message.FiStId,
-        //        FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
-        //        FixtureTypeId = message.FiTyId,
-        //        FixtureTypeName = ((FixtureType)message.FiTyId).ToString(),
-        //        HomeRedCards = message.HoReCa,
-        //        AwayRedCards = message.AwReCa,
-        //        //HomeYellowCards = message.HomeYellowCards,
-        //        //AwayYellowCards = message.AwayYellowCards,
-        //        //HomeCorners = message.HomeCorners,
-        //        //AwayCorners = message.AwayCorners,
-        //        HomeScore = homeScore,
-        //        AwayScore = awayScore,
-        //        HomeId = message.HoId,
-        //        //HomeReference = GetReferences(message.HomeBetradarId),
-        //        AwayId = message.AwId,
-        //        //AwayReference = GetReferences(message.AwayBetradarId),
-        //        CurrentPeriod = message.CuPeId,
-        //        CurrentMinute = message.CuMi,
-        //        CurrentSecond = message.CuSec,
-        //        CurrentServer = message.CuSer,
-        //        //PeriodScores = message.PeriodScores.Select(s => new PeriodScoreMessage
-        //        //{
-        //        //    Home = s.Home,
-        //        //    Away = s.Away,
-        //        //    MatchStatusCode = s.MatchStatusCode,
-        //        //    PeriodType = s.PeriodType
-        //        //}).ToList(),
-        //        TimeStampSent = message.TiSe,
-        //        TimeStampReceived = message.TiRe,
-        //        //TimeStampDispatched = message.TimestampDispatched,
-        //        //SportNameTranslations = message.SportTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-        //        //    .Select(sport => new OFSportTranslation
-        //        //    {
-        //        //        LanguageCode = sport.LanguageCode,
-        //        //        SportName = sport.SportName
-        //        //    }).ToList(),
-        //        //SegmentNameTranslations = message.SegmentTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-        //        //    .Select(segment => new OFSegmentTranslation
-        //        //    {
-        //        //        LanguageCode = segment.LanguageCode,
-        //        //        SegmentName = segment.SegmentName
-        //        //    }).ToList(),
-        //        //LeagueNameTranslations = message.LeagueTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-        //        //    .Select(league => new OFLeagueTranslation
-        //        //    {
-        //        //        LanguageCode = league.LanguageCode,
-        //        //        LeagueName = league.LeagueName
-        //        //    }).ToList(),
-        //        //FixtureNameTranslations = message.FixtureTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-        //        //    .Select(fixture => new OFFixtureTranslation
-        //        //    {
-        //        //        LanguageCode = fixture.LanguageCode,
-        //        //        FixtureName = fixture.FixtureName
-        //        //    }).ToList(),
-        //        //Raw = message.Raw
-        //    };
-        //}
+                homeScore = scoreSplit.First().Trim();
+                awayScore = scoreSplit.Last().Trim();
+            }
+            //TODO: see comments below
+            return new OFOddsChangeMessage
+            {
+                SportId = message.SpId,
+                SportName = message.SpNa,
+                SegmentId = message.SegId,
+                SegmentName = message.SegNa,
+                LeagueId = message.LeId,
+                LeagueName = message.LeNa,
+                FixtureId = message.FiId,
+                //LeagueReference = GetReferences(message.LeagueBetradarId),
+                //LeagueRoundId = message.LeagueBetradarId,
+                //LeagueRoundName = message.LeagueBetradarName,
+                IsOfferedLive = message.IsOfLi,
+                FixtureSpecifier = message.FiSp,
+                FixtureProviderId = message.PrFiId,
+                FixtureName = message.FiNa,
+                FixtureStartDate = message.FiStDa.ToString("yyyy'-'MM'-'dd'T'HH':'mm':'ss.fffffff"),
+                FixtureStatusId = message.FiStId,
+                FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
+                FixtureTypeId = message.FiTyId,
+                FixtureTypeName = ((FixtureType)message.FiTyId).ToString(),
+                HomeRedCards = message.HoReCa,
+                AwayRedCards = message.AwReCa,
+                //HomeYellowCards = message.HomeYellowCards,
+                //AwayYellowCards = message.AwayYellowCards,
+                //HomeCorners = message.HomeCorners,
+                //AwayCorners = message.AwayCorners,
+                HomeScore = homeScore,
+                AwayScore = awayScore,
+                HomeId = message.HoId,
+                //HomeReference = GetReferences(message.HomeBetradarId),
+                AwayId = message.AwId,
+                //AwayReference = GetReferences(message.AwayBetradarId),
+                CurrentPeriod = message.CuPeId,
+                CurrentMinute = message.CuMi,
+                CurrentSecond = message.CuSec,
+                CurrentServer = message.CuSer,
+                //PeriodScores = message.PeriodScores.Select(s => new PeriodScoreMessage
+                //{
+                //    Home = s.Home,
+                //    Away = s.Away,
+                //    MatchStatusCode = s.MatchStatusCode,
+                //    PeriodType = s.PeriodType
+                //}).ToList(),
+                TimeStampSent = message.TiSe,
+                TimeStampReceived = message.TiRe,
+                //TimeStampDispatched = message.TimestampDispatched,
+                //SportNameTranslations = message.SportTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                //    .Select(sport => new OFSportTranslation
+                //    {
+                //        LanguageCode = sport.LanguageCode,
+                //        SportName = sport.SportName
+                //    }).ToList(),
+                //SegmentNameTranslations = message.SegmentTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                //    .Select(segment => new OFSegmentTranslation
+                //    {
+                //        LanguageCode = segment.LanguageCode,
+                //        SegmentName = segment.SegmentName
+                //    }).ToList(),
+                //LeagueNameTranslations = message.LeagueTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                //    .Select(league => new OFLeagueTranslation
+                //    {
+                //        LanguageCode = league.LanguageCode,
+                //        LeagueName = league.LeagueName
+                //    }).ToList(),
+                //FixtureNameTranslations = message.FixtureTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                //    .Select(fixture => new OFFixtureTranslation
+                //    {
+                //        LanguageCode = fixture.LanguageCode,
+                //        FixtureName = fixture.FixtureName
+                //    }).ToList(),
+                //Raw = message.Raw
+            };
+        }
 
         private void PublishBetStopMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {

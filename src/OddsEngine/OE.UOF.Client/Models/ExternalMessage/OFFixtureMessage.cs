@@ -1,9 +1,9 @@
 ﻿
 namespace OE.UOF.Client.Models
 {
-    public class OFFixtureMessage
+    public class OFOddsChangeMessage
     {
-        public OFFixtureMessage()
+        public OFOddsChangeMessage()
         {
             SportNameTranslations = new List<OFSportTranslation>();
             SegmentNameTranslations = new List<OFSegmentTranslation>();

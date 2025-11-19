@@ -2,6 +2,7 @@ using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.Shared.Utilities;
+using OE.UOF.Client.Models;
 using OE.UOF.Client.Repository;
 using RabbitMQ.Client.Events;
 using System.Diagnostics;
@@ -93,44 +94,48 @@ namespace OE.UOF.Client
 
                 switch (messageType)
                 {
-
-                    // OnMarket Change == Odds Change
                     case MessageType.ON_FIXTURE_CHANGE:
-                        var onOddsChangeSport = JsonSerializer.Deserialize<SportModel>(payload);
+                        ProcessMessageWithValidation<OnFixtureChangeMessage>(payload, msg =>
+                            {
+                                _clientRepository.ProcessFixtureChange(msg, _messageBrokerExternal, correlationId );
 
-                        if (IsMessageValid(onOddsChangeSport))
-                        {
-                            // Change model remove on internal oddschange
-                            var message = JsonSerializer.Deserialize<OnFixtureChangeMessage>(payload);
+                                _clientRepository.UpdateFixtureConfiguration(msg, _messageBroker, _fixtureConfigurations, _configurations);
+                            });
+                        break;
+                    case MessageType.ON_MARKET_CHANGE:
+                        ProcessMessageWithValidation<OnMarketChangeMessage>(payload, msg =>
+                            {
+                                _clientRepository.ProcessMarketChange(msg, _messageBrokerExternal, correlationId, _fixtureConfigurations, _configurations);
 
-                            _clientRepository.ProcessFixtureChange(message, _messageBrokerExternal, correlationId, _fixtureConfigurations, _configurations);
-
-                            _clientRepository.UpdateFixtureConfiguration(message, _messageBroker, _fixtureConfigurations, _configurations);
-                        }
+                                //_clientRepository.UpdateFixtureConfiguration(msg, _messageBroker, _fixtureConfigurations, _configurations);
+                            });
                         break;
                     case MessageType.ON_BET_STOP_FIXTURE:
-                        var onBetStopSport = JsonSerializer.Deserialize<SportModel>(payload);
-
-                        if (IsMessageValid(onBetStopSport))
-                            _clientRepository.ProcessBetStop(payload, _messageBrokerExternal, correlationId);
+                        ProcessMessageWithValidation<SportModel>(payload, msg =>
+                            {
+                                _clientRepository.ProcessBetStop(payload, _messageBrokerExternal, correlationId);
+                            });
                         break;
                     case MessageType.ON_BET_STOP_GLOBAL:
-                        _clientRepository.ProcessBetStopGlobal(payload, _messageBrokerExternal, correlationId);
+                        ProcessRawMessage(payload, raw => _clientRepository.ProcessBetStopGlobal(raw, _messageBrokerExternal, correlationId));
                         break;
+
                     case MessageType.ON_MARKET_SETTLEMENT:
-                        var onBetSettlementSport = JsonSerializer.Deserialize<SportModel>(payload);
-
-                        if (IsMessageValid(onBetSettlementSport))
-                            _clientRepository.ProcessMarketSettlement(payload, _messageBrokerExternal, correlationId);
+                        ProcessMessageWithValidation<SportModel>(payload, msg =>
+                            {
+                                _clientRepository.ProcessMarketSettlement(payload, _messageBrokerExternal, correlationId);
+                            });
                         break;
+
                     case MessageType.ON_MARKET_CANCEL:
-                        var onBetCancellationSport = JsonSerializer.Deserialize<SportModel>(payload);
-
-                        if (IsMessageValid(onBetCancellationSport))
-                            _clientRepository.ProcessMarketCancellation(payload, _messageBrokerExternal, correlationId);
+                        ProcessMessageWithValidation<SportModel>(payload, msg =>
+                            {
+                                _clientRepository.ProcessMarketCancellation(payload, _messageBrokerExternal, correlationId);
+                            });
                         break;
+
                     case "OnHeartbeat":
-                        _clientRepository.ProcessHeartbeat(payload, _messageBrokerExternal, correlationId);
+                        ProcessRawMessage(payload, raw => _clientRepository.ProcessHeartbeat(raw, _messageBrokerExternal, correlationId));
                         break;
                 }
 
@@ -152,60 +157,55 @@ namespace OE.UOF.Client
             }
         }
 
+        private void ProcessMessageWithValidation<T>(string payload, Action<T> handler)
+        {
+            var sportModel = JsonSerializer.Deserialize<SportModel>(payload);
+
+            if (!IsMessageValid(sportModel))
+                return;
+
+            var message = JsonSerializer.Deserialize<T>(payload);
+            handler(message);
+        }
+
+        private void ProcessRawMessage(string payload, Action<string> handler)
+        {
+            handler(payload);
+        }
+
         private bool IsMessageValid(SportModel model)
         {
             //var stopwatch = new Stopwatch();
             //stopwatch.Start();
 
-            var retval = false;
+            var sportConfig = _configurations.FirstOrDefault(c => c.SportId == model.SpId);
+            if (sportConfig == null)
+                return false;
 
-            var sportConfiguration = _configurations.FirstOrDefault(c => c.SportId == model.SportId);
+            if (model.PrId == 3)
+                return sportConfig.PrematchOdds;
 
-            if (sportConfiguration != null)
-            {
-                if (model.ProducerId == 3 && sportConfiguration.PrematchOdds)
-                {
-                    retval = true;
-                }
-                else if (model.ProducerId == 1 && sportConfiguration.LiveOdds)
-                {
-                    if (!sportConfiguration.MaxFixtures.HasValue)
-                    {
-                        // if max fixture doesn't have value it means no max fixture is set.
-                        retval = true;
-                    }
-                    else
-                    {
-                        var fixtureConfig = _fixtureConfigurations.FirstOrDefault(c => c.SportId == model.SportId);
+            if (model.PrId != 1 || !sportConfig.LiveOdds)
+                return false;
 
-                        if (fixtureConfig == null)
-                        {
-                            // if sport doesn't exist then return true.
-                            retval = true;
-                        }
-                        else
-                        {
-                            if (fixtureConfig.Fixtures.Count < sportConfiguration.MaxFixtures)
-                            {
-                                // if fixture count didn't reach the treshold yet then return true.
-                                retval = true;
-                            }
-                            else if (fixtureConfig.Fixtures.Count >= sportConfiguration.MaxFixtures)
-                            {
-                                // check if the fixture is included in the list. if not then return false.
-                                var existingFixture = fixtureConfig.Fixtures.FirstOrDefault(c => c.FixtureSpecifier == model.FixtureSpecifier);
+            if (!sportConfig.MaxFixtures.HasValue)
+                return true;
 
-                                retval = existingFixture != null ? true : false;
-                            }
-                        }
-                    }
-                }
-            }
+            var fixtureConfig = _fixtureConfigurations.FirstOrDefault(c => c.SportId == model.SpId);
+
+            if (fixtureConfig == null)
+                return true;
+
+            int currentFixtureCount = fixtureConfig.Fixtures.Count;
+            int maxFixtures = sportConfig.MaxFixtures.Value;
+
+            if (currentFixtureCount < maxFixtures)
+                return true;
+
+            return fixtureConfig.Fixtures.Any(f => f.FixtureSpecifier == model.FiSp);
 
             //Console.WriteLine($"IsMessageValid: {stopwatch.Elapsed:hh\\:mm\\:ss\\.fff}");
             //stopwatch.Stop();
-
-            return retval;
         }
 
         private void ResetDate()
