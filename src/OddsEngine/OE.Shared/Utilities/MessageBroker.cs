@@ -239,7 +239,7 @@ namespace OE.Shared.Utilities
         private void HandleMessage(object sender, BasicDeliverEventArgs e)
         {
             try
-            {   
+            {
                 MessageReceived(sender, e);
 
                 _consumer.Model.BasicAck(e.DeliveryTag, false);
@@ -278,8 +278,7 @@ namespace OE.Shared.Utilities
         public void Publish<T>(T payload, string messageType, string routingKey, string correlationId)
         {
           var activityName = "${routingKey} send";
-          var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer);
-          try
+          using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
           {
             var properties = _model.CreateBasicProperties();
             properties.CorrelationId = correlationId;
@@ -302,21 +301,12 @@ namespace OE.Shared.Utilities
 
             _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
           }
-          finally
-          {
-            if (activity != null)
-            {
-              activity.Stop();
-              activity.Dispose();
-            }
-          }
         }
 
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
         {
           var activityName = "${routingKey} send";
-          var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer);
-          try
+          using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
           {
             var properties = _model.CreateBasicProperties();
             properties.CorrelationId = correlationId;
@@ -338,14 +328,6 @@ namespace OE.Shared.Utilities
             var payloadBytes = Encoding.UTF8.GetBytes(payload);
 
             _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
-          }
-          finally
-          {
-            if (activity != null)
-            {
-              activity.Stop();
-              activity.Dispose();
-            }
           }
         }
 
