@@ -1,0 +1,22 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace OE.WebSocket.Service.Messages
+{
+    public class OutgoingBetStopFixture
+    {
+        public OutgoingBetStopFixture()
+        {
+            Gr = new List<string>();
+        }
+        public List<string> Gr { get; set; }
+        public BetStopFixture Pa { get; set; }
+    }
+
+    public class BetStopFixture
+    {
+        public string FiId { get; set; }
+        public bool IsBeSt { get; set; }
+        public bool SeAcMaToIn { get; set; }
+    }
+}
