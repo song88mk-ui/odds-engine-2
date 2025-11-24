@@ -45,6 +45,11 @@ namespace OE.Adapter.Service.Repositories
             PublishMessage(messageBroker, message, MessageType.ON_MARKET_SETTLEMENT, correlationId);
         }
 
+        public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
+        {
+            PublishMessage(messageBroker, message, MessageType.ON_BET_STOP_GLOBAL, correlationId);
+        }
+
         #endregion
 
         #region Utilities
