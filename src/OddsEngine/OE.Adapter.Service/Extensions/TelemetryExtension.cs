@@ -7,7 +7,6 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using OpenTelemetry;
-using Prometheus;
 using System;
 
 namespace OE.Adapter.Service.Extensions
@@ -32,27 +31,27 @@ namespace OE.Adapter.Service.Extensions
 
             if (Convert.ToBoolean(configuration["Telemetry:Enabled"]))
             {
-                logger.LogInformation("Initialize OpenTelemetry and Prometheus Exporter");
-                services
-                    .AddOpenTelemetry()
-                    .ConfigureResource(resource)
-                    .WithTracing(tracing =>
-                    {
-                        tracing
-                        .AddSource(Instrumentation.ActivitySourceName)
-                        .SetSampler(new AlwaysOnSampler())
-                        .AddOtlpExporter();
-                    })
-                    .WithMetrics(metrics =>
-                    {
-                        metrics
-                        .AddMeter(Instrumentation.MeterName)
-                        .AddRuntimeInstrumentation()
-                        .AddProcessInstrumentation()
-                        .AddOtlpExporter();
-                    });
+                var metricsPort = configuration.GetValue<int>("Telemetry:MetricsPort", 8080);
+                logger.LogInformation("Setting up Open Telemetry: Prometheus endpoint on port {metricsPort}", metricsPort);
 
-                services.AddMetricServer(opts => { opts.Port = 8080; });
+                services
+                .AddOpenTelemetry()
+                .ConfigureResource(resource)
+                .WithTracing(tracing =>
+                {
+                    tracing
+                    .AddSource(Instrumentation.ActivitySourceName)
+                    .SetSampler(new AlwaysOnSampler())
+                    .AddOtlpExporter();
+                })
+                .WithMetrics(metrics =>
+                {
+                    metrics
+                    .AddMeter(Instrumentation.MeterName)
+                    .AddRuntimeInstrumentation()
+                    .AddProcessInstrumentation()
+                    .AddPrometheusHttpListener(opts => opts.UriPrefixes = new string[] { $"http://+:{metricsPort}" });
+                });
             }
 
             return services;
