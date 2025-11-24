@@ -180,16 +180,16 @@ namespace OE.UOF.Client.Repository
         {
 
             //TODO: see comments below
-            //var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
+            var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
 
-            //var finalPayload = new
-            //{
-            //    isBetStop = message.IsBetStop
-            //};
+            var finalPayload = new
+            {
+                isBetStop = message.IsBetStop
+            };
 
-            //var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+            var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
 
-            //PublishMessage(messageBroker, payloadStr, "onbetstopglobal", $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            PublishMessage(messageBroker, payloadStr, "onbetstopglobal", $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
         public void ProcessMarketSettlement(string payload, IMessageBroker messageBroker, string correlationId)
