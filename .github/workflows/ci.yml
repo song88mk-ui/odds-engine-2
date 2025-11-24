@@ -27,6 +27,8 @@ jobs:
             image: oev2-adapter-service
           - path: OE.Sportsbook.Service
             image: oev2-sportsbook-service
+          - path: OE.Websocket.Service
+            image: oev2-websocket-service
     steps:
       - name: Checkout
         uses: actions/checkout@v5
