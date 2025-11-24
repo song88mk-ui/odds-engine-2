@@ -179,15 +179,19 @@ namespace OE.UOF.Client.Repository
         public void ProcessBetStopGlobal(string payload, IMessageBroker messageBroker, string correlationId)
         {
 
-            //TODO: see comments below
-            var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
+            var payloadStr = string.Empty;
 
-            var finalPayload = new
+            if (!String.IsNullOrEmpty(payload))
             {
-                isBetStop = message.IsBetStop
-            };
+                var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
 
-            var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+                var finalPayload = new
+                {
+                    isBetStop = message.IsBetStop
+                };
+
+                payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+            }
 
             PublishMessage(messageBroker, payloadStr, "onbetstopglobal", $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
