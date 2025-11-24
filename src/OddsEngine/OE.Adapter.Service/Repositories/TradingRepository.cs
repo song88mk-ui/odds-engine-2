@@ -47,7 +47,13 @@ namespace OE.Adapter.Service.Repositories
 
         public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
         {
-            PublishMessage(messageBroker, message, MessageType.ON_BET_STOP_GLOBAL, correlationId);
+            using (var activity = _activitySource.StartActivity("publish.message"))
+            {
+                var instanceName = "10";
+                activity?.SetTag("sb.engine.service.id", instanceName);
+
+                messageBroker.Publish(message, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.adapter.{MessageType.ON_BET_STOP_GLOBAL.ToLower()}.{instanceName}", correlationId);
+            }
         }
 
         #endregion
