@@ -92,27 +92,34 @@ namespace OE.Adapter.Service
 
                 activity?.SetTag("message.type", messageType);
 
-                switch (messageType)
-                {
-                    case MessageType.ON_FIXTURE_CHANGE:
-                        ProcessMessage<OnFixtureChangeMessage>(
-                            payload,
-                            (msg) => _tradingRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
-                        );
-                        break;
-                    case MessageType.ON_MARKET_CHANGE:
-                        ProcessMessage<OnMarketChangeMessage>(
-                            payload,
-                            (msg) => _tradingRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
-                        );
-                        break;
-                    case MessageType.ON_MARKET_SETTLEMENT:
-                        ProcessMessage<OnMarketSettlementMessage>(
-                            payload,
-                            (msg) => _tradingRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
-                        );
-                        break;
-                }
+                    switch (messageType)
+                    {
+                        case MessageType.ON_FIXTURE_CHANGE:
+                            ProcessMessage<OnFixtureChangeMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_MARKET_CHANGE:
+                            ProcessMessage<OnMarketChangeMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_MARKET_SETTLEMENT:
+                            ProcessMessage<OnMarketSettlementMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_BET_STOP_GLOBAL:
+                            ProcessMessage<OnBetStopGlobalMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnBetStopGlobalMessage(_messageBroker, msg, correlationId)
+                            );
+
+                            break;
+                    }
 
                 if (_processedMessagesCounter.Enabled)
                     _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
