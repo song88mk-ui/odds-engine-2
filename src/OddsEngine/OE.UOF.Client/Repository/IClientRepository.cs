@@ -8,8 +8,8 @@ namespace OE.UOF.Client.Repository
     {
         void ProcessFixtureChange(OnFixtureChangeMessage message, IMessageBroker messageBroker, string correlationId);
         void ProcessMarketChange(OnMarketChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations);
+        void ProcessBetStopGlobal(OnBetStopGlobalMessage message, IMessageBroker messageBroker, string correlationId);
         void ProcessBetStop(string payload, IMessageBroker messageBroker, string correlationId);
-        void ProcessBetStopGlobal(string payload, IMessageBroker messageBroker, string correlationId);
         void ProcessMarketSettlement(string payload, IMessageBroker messageBroker, string correlationId);
         void ProcessMarketCancellation(string payload, IMessageBroker messageBroker, string correlationId);
         void ProcessHeartbeat(string payload, IMessageBroker messageBroker, string correlationId);

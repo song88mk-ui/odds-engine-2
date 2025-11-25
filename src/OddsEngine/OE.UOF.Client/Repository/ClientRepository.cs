@@ -60,7 +60,7 @@ namespace OE.UOF.Client.Repository
         #endregion
 
         #region Methods
-        
+
         public void ProcessFixtureChange(OnFixtureChangeMessage message, IMessageBroker messageBroker, string correlationId)
         {
             //CheckDelay(message, "START");
@@ -177,22 +177,20 @@ namespace OE.UOF.Client.Repository
             //_memCache.AddOrUpdateCache($"BetStopFixture:{message.FixtureSpecifier}", betStopFixture, 24);
         }
 
-        public void ProcessBetStopGlobal(string payload, IMessageBroker messageBroker, string correlationId)
+        public void ProcessBetStopGlobal(OnBetStopGlobalMessage message, IMessageBroker messageBroker, string correlationId)
         {
 
             var payloadStr = string.Empty;
 
-            if (!String.IsNullOrEmpty(payload))
+            if (message == null)
+                return;
+
+            var finalPayload = new
             {
-                var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
+                isBetStop = message.IsBetStop
+            };
 
-                var finalPayload = new
-                {
-                    isBetStop = message.IsBetStop
-                };
-
-                payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-            }
+            payloadStr = JsonSerializer.Serialize(finalPayload, _options);
 
             PublishMessage(messageBroker, payloadStr, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }

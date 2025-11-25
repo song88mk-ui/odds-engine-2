@@ -117,7 +117,7 @@ namespace OE.UOF.Client
                             });
                         break;
                     case MessageType.ON_BET_STOP_GLOBAL:
-                        ProcessRawMessage(payload, raw => _clientRepository.ProcessBetStopGlobal(raw, _messageBrokerExternal, correlationId));
+                        ProcessMessage<OnBetStopGlobalMessage>(payload, msg => _clientRepository.ProcessBetStopGlobal(msg, _messageBrokerExternal, correlationId));
                         break;
 
                     case MessageType.ON_MARKET_SETTLEMENT:
@@ -168,6 +168,11 @@ namespace OE.UOF.Client
             handler(message);
         }
 
+        private void ProcessMessage<T>(string payload, Action<T> handler)
+        {
+            var message = JsonSerializer.Deserialize<T>(payload);
+            handler(message);
+        }
         private void ProcessRawMessage(string payload, Action<string> handler)
         {
             handler(payload);
