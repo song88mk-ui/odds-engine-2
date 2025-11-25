@@ -1,4 +1,5 @@
-﻿using OE.Shared.Enums;
+﻿using OE.Shared.Constants;
+using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
@@ -179,17 +180,21 @@ namespace OE.UOF.Client.Repository
         public void ProcessBetStopGlobal(string payload, IMessageBroker messageBroker, string correlationId)
         {
 
-            //TODO: see comments below
-            //var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
+            var payloadStr = string.Empty;
 
-            //var finalPayload = new
-            //{
-            //    isBetStop = message.IsBetStop
-            //};
+            if (!String.IsNullOrEmpty(payload))
+            {
+                var message = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
 
-            //var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+                var finalPayload = new
+                {
+                    isBetStop = message.IsBetStop
+                };
 
-            //PublishMessage(messageBroker, payloadStr, "onbetstopglobal", $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+            }
+
+            PublishMessage(messageBroker, payloadStr, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
         public void ProcessMarketSettlement(string payload, IMessageBroker messageBroker, string correlationId)
