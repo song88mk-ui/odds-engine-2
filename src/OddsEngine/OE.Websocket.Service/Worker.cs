@@ -3,12 +3,17 @@ using MessagePack;
 using Microsoft.AspNetCore.SignalR.Client;
 using OE.Shared.Utilities;
 using OE.WebSocket.Service.Messages;
-using System.Collections.Concurrent;
-using RabbitMQ.Client.Events;
-using System.Text;
-using System.Text.Json;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.WebSocket.Service.Repository;
+using OE.WebSocket.Service.Telemetry;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
 namespace OE.Websocket.Service
 {
@@ -19,6 +24,9 @@ namespace OE.Websocket.Service
         private readonly IMessageBroker _messageBroker;
         private readonly ISportsbookRepository _sportsbookRepository;
         private readonly HubConnection _hubConnection;
+
+        private readonly ActivitySource _activitySource;
+        private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
 
         private Thread _threadTopFixtures;
         private Thread _threadTopLeagues;
@@ -153,12 +161,22 @@ namespace OE.Websocket.Service
             }
         }
 
-        public Worker(ILogger<Worker> logger, IConfiguration configuration, IMessageBroker messageBroker, ISportsbookRepository sportsbookRepository)
+        public Worker(
+                ILogger<Worker> logger,
+                IConfiguration configuration,
+                IMessageBroker messageBroker,
+                ISportsbookRepository sportsbookRepository,
+                Instrumentation instrumentation)
         {
             _configuration = configuration;
+            _activitySource = instrumentation.ActivitySource;
+            _logger = logger;
+            _messageBroker = messageBroker;
+            _sportsbookRepository = sportsbookRepository;
 
             if (bool.Parse(_configuration["Custom:UseMessagePack"]))
             {
+                _logger.LogInformation("Using messagepack serialization protocol");
                 _hubConnection = new HubConnectionBuilder()
                                     .WithUrl(_configuration["Custom:WebSocketAPI"])
                                     .AddMessagePackProtocol(options =>
@@ -175,16 +193,13 @@ namespace OE.Websocket.Service
             }
             else
             {
+                _logger.LogInformation("Not using messagepack serialization protocol");
                 _hubConnection = new HubConnectionBuilder()
                                     .WithUrl(_configuration["Custom:WebSocketAPI"])
                                     .WithAutomaticReconnect()
                                     .Build();
             }
 
-            _logger = logger;
-
-            _messageBroker = messageBroker;
-            _sportsbookRepository = sportsbookRepository;
         }
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
@@ -200,6 +215,7 @@ namespace OE.Websocket.Service
             await _sportsbookRepository.ProcessBetBuilderMarketTemplates();
             await _sportsbookRepository.ProcessMarketTemplatePlayerProps();
 
+            _logger.LogInformation("Preparing threads");
             _threadTopFixtures = new Thread(ThreadTopFixtures);
             _threadTopLeagues = new Thread(ThreadTopLeagues);
             _threadMarketCount = new Thread(ThreadMarketCount);
@@ -214,6 +230,7 @@ namespace OE.Websocket.Service
             _threadPayable = new Thread(ThreadPayable);
             _threadMarketSortOrderChange = new Thread(ThreadMarketSortOrder);
 
+            _logger.LogInformation("Starting threads");
             _threadTopFixtures.Start();
             _threadTopLeagues.Start();
             _threadMarketCount.Start();
@@ -230,17 +247,27 @@ namespace OE.Websocket.Service
 
             await _hubConnection.StartAsync();
 
+            _logger.LogInformation("Connecting to broker/RabbitMQ");
             _messageBroker.Connect();
+
             _messageBroker.MessageReceived += MessageReceivedEvent;
         }
+
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
         {
+            var parentContext = Propagator.Extract(default, e.BasicProperties, this.ExtractTraceFromBasicProperties);
+            Baggage.Current = parentContext.Baggage;
+
             var payload = Encoding.UTF8.GetString(e.Body);
             var messageType = e.BasicProperties.Type;
             var correlationId = e.BasicProperties.CorrelationId;
 
+
+            using (var activity = _activitySource.StartActivity("${e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
             try
             {
+                activity?.SetTag("message.type", messageType);
+
                 switch (messageType)
                 {
                     case "OnOddsChange":
@@ -300,14 +327,30 @@ namespace OE.Websocket.Service
                         break;
 
                 }
+                activity?.SetStatus(ActivityStatusCode.Ok);
             }
             catch (Exception exception)
             {
-                _logger.LogError("error processing message: {message}, trace: {trace}", exception.Message, exception.StackTrace);
+                activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                _logger.LogError(exception, "error processing message: {trace}", exception.StackTrace);
                 // abruptly terminate the process and let the operating system
                 // supervisor handles its job of restarting it
                 System.Environment.Exit(1);
             }
+        }
+
+        private IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
+        {
+            try
+            {
+                if (props.Headers.TryGetValue(key, out var value))
+                {
+                    var bytes = value as byte[];
+                    return new[] { Encoding.UTF8.GetString(bytes) };
+                }
+            } catch (Exception) {}
+
+            return Enumerable.Empty<string>();
         }
     }
 }
