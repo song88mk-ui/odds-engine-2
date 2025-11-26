@@ -4,7 +4,6 @@ using OE.UOF.Client.Repository;
 
 
 Host.CreateDefaultBuilder(args)
-    .UseWindowsService()
     .ConfigureServices((context, services) =>
     {
         services.AddSingleton<IMessageBroker, MessageBroker>();
