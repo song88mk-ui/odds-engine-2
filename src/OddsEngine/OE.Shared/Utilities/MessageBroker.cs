@@ -137,7 +137,7 @@ namespace OE.Shared.Utilities
                 {
                     var clientProperties = new Dictionary<string, object>
                     {
-                        { "client_id", Environment.MachineName },
+                        { "connection_name", Environment.MachineName },
                         { "application_name", "Song88 Platform" }
                     };
 
@@ -365,10 +365,7 @@ namespace OE.Shared.Utilities
             }
             props.Headers[key] = value;
           }
-          catch (Exception)
-          {
-            //
-          }
+          catch (Exception) {}
         }
 
         private void PrepareExternalConnection()
@@ -379,7 +376,7 @@ namespace OE.Shared.Utilities
                 {
                     var clientProperties = new Dictionary<string, object>
                     {
-                        { "client_id", "Song88 Platform" }
+                        { "connection_name", "Song88 Platform" }
                     };
 
                     _externalConnectionFactory = new ConnectionFactory

@@ -20,7 +20,6 @@ namespace OE.Websocket.Service
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
-
         private readonly IConfiguration _configuration;
         private readonly IMessageBroker _messageBroker;
         private readonly ISportsbookRepository _sportsbookRepository;
