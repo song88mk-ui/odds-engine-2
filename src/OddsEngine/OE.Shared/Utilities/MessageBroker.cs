@@ -134,6 +134,13 @@ namespace OE.Shared.Utilities
             if (_connection == null)
             {
                 if (_connectionFactory == null)
+                {
+                    var clientProperties = new Dictionary<string, object>
+                    {
+                        { "client_id", Environment.MachineName },
+                        { "application_name", "Song88 Platform" }
+                    };
+
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
@@ -142,8 +149,10 @@ namespace OE.Shared.Utilities
                         Password = _password,
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
-                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
+                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
+                        ClientProperties = clientProperties
                     };
+                }
 
                 _connection = _connectionFactory.CreateConnection();
 
@@ -367,6 +376,12 @@ namespace OE.Shared.Utilities
             if (_externalConnection == null)
             {
                 if (_externalConnectionFactory == null)
+                {
+                    var clientProperties = new Dictionary<string, object>
+                    {
+                        { "client_id", "Song88 Platform" }
+                    };
+
                     _externalConnectionFactory = new ConnectionFactory
                     {
                         HostName = _externalHostName,
@@ -376,8 +391,10 @@ namespace OE.Shared.Utilities
                         VirtualHost = _externalVirtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _externalPort == 5671 ? true : false, ServerName = _externalHostName }
+                        Ssl = new SslOption { Enabled = _externalPort == 5671 ? true : false, ServerName = _externalHostName },
+                        ClientProperties = clientProperties
                     };
+                }
 
                 _externalConnection = _externalConnectionFactory.CreateConnection();
 
