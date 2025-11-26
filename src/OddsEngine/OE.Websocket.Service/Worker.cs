@@ -265,7 +265,7 @@ namespace OE.Websocket.Service
             var correlationId = e.BasicProperties.CorrelationId;
 
 
-            using (var activity = _activitySource.StartActivity("${e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
+            using (var activity = _activitySource.StartActivity($"{e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
             try
             {
                 activity?.SetTag("message.type", messageType);

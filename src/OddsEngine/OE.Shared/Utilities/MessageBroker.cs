@@ -301,7 +301,7 @@ namespace OE.Shared.Utilities
 
         public void Publish<T>(T payload, string messageType, string routingKey, string correlationId)
         {
-          var activityName = "${routingKey} send";
+          var activityName = $"{routingKey} send";
           using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
           {
             var properties = _model.CreateBasicProperties();
@@ -329,7 +329,7 @@ namespace OE.Shared.Utilities
 
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
         {
-          var activityName = "${routingKey} send";
+          var activityName = $"{routingKey} send";
           using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
           {
             var properties = _model.CreateBasicProperties();
