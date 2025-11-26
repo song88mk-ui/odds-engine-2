@@ -7,6 +7,7 @@ using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -111,7 +112,21 @@ namespace OE.Shared.Utilities
             _password = _configuration["MessageBroker:Password"];
             _virtualHost = _configuration["MessageBroker:VirtualHost"];
             _exchange = _configuration["MessageBroker:Exchange"];
-            _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{Environment.MachineName.ToLower()}" : _configuration["MessageBroker:Queue"];
+
+            var suffix = "";
+
+            if (_isExclusive)
+            {
+                using (MD5 hasher = MD5.Create())
+                {
+                    byte[] bytes = hasher.ComputeHash(Encoding.UTF8.GetBytes(Environment.MachineName));
+                    StringBuilder sb = new StringBuilder();
+                    foreach(byte b in bytes)
+                        sb.Append(b.ToString("x2"));
+                    suffix = sb.ToString().Substring(0,5);
+                }
+            }
+            _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{suffix}" : _configuration["MessageBroker:Queue"];
             _consumerName = _configuration["MessageBroker:Consumer"];
             _routingKey = _configuration["MessageBroker:RoutingKey"];
             _prefetchCount = string.IsNullOrEmpty(_configuration["MessageBroker:PrefetchCount"]) ? "1000" : _configuration["MessageBroker:PrefetchCount"];
