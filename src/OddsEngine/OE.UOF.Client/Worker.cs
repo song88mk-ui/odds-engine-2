@@ -52,7 +52,7 @@ namespace OE.UOF.Client
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "failed to start worker");
             }
 
             return base.StopAsync(cancellationToken);
@@ -60,9 +60,13 @@ namespace OE.UOF.Client
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _logger.LogInformation("processing market template player props");
             _platformRepository.ProcessMarketTemplatePlayerProps();
 
+            _logger.LogInformation("getting client configurations");
             _configurations = _tradingRepository.GetClientConfigurations();
+
+            _logger.LogInformation("getting client live fixtures");
             _fixtureConfigurations = _tradingRepository.GetClientLiveFixtures();
 
             var configurationPayload = JsonSerializer.Serialize(_configurations);
@@ -71,10 +75,13 @@ namespace OE.UOF.Client
             var fixtureConfigurationPayload = JsonSerializer.Serialize(_fixtureConfigurations);
             _logger.LogDebug(fixtureConfigurationPayload);
 
+            _logger.LogInformation("connecting to external broker");
             _messageBrokerExternal.ExternalConnect();
 
+            _logger.LogInformation("connecting to broker/RabbitMQ");
             _messageBroker.Connect();
             _messageBroker.MessageReceived += MessageReceivedEvent;
+            _logger.LogInformation("connected, processing incoming messages");
 
             return Task.CompletedTask;
         }
@@ -144,7 +151,7 @@ namespace OE.UOF.Client
             }
             catch (Exception ex)
             {
-                _logger.LogError("${ex.Message} - {ex.StackTrace}");
+                _logger.LogError(ex, $"trace: {ex.StackTrace}");
                 var errorMessage = new
                 {
                     CorrelationId = correlationId,
