@@ -137,7 +137,7 @@ namespace OE.Shared.Utilities
                 {
                     var clientProperties = new Dictionary<string, object>
                     {
-                        { "connection_name", Environment.MachineName },
+                        { "host_name", Environment.MachineName },
                         { "application_name", "Song88 Platform" }
                     };
 
@@ -376,7 +376,7 @@ namespace OE.Shared.Utilities
                 {
                     var clientProperties = new Dictionary<string, object>
                     {
-                        { "connection_name", "Song88 Platform" }
+                        { "application_name", "Song88 Platform" }
                     };
 
                     _externalConnectionFactory = new ConnectionFactory
