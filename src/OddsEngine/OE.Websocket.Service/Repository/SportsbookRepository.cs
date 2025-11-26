@@ -22,12 +22,15 @@ namespace OE.WebSocket.Service.Repository
         private readonly IConfiguration _configuration;
         private readonly IMemCache _memCache;
         private readonly HttpClient _httpClient;
+        private readonly ILogger<SportsbookRepository> _logger;
+
         private readonly ActivitySource _activitySource;
         private readonly Counter<long> _publishedToWebSocketCounter;
 
         private List<Tuple<int, List<string>>> _mainMarketTemplates = new List<Tuple<int, List<string>>>();
         private readonly List<int> _fixtureStatus = new List<int> { (int)FixtureStatus.Prematch, (int)FixtureStatus.Live };
         private static List<string> _asianClCo = new List<string>();
+        // TODO: doc: what are these numbers?
         private static List<string> _MaTeIds = new List<string> { "16", "18", "66", "68" };
 
         private readonly List<int> _marketStatusToRemove = new List<int> { (int)MarketStatus.Inactive, (int)MarketStatus.Cancelled, (int)MarketStatus.Settled, (int)MarketStatus.HandedOver };
@@ -37,8 +40,9 @@ namespace OE.WebSocket.Service.Repository
 
         #region Ctor
 
-        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, Instrumentation instrumentation)
+        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, Instrumentation instrumentation, ILogger<SportsbookRepository> logger)
         {
+            _logger = logger;
             _configuration = configuration;
             _memCache = memCache;
             _activitySource = instrumentation.ActivitySource;
@@ -93,8 +97,9 @@ namespace OE.WebSocket.Service.Repository
                         await ProcessMatchOddsChangeForMainMarkets(message, hubConnection, finalMarkets);
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error processing odds change for main markets");
             }
         }
 
@@ -114,8 +119,9 @@ namespace OE.WebSocket.Service.Repository
                         await ProcessMatchOddsChangeForAllMarkets(message, hubConnection);
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error processing oddschange for all markets");
             }
         }
 
@@ -161,8 +167,9 @@ namespace OE.WebSocket.Service.Repository
                             new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
                 await PublishToWebSocket("PublishBetStopGlobal", hubConnection, payload);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error processing bet stop global");
             }
         }
 
@@ -185,8 +192,9 @@ namespace OE.WebSocket.Service.Repository
                             new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
                 await PublishToWebSocket("PublishBetStatus", hubConnection, payload);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error processing bet status");
             }
         }
 

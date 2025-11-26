@@ -251,6 +251,7 @@ namespace OE.Websocket.Service
             _messageBroker.Connect();
 
             _messageBroker.MessageReceived += MessageReceivedEvent;
+            _logger.LogInformation("connected. processing incoming messages");
         }
 
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
