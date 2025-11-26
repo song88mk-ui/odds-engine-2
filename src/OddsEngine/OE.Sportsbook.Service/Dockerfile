@@ -20,5 +20,6 @@ RUN apt-get update -qq && \
     apt-get install curl -y && \
     apt-get clean && \
     rm -fr /var/lib/apt/lists/*
+
 COPY --from=build /app .
 ENTRYPOINT ["dotnet", "OE.Sportsbook.Service.dll"]
