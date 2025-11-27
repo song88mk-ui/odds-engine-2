@@ -3,6 +3,7 @@
     public enum FixtureType
     {
         Match = 0,
-        Outright = 1
+        Outright = 1,
+        Unknown = -1
     }
 }
