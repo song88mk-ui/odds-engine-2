@@ -7,6 +7,7 @@ using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -111,7 +112,21 @@ namespace OE.Shared.Utilities
             _password = _configuration["MessageBroker:Password"];
             _virtualHost = _configuration["MessageBroker:VirtualHost"];
             _exchange = _configuration["MessageBroker:Exchange"];
-            _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{Environment.MachineName.ToLower()}" : _configuration["MessageBroker:Queue"];
+
+            var suffix = "";
+
+            if (_isExclusive)
+            {
+                using (MD5 hasher = MD5.Create())
+                {
+                    byte[] bytes = hasher.ComputeHash(Encoding.UTF8.GetBytes(Environment.MachineName));
+                    StringBuilder sb = new StringBuilder();
+                    foreach(byte b in bytes)
+                        sb.Append(b.ToString("x2"));
+                    suffix = sb.ToString().Substring(0,5);
+                }
+            }
+            _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{suffix}" : _configuration["MessageBroker:Queue"];
             _consumerName = _configuration["MessageBroker:Consumer"];
             _routingKey = _configuration["MessageBroker:RoutingKey"];
             _prefetchCount = string.IsNullOrEmpty(_configuration["MessageBroker:PrefetchCount"]) ? "1000" : _configuration["MessageBroker:PrefetchCount"];
@@ -119,6 +134,13 @@ namespace OE.Shared.Utilities
             if (_connection == null)
             {
                 if (_connectionFactory == null)
+                {
+                    var clientProperties = new Dictionary<string, object>
+                    {
+                        { "host_name", Environment.MachineName },
+                        { "application_name", "Song88 Platform" }
+                    };
+
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
@@ -127,8 +149,10 @@ namespace OE.Shared.Utilities
                         Password = _password,
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
-                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
+                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
+                        ClientProperties = clientProperties
                     };
+                }
 
                 _connection = _connectionFactory.CreateConnection();
 
@@ -277,7 +301,7 @@ namespace OE.Shared.Utilities
 
         public void Publish<T>(T payload, string messageType, string routingKey, string correlationId)
         {
-          var activityName = "${routingKey} send";
+          var activityName = $"{routingKey} send";
           using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
           {
             var properties = _model.CreateBasicProperties();
@@ -305,7 +329,7 @@ namespace OE.Shared.Utilities
 
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
         {
-          var activityName = "${routingKey} send";
+          var activityName = $"{routingKey} send";
           using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
           {
             var properties = _model.CreateBasicProperties();
@@ -341,10 +365,7 @@ namespace OE.Shared.Utilities
             }
             props.Headers[key] = value;
           }
-          catch (Exception)
-          {
-            //
-          }
+          catch (Exception) {}
         }
 
         private void PrepareExternalConnection()
@@ -352,6 +373,12 @@ namespace OE.Shared.Utilities
             if (_externalConnection == null)
             {
                 if (_externalConnectionFactory == null)
+                {
+                    var clientProperties = new Dictionary<string, object>
+                    {
+                        { "application_name", "Song88 Platform" }
+                    };
+
                     _externalConnectionFactory = new ConnectionFactory
                     {
                         HostName = _externalHostName,
@@ -361,8 +388,10 @@ namespace OE.Shared.Utilities
                         VirtualHost = _externalVirtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _externalPort == 5671 ? true : false, ServerName = _externalHostName }
+                        Ssl = new SslOption { Enabled = _externalPort == 5671 ? true : false, ServerName = _externalHostName },
+                        ClientProperties = clientProperties
                     };
+                }
 
                 _externalConnection = _externalConnectionFactory.CreateConnection();
 

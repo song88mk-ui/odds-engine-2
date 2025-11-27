@@ -4,12 +4,13 @@ using OE.UOF.Client.Repository;
 
 
 Host.CreateDefaultBuilder(args)
-    .UseWindowsService()
     .ConfigureServices((context, services) =>
     {
         services.AddSingleton<IMessageBroker, MessageBroker>();
         services.AddSingleton<IMemCache, MemCache>();
         services.AddSingleton<IClientRepository, ClientRepository>();
+        services.AddSingleton<IPlatformRepository, PlatformRepository>();
+        services.AddSingleton<ITradingRepository, TradingRepository>();
         services.AddHostedService<Worker>();
     })
     .Build()

@@ -86,7 +86,7 @@ namespace OE.Adapter.Service
             var messageType = ea.BasicProperties.Type;
             var correlationId = ea.BasicProperties.CorrelationId;
 
-            using (var activity = _activitySource.StartActivity("${ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
+            using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
             try
             {
 

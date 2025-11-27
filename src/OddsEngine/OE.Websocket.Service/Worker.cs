@@ -20,6 +20,7 @@ namespace OE.Websocket.Service
     public class Worker : BackgroundService
     {
         private readonly ILogger<Worker> _logger;
+
         private readonly IConfiguration _configuration;
         private readonly IMessageBroker _messageBroker;
         private readonly ISportsbookRepository _sportsbookRepository;
@@ -251,6 +252,7 @@ namespace OE.Websocket.Service
             _messageBroker.Connect();
 
             _messageBroker.MessageReceived += MessageReceivedEvent;
+            _logger.LogInformation("connected. processing incoming messages");
         }
 
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
@@ -263,7 +265,7 @@ namespace OE.Websocket.Service
             var correlationId = e.BasicProperties.CorrelationId;
 
 
-            using (var activity = _activitySource.StartActivity("${e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
+            using (var activity = _activitySource.StartActivity($"{e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
             try
             {
                 activity?.SetTag("message.type", messageType);

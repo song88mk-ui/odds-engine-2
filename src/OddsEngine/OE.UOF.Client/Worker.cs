@@ -52,7 +52,7 @@ namespace OE.UOF.Client
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex.Message);
+                _logger.LogError(ex, "failed to start worker");
             }
 
             return base.StopAsync(cancellationToken);
@@ -60,9 +60,13 @@ namespace OE.UOF.Client
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _logger.LogInformation("processing market template player props");
             _platformRepository.ProcessMarketTemplatePlayerProps();
 
+            _logger.LogInformation("getting client configurations");
             _configurations = _tradingRepository.GetClientConfigurations();
+
+            _logger.LogInformation("getting client live fixtures");
             _fixtureConfigurations = _tradingRepository.GetClientLiveFixtures();
 
             var configurationPayload = JsonSerializer.Serialize(_configurations);
@@ -71,10 +75,13 @@ namespace OE.UOF.Client
             var fixtureConfigurationPayload = JsonSerializer.Serialize(_fixtureConfigurations);
             _logger.LogDebug(fixtureConfigurationPayload);
 
+            _logger.LogInformation("connecting to external broker");
             _messageBrokerExternal.ExternalConnect();
 
+            _logger.LogInformation("connecting to broker/RabbitMQ");
             _messageBroker.Connect();
             _messageBroker.MessageReceived += MessageReceivedEvent;
+            _logger.LogInformation("connected, processing incoming messages");
 
             return Task.CompletedTask;
         }
@@ -117,7 +124,7 @@ namespace OE.UOF.Client
                             });
                         break;
                     case MessageType.ON_BET_STOP_GLOBAL:
-                        ProcessRawMessage(payload, raw => _clientRepository.ProcessBetStopGlobal(raw, _messageBrokerExternal, correlationId));
+                        ProcessMessage<OnBetStopGlobalMessage>(payload, msg => _clientRepository.ProcessBetStopGlobal(msg, _messageBrokerExternal, correlationId));
                         break;
 
                     case MessageType.ON_MARKET_SETTLEMENT:
@@ -144,7 +151,7 @@ namespace OE.UOF.Client
             }
             catch (Exception ex)
             {
-                _logger.LogError("${ex.Message} - {ex.StackTrace}");
+                _logger.LogError(ex, $"trace: {ex.StackTrace}");
                 var errorMessage = new
                 {
                     CorrelationId = correlationId,
@@ -168,6 +175,11 @@ namespace OE.UOF.Client
             handler(message);
         }
 
+        private void ProcessMessage<T>(string payload, Action<T> handler)
+        {
+            var message = JsonSerializer.Deserialize<T>(payload);
+            handler(message);
+        }
         private void ProcessRawMessage(string payload, Action<string> handler)
         {
             handler(payload);
