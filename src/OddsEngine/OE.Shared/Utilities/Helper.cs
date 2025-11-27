@@ -1,4 +1,5 @@
-﻿using System;
+﻿using OE.Shared.Enums;
+using System;
 
 namespace OE.Shared.Utilities
 {
@@ -24,6 +25,28 @@ namespace OE.Shared.Utilities
                 return $"0{result}";
             else
                 return result.ToString();
+        }
+        public static VoidFactor GetVoidFactor(BetStatus status)
+        {
+            var voidFactor = VoidFactor.Zero;
+            if (status == BetStatus.Won || status == BetStatus.Lost)
+                return VoidFactor.Zero;
+            if (status == BetStatus.Void)
+                return VoidFactor.One;
+            if (status == BetStatus.HalfWon || status == BetStatus.HalfLost)
+                return VoidFactor.Half;
+            return voidFactor;
+        }
+        public static VoidFactor GetVoidFactor(SettlementStatus status)
+        {
+            var voidFactor = VoidFactor.Zero;
+            if (status == SettlementStatus.Won || status == SettlementStatus.Lost)
+                return VoidFactor.Zero;
+            if (status == SettlementStatus.Void)
+                return VoidFactor.One;
+            if (status == SettlementStatus.HalfWon || status == SettlementStatus.HalfLost)
+                return VoidFactor.Half;
+            return voidFactor;
         }
     }
 }
