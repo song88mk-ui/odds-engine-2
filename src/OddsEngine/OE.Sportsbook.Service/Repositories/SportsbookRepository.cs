@@ -332,7 +332,6 @@ namespace OE.Sportsbook.Service.Repositories
                     Builders<Market>.Update
                         .Set(s => s.MaStId, market.MaStId)
                         .Set(s => s.MaStNa, market.MaStNa)
-                        .Set(s => s.MaStNa, "")
                 //TODO
                 //.AddToSetEach(s => s.MaNaTr, 
                 //    market.MarketTranslations.Select(
@@ -349,7 +348,6 @@ namespace OE.Sportsbook.Service.Repositories
                             //.Set(s => s.IsAc, selection.IsAc)
                             //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
                             .Set(s => s.SeStId, selection.SeStId)
-                            .Set(s => s.SeStNa, "Pending")
                     //TODO
                     //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
                     )
