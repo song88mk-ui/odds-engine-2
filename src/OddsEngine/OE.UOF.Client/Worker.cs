@@ -128,9 +128,9 @@ namespace OE.UOF.Client
                         break;
 
                     case MessageType.ON_MARKET_SETTLEMENT:
-                        ProcessMessageWithValidation<SportModel>(payload, msg =>
+                        ProcessMessageWithValidation<OnMarketSettlementMessage>(payload, msg =>
                             {
-                                _clientRepository.ProcessMarketSettlement(payload, _messageBrokerExternal, correlationId);
+                                _clientRepository.ProcessMarketSettlement(msg, _messageBrokerExternal, correlationId);
                             });
                         break;
 

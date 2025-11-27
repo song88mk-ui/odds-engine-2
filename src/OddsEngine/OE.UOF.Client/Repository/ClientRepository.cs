@@ -1,4 +1,5 @@
-﻿using OE.Shared.Constants;
+﻿using Microsoft.IdentityModel.Tokens;
+using OE.Shared.Constants;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
@@ -136,9 +137,7 @@ namespace OE.UOF.Client.Repository
                 PublishBetStopMessage(messageBroker, message, correlationId);
             }
 
-            payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-            PublishMessage(messageBroker, payloadStr, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            PublishMessage(messageBroker, finalPayload, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
         public void ProcessBetStop(string payload, IMessageBroker messageBroker, string correlationId)
         {
@@ -190,14 +189,11 @@ namespace OE.UOF.Client.Repository
                 isBetStop = message.IsBetStop
             };
 
-            payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-            PublishMessage(messageBroker, payloadStr, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
-        public void ProcessMarketSettlement(string payload, IMessageBroker messageBroker, string correlationId)
+        public void ProcessMarketSettlement(OnMarketSettlementMessage message, IMessageBroker messageBroker, string correlationId)
         {
-
             //TODO: see comments below
             //var message = JsonSerializer.Deserialize<OnBetSettlementMessage>(payload);
 
@@ -208,43 +204,27 @@ namespace OE.UOF.Client.Repository
             //if (message.SportId > 1000)
             //    return;
 
-            //var finalPayload = new
-            //{
-            //    fixtureId = message.FixtureId,
-            //    sport = new
-            //    {
-            //        Id = message.Sport.Id
-            //    },
-            //    sportId = message.SportId,
-            //    fixtureSpecifier = message.FixtureSpecifier,
-            //    selections = message.Selections.Select(s => new
-            //    {
-            //        marketTemplate = new 
-            //        {
-            //            id = s.MarketTemplate.Id,
-            //            specifier = s.MarketTemplate.Specifier
-            //        },
-            //        selectionTemplate = new 
-            //        {
-            //            id = s.SelectionTemplate.Id
-            //        },
-            //        MaTeId = s.MaTeId,
-            //        marketSpecifier = s.MarketSpecifier,
-            //        selectionTemplateId = s.SelectionTemplateId,
-            //        result = s.Result,
-            //        voidFactor = s.VoidFactor,
-            //        deadHeatFactor = s.DeadHeatFactor,
+            foreach (var market in message.Ma)
+            {
+                var finalPayload = new
+                {
+                    sportId = market.SpId,
+                    fixtureSpecifier = message.FiSp,
+                    selections = market.Se.Select(selection => new
+                    {
+                        marketTemplateId = market.MaTeId,
+                        marketSpecifier = market.MaSp,
+                        selectionTemplateId = selection.SeTeId,
+                        result = selection.SeStId,
+                        voidFactor = Helper.GetVoidFactor((SettlementStatus)selection.SeStId),
+                        deadHeatFactor = 0
+                    }).ToList(),
+                    timeStampSent = market.TiSe,
+                    timeStampReceived = market.TiRe
+                };
 
-            //    }).ToList(),
-            //    timeStampSent = message.TimestampSent,
-            //    timeStampReceived = message.TimestampReceived,
-            //    timeStampDispatched = message.TimestampDispatched,
-            //    raw = message.Raw
-            //};
-
-            //var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-            //PublishMessage(messageBroker, payloadStr, "onmarketsettlement", $"uof.onmarketsettlement.{GetSportName(message.SportId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onmarketsettlement.{GetSportName(market.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            }
         }
 
         public void ProcessMarketCancellation(string payload, IMessageBroker messageBroker, string correlationId)
@@ -302,9 +282,7 @@ namespace OE.UOF.Client.Repository
                 timeStamp = message.Timestamp
             };
 
-            var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-            PublishMessage(messageBroker, payloadStr, "onheartbeat", $"uof.onheartbeat", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            PublishMessage(messageBroker, finalPayload, "onheartbeat", $"uof.onheartbeat", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
         public void UpdateFixtureConfiguration(OnFixtureChangeMessage message, IMessageBroker messageBroker, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
