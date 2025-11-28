@@ -37,7 +37,7 @@ namespace OE.Sportsbook.Service.Repositories
         private const string FIXTURE_PREFIX = "fi";
         private const string MARKET_MAPPING_PREFIX = "mama";
         private const string SELECTION_MAPPING_PREFIX = "sema";
-        private const string BETTING_STATUS_MODEL_ID = "1";
+        private const string BETTING_STATUS_MODEL_ID = "betstop";
 
         private static IdGenerator _defaultIdGenerator;
 
@@ -272,18 +272,13 @@ namespace OE.Sportsbook.Service.Repositories
 
         private WriteModel<BettingStatus>[] ToDBBettingStatus(OnBetStopGlobalMessage message)
         {
-
-            var filter = Builders<BettingStatus>.Filter.Eq(bs => bs.BeSo, BETTING_STATUS_MODEL_ID);
-
-            var modelToWrite = Builders<BettingStatus>.Update
-                .Set(s => s.IsBeSo, message.IsBetStop)
-                .SetOnInsert(s => s.BeSo, BETTING_STATUS_MODEL_ID);
-
             return new WriteModel<BettingStatus>[]
-            {
-                    new UpdateOneModel<BettingStatus>(filter, modelToWrite)
-                    { IsUpsert = true }
-            };
+           {
+                new UpdateOneModel<BettingStatus>(Builders<BettingStatus>.Filter.Eq("BeSo", BETTING_STATUS_MODEL_ID),
+                    Builders<BettingStatus>.Update
+                        .Set(s => s.IsBeSo, message.IsBetStop))
+                { IsUpsert = true }
+           };
         }
 
         private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketChangeMessage message, string correlationId)
