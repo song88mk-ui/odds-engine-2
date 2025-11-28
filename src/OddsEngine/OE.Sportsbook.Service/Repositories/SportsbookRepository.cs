@@ -153,9 +153,10 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
         {
-            if (message == null) return;
+            if (message == null || (_IsBetStopGlobally == message.IsBetStop))
+                return;
 
-            _logger.LogWarning($"Incoming OnBetStopGlobalMessage with status: {message.IsBetStop}");
+            _logger.LogWarning($"Incoming OnBetStopGlobalMessage change the status ! : from {_IsBetStopGlobally} to {message.IsBetStop}");
             BulkWrite(_bettingStatusCollection, ToDBBettingStatus(message));
 
             var payload = new
@@ -163,14 +164,9 @@ namespace OE.Sportsbook.Service.Repositories
                 IsBetStop = message.IsBetStop,
                 CorrelationId = correlationId
             };
-
-
-            if (_IsBetStopGlobally != message.IsBetStop)
-            {
-                _logger.LogWarning($"Incoming OnBetStopGlobalMessage change the status ! : from {_IsBetStopGlobally} to {message.IsBetStop}");
-                _IsBetStopGlobally = message.IsBetStop;
-                messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.onbetstopglobal", Guid.NewGuid().ToString());
-            }
+            
+            _IsBetStopGlobally = message.IsBetStop;
+            messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.onbetstopglobal", Guid.NewGuid().ToString());
         }
         #endregion
 
