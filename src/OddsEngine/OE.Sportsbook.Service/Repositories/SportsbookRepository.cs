@@ -69,15 +69,12 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
-            if (_IsBetStopGlobally)
-                return;
-
             BulkWrite(_fixtureCollection, ToFixture(message));
         }
 
         public void ProcessOnMarketChangeMessage(IMessageBroker messageBroker, OnMarketChangeMessage message, string correlationId)
         {
-            if (!message.Ma.Any() || _IsBetStopGlobally)
+            if (!message.Ma.Any())
                 return;
 
             var payload = PrepareInternalOddsChangeMessage(message, correlationId);
@@ -110,7 +107,7 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId)
         {
-            if (!message.Ma.Any() || _IsBetStopGlobally)
+            if (!message.Ma.Any())
                 return;
 
             var timestamp = DateTime.UtcNow.ToEpochTimestamp();
@@ -159,12 +156,21 @@ namespace OE.Sportsbook.Service.Repositories
             if (message == null) return;
 
             _logger.LogWarning($"Incoming OnBetStopGlobalMessage with status: {message.IsBetStop}");
-
-            _IsBetStopGlobally = message.IsBetStop;
             BulkWrite(_bettingStatusCollection, ToDBBettingStatus(message));
 
-            //TODO: 
-            // Is there messageBroker.Publish ????
+            var payload = new
+            {
+                IsBetStop = message.IsBetStop,
+                CorrelationId = correlationId
+            };
+
+
+            if (_IsBetStopGlobally != message.IsBetStop)
+            {
+                _logger.LogWarning($"Incoming OnBetStopGlobalMessage change the status ! : from {_IsBetStopGlobally} to {message.IsBetStop}");
+                _IsBetStopGlobally = message.IsBetStop;
+                messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.onbetstopglobal", Guid.NewGuid().ToString());
+            }
         }
         #endregion
 
