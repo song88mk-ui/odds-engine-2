@@ -57,7 +57,7 @@ namespace OE.UOF.Client
 
             _currentMonth = DateTime.UtcNow.Month;
 
-            _clientId = configuration["Custom.ClientId"];
+            _clientId = configuration["Custom:ClientId"];
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
