@@ -29,7 +29,7 @@ namespace OE.UOF.Client
         private readonly Counter<long> _forwardedMessagesCounter;
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
         private readonly IConfiguration _configuration;
-        private readonly string _clientId;
+        private readonly string _clientCode;
 
         private int _currentMonth;
 
@@ -57,7 +57,7 @@ namespace OE.UOF.Client
 
             _currentMonth = DateTime.UtcNow.Month;
 
-            _clientId = configuration["Custom:ClientId"];
+            _clientCode = configuration["Custom:ClientCode"];
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
@@ -122,7 +122,7 @@ namespace OE.UOF.Client
             try
             {
                 activity?.SetTag("message.type", messageType);
-                activity?.SetTag("client.id", _clientId);
+                activity?.SetTag("client.code", _clientCode);
 
                 ResetDate();
 
@@ -174,7 +174,7 @@ namespace OE.UOF.Client
                 }
 
                 if (_forwardedMessagesCounter.Enabled)
-                    _forwardedMessagesCounter.Add(1, new KeyValuePair<string, object?>("client.id", _clientId));
+                    _forwardedMessagesCounter.Add(1, new KeyValuePair<string, object?>("client.code", _clientCode));
 
                 activity?.SetStatus(ActivityStatusCode.Ok);
 
