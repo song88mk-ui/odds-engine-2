@@ -1,11 +1,17 @@
+using Microsoft.Extensions.Configuration;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.Shared.Utilities;
 using OE.UOF.Client.Models;
 using OE.UOF.Client.Repository;
+using OE.UOF.Client.Telemetry;
+using OpenTelemetry;
+using OpenTelemetry.Context.Propagation;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Text;
 using System.Text.Json;
 
@@ -19,22 +25,39 @@ namespace OE.UOF.Client
         private readonly IMessageBroker _messageBrokerExternal;
         private readonly ITradingRepository _tradingRepository;
         private readonly ILogger<Worker> _logger;
+        private readonly ActivitySource _activitySource;
+        private readonly Counter<long> _forwardedMessagesCounter;
+        private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
+        private readonly IConfiguration _configuration;
+        private readonly string _clientId;
 
         private int _currentMonth;
 
         private List<ClientConfigurationModel> _configurations = new List<ClientConfigurationModel>();
         private List<ClientLiveFixtureModel> _fixtureConfigurations = new List<ClientLiveFixtureModel>();
 
-        public Worker(IMessageBroker messageBroker, IClientRepository clientRepository, IPlatformRepository platformRepository, IMessageBroker messageBrokerExternal, ITradingRepository tradingRepository, ILogger<Worker> logger)
+        public Worker(IMessageBroker messageBroker,
+                      IClientRepository clientRepository,
+                      IPlatformRepository platformRepository,
+                      IMessageBroker messageBrokerExternal,
+                      ITradingRepository tradingRepository,
+                      ILogger<Worker> logger,
+                      Instrumentation instrumentation,
+                      IConfiguration configuration)
         {
+            _configuration = configuration;
             _messageBroker = messageBroker;
             _clientRepository = clientRepository;
             _platformRepository = platformRepository;
             _messageBrokerExternal = messageBrokerExternal;
             _tradingRepository = tradingRepository;
             _logger = logger;
+            _activitySource = instrumentation.ActivitySource;
+            _forwardedMessagesCounter = instrumentation.ForwardedMessagesCounter;
 
             _currentMonth = DateTime.UtcNow.Month;
+
+            _clientId = configuration["Custom.ClientId"];
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
@@ -86,16 +109,20 @@ namespace OE.UOF.Client
             return Task.CompletedTask;
         }
 
-        private void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
+        private void MessageReceivedEvent(object sender, BasicDeliverEventArgs ea)
         {
-            var payload = Encoding.UTF8.GetString(e.Body.ToArray());
-            var messageType = e.BasicProperties.Type;
-            var correlationId = e.BasicProperties.CorrelationId;
+            var parentContext = Propagator.Extract(default, ea.BasicProperties, this.ExtractTraceFromBasicProperties);
+            Baggage.Current = parentContext.Baggage;
 
+            var payload = Encoding.UTF8.GetString(ea.Body.ToArray());
+            var messageType = ea.BasicProperties.Type;
+            var correlationId = ea.BasicProperties.CorrelationId;
+
+            using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
             try
             {
-                var stopwatch = new Stopwatch();
-                stopwatch.Start();
+                activity?.SetTag("message.type", messageType);
+                activity?.SetTag("client.id", _clientId);
 
                 ResetDate();
 
@@ -146,11 +173,16 @@ namespace OE.UOF.Client
                         break;
                 }
 
-                _logger.LogDebug($"correlationId: {stopwatch.Elapsed:hh\\:mm\\:ss\\.fff}");
-                stopwatch.Stop();
+                if (_forwardedMessagesCounter.Enabled)
+                    _forwardedMessagesCounter.Add(1, new KeyValuePair<string, object?>("client.id", _clientId));
+
+                activity?.SetStatus(ActivityStatusCode.Ok);
+
             }
             catch (Exception ex)
             {
+                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+
                 _logger.LogError(ex, $"trace: {ex.StackTrace}");
                 var errorMessage = new
                 {
@@ -187,9 +219,6 @@ namespace OE.UOF.Client
 
         private bool IsMessageValid(SportModel model)
         {
-            //var stopwatch = new Stopwatch();
-            //stopwatch.Start();
-
             var sportConfig = _configurations.FirstOrDefault(c => c.SportId == model.SpId);
             if (sportConfig == null)
                 return false;
@@ -215,9 +244,6 @@ namespace OE.UOF.Client
                 return true;
 
             return fixtureConfig.Fixtures.Any(f => f.FixtureSpecifier == model.FiSp);
-
-            //Console.WriteLine($"IsMessageValid: {stopwatch.Elapsed:hh\\:mm\\:ss\\.fff}");
-            //stopwatch.Stop();
         }
 
         private void ResetDate()
@@ -229,6 +255,20 @@ namespace OE.UOF.Client
                 _currentMonth = newMonth;
                 _fixtureConfigurations = new List<ClientLiveFixtureModel>();
             }
+        }
+
+        private IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
+        {
+            try
+            {
+                if (props.Headers.TryGetValue(key, out var value))
+                {
+                    var bytes = value as byte[];
+                    return new[] { Encoding.UTF8.GetString(bytes) };
+                }
+            } catch (Exception) {}
+
+            return Enumerable.Empty<string>();
         }
     }
 }
