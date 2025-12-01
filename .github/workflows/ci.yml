@@ -31,6 +31,8 @@ jobs:
             image: oev2-websocket-service
           - path: OE.UOF.Client
             image: oev2-uof-client
+          - path: OE.Job.KeepAlive
+            image: oev2-job-keepalive
     steps:
       - name: Checkout
         uses: actions/checkout@v5
