@@ -293,10 +293,8 @@ namespace OE.UOF.Client.Repository
             //PublishMessage(messageBroker, payloadStr, "onmarketcancellation", $"uof.onmarketcancellation.{GetSportName(message.SportId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
-        public void ProcessHeartbeat(string payload, IMessageBroker messageBroker, string correlationId)
+        public void ProcessHeartbeat(OFHeartbeatMessage message, IMessageBroker messageBroker, string correlationId)
         {
-            var message = JsonSerializer.Deserialize<OFHeartbeatMessage>(payload);
-
             var finalPayload = new
             {
                 timeStamp = message.Timestamp

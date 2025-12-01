@@ -142,7 +142,7 @@ namespace OE.UOF.Client
                         break;
 
                     case "OnHeartbeat":
-                        ProcessRawMessage(payload, raw => _clientRepository.ProcessHeartbeat(raw, _messageBrokerExternal, correlationId));
+                        ProcessMessage<OFHeartbeatMessage>(payload, msg => _clientRepository.ProcessHeartbeat(msg, _messageBrokerExternal, correlationId));
                         break;
                 }
 
