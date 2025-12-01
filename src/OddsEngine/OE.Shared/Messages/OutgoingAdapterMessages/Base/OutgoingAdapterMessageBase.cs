@@ -7,5 +7,7 @@
         public string PrFiId { get; set; }
         public long FiId { get; set; }
         public string FiSp { get; set; }
+        public long TiSe { get; set; }
+        public long TiRe { get; set; }
     }
 }

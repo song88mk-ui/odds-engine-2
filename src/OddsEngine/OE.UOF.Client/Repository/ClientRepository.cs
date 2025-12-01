@@ -220,8 +220,8 @@ namespace OE.UOF.Client.Repository
                         voidFactor = Helper.GetVoidFactor((SettlementStatus)selection.SeStId),
                         deadHeatFactor = 0
                     }).ToList(),
-                    timeStampSent = market.TiSe,
-                    timeStampReceived = market.TiRe
+                    timeStampSent = message.TiSe,
+                    timeStampReceived = message.TiRe
                 };
 
                 PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onmarketsettlement.{GetSportName(market.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");

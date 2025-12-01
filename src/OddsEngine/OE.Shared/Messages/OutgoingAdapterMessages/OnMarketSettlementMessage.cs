@@ -24,8 +24,6 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public int MaStId { get; set; } //MarketStatusId
         public string MaStNa { get; set; } //MarketStatusName
         public List<SelectionResult> Se { get; set; }
-        public long TiSe { get; set; } //Time message sent
-        public long TiRe { get; set; } //Time message receivec
     }
 
     public class SelectionResult

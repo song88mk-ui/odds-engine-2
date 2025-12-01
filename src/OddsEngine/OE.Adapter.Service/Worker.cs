@@ -68,7 +68,7 @@ namespace OE.Adapter.Service
             catch (Exception e)
             {
                 _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
-                throw e; // up to stack, so it can fail early
+                throw e;
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
         }

@@ -142,12 +142,11 @@ namespace OE.Sportsbook.Service.Repositories
                         selection.SeId,
                         selection.SeStId
                     }),
-                    market.TiSe,
-                    market.TiRe
-
+                    message.TiSe,
+                    message.TiRe
                 };
 
-                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
+                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}", Guid.NewGuid().ToString());
             }
         }
 
@@ -166,7 +165,7 @@ namespace OE.Sportsbook.Service.Repositories
             };
             
             _IsBetStopGlobally = message.IsBetStop;
-            messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.onbetstopglobal", Guid.NewGuid().ToString());
+            messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.{MessageType.ON_BET_STOP_GLOBAL.ToLower()}", Guid.NewGuid().ToString());
         }
         #endregion
 
