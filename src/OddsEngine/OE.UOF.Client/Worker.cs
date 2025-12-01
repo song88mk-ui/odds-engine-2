@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
@@ -198,10 +197,11 @@ namespace OE.UOF.Client
 
         private void ProcessMessageWithValidation<T>(string payload, Action<T> handler)
         {
-            var sportModel = JsonSerializer.Deserialize<SportModel>(payload);
+            //TODO: check config validation 
+            //var sportModel = JsonSerializer.Deserialize<SportModel>(payload);
 
-            if (!IsMessageValid(sportModel))
-                return;
+            //if (!IsMessageValid(sportModel))
+            //    return;
 
             var message = JsonSerializer.Deserialize<T>(payload);
             handler(message);
