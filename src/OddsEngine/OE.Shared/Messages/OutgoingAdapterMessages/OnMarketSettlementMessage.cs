@@ -38,6 +38,5 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string SeTeId { get; set; }
         public long SeId { get; set; }
         public int SeStId { get; set; } // Selection Status Id
-        public string SeStNa { get; set; } // Selection Status Id
     }
 }

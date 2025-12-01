@@ -1,7 +1,7 @@
 ﻿using IdGen;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
-using OE.Sportsbook.Service.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
@@ -9,6 +9,7 @@ using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
+using OE.Sportsbook.Service.Telemetry;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
@@ -31,22 +32,28 @@ namespace OE.Sportsbook.Service.Repositories
         private IMongoCollection<Market> _marketCollection;
         private IMongoCollection<Selection> _selectionCollection;
 
+        private readonly ILogger<SportsbookRepository> _logger;
+
         private const string FIXTURE_PREFIX = "fi";
         private const string MARKET_MAPPING_PREFIX = "mama";
         private const string SELECTION_MAPPING_PREFIX = "sema";
+        private const string BETTING_STATUS_MODEL_ID = "betstop";
 
         private static IdGenerator _defaultIdGenerator;
+
+        private bool _IsBetStopGlobally = false;
 
         #endregion
 
         #region Ctor
 
-        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper, Instrumentation instrumentation)
+        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper, Instrumentation instrumentation, ILogger<SportsbookRepository> logger)
         {
             _configuration = configuration;
             _memCache = memCache;
             _helper = helper;
             _bulkWriteDurationHistogram = instrumentation.BulkWriteDurationHistogram;
+            _logger = logger;
 
             PrepareDatabaseConnection();
         }
@@ -54,6 +61,11 @@ namespace OE.Sportsbook.Service.Repositories
         #endregion
 
         #region Methods
+
+        public Task SetInitialData()
+        {
+            return Task.Run(SetBetStopStatus);
+        }
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
@@ -137,6 +149,24 @@ namespace OE.Sportsbook.Service.Repositories
 
                 messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.onmarketsettlement", Guid.NewGuid().ToString());
             }
+        }
+
+        public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
+        {
+            if (message == null || (_IsBetStopGlobally == message.IsBetStop))
+                return;
+
+            _logger.LogWarning($"Incoming OnBetStopGlobalMessage change the status ! : from {_IsBetStopGlobally} to {message.IsBetStop}");
+            BulkWrite(_bettingStatusCollection, ToDBBettingStatus(message));
+
+            var payload = new
+            {
+                IsBetStop = message.IsBetStop,
+                CorrelationId = correlationId
+            };
+            
+            _IsBetStopGlobally = message.IsBetStop;
+            messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.onbetstopglobal", Guid.NewGuid().ToString());
         }
         #endregion
 
@@ -236,6 +266,17 @@ namespace OE.Sportsbook.Service.Repositories
             };
         }
 
+        private WriteModel<BettingStatus>[] ToDBBettingStatus(OnBetStopGlobalMessage message)
+        {
+            return new WriteModel<BettingStatus>[]
+           {
+                new UpdateOneModel<BettingStatus>(Builders<BettingStatus>.Filter.Eq("BeSo", BETTING_STATUS_MODEL_ID),
+                    Builders<BettingStatus>.Update
+                        .Set(s => s.IsBeSo, message.IsBetStop))
+                { IsUpsert = true }
+           };
+        }
+
         private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketChangeMessage message, string correlationId)
         {
             var markets = new List<WriteModel<Market>>();
@@ -332,7 +373,6 @@ namespace OE.Sportsbook.Service.Repositories
                     Builders<Market>.Update
                         .Set(s => s.MaStId, market.MaStId)
                         .Set(s => s.MaStNa, market.MaStNa)
-                        .Set(s => s.MaStNa, "")
                 //TODO
                 //.AddToSetEach(s => s.MaNaTr, 
                 //    market.MarketTranslations.Select(
@@ -349,7 +389,6 @@ namespace OE.Sportsbook.Service.Repositories
                             //.Set(s => s.IsAc, selection.IsAc)
                             //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
                             .Set(s => s.SeStId, selection.SeStId)
-                            .Set(s => s.SeStNa, "Pending")
                     //TODO
                     //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
                     )
@@ -363,9 +402,12 @@ namespace OE.Sportsbook.Service.Repositories
         private void BulkWrite<T>(IMongoCollection<T> collection, WriteModel<T>[] data)
         {
             Stopwatch sw = Stopwatch.StartNew();
-            try {
+            try
+            {
                 collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
-            } finally {
+            }
+            finally
+            {
                 sw.Stop();
                 _bulkWriteDurationHistogram.Record(sw.Elapsed.TotalMilliseconds);
             }
@@ -516,6 +558,15 @@ namespace OE.Sportsbook.Service.Repositories
             _ = int.TryParse(id, out int result);
 
             return result;
+        }
+
+        private async Task SetBetStopStatus()
+        {
+            var filter = Builders<BettingStatus>.Filter.Where(bs => bs.BeSo.Equals(BETTING_STATUS_MODEL_ID));
+            var existingBettingStatusData = _bettingStatusCollection.Find(filter).FirstOrDefault();
+
+            _IsBetStopGlobally = existingBettingStatusData?.IsBeSo ?? false;
+            _logger.LogWarning($"BetStopGlobally exhibited in: {_IsBetStopGlobally}");
         }
         #endregion
     }

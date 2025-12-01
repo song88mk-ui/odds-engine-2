@@ -63,6 +63,8 @@ namespace OE.Sportsbook.Service
         {
             try
             {
+                _logger.LogInformation("Prefetch SportsBook data");
+                await _sportsbookRepository.SetInitialData();
                 _logger.LogInformation("Connecting to RabbitMQ Server");
                 _messageBroker.Connect();
             } catch (Exception e)
@@ -112,7 +114,13 @@ namespace OE.Sportsbook.Service
                             (msg) => _sportsbookRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
                         );
                         break;
-                }
+                        case MessageType.ON_BET_STOP_GLOBAL:
+                            ProcessMessage<OnBetStopGlobalMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnBetStopGlobalMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                    }
 
                 if (_processedMessagesCounter.Enabled)
                     _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
