@@ -224,7 +224,7 @@ namespace OE.UOF.Client.Repository
                     timeStampReceived = message.TiRe
                 };
 
-                PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onmarketsettlement.{GetSportName(market.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                PublishMessage(messageBroker, finalPayload, MessageType.ON_MARKET_SETTLEMENT.ToLower(), $"uof.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}.{GetSportName(market.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
             }
         }
 
