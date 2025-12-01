@@ -72,17 +72,17 @@ namespace OE.UOF.Client.Repository
             {
                 SportId = message.SpId,
                 FixtureSpecifier = message.FiSp,
-                ChangeTypeId = message.ChTyId,
-                ChangeTypeName = ((ChannelType)message.ChTyId).ToString(),
+                ChangeTypeId = (int)FixtureChangeType.Other,
+                ChangeTypeName = FixtureChangeType.Other.ToString(),
                 FixtureStatusId = message.FiStId,
                 FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
                 TimeStampSent = message.TiSe,
-                TimeStampReceived = message.TiRe,
-                Raw = string.Empty
+                TimeStampReceived = message.TiRe
             };
 
-            PublishMessage(messageBroker, payload, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            PublishMessage(messageBroker, payload, MessageType.ON_FIXTURE_CHANGE.ToLower(), $"uof.{MessageType.ON_FIXTURE_CHANGE.ToLower()}.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
+
         public void ProcessMarketChange(OnMarketChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
         {
             //CheckDelay(message, "START");
@@ -139,6 +139,7 @@ namespace OE.UOF.Client.Repository
 
             PublishMessage(messageBroker, finalPayload, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
+
         public void ProcessBetStop(string payload, IMessageBroker messageBroker, string correlationId)
         {
 
@@ -361,34 +362,44 @@ namespace OE.UOF.Client.Repository
         {
             switch (sportId)
             {
-                case 1:
+                case 10:
                     return "soccer";
-                case 2:
+                case 4:
                     return "basketball";
                 case 3:
                     return "baseball";
-                case 4:
+                case 15:
                     return "icehockey";
-                case 5:
+                case 24:
                     return "tennis";
-                case 10:
+                case 5:
                     return "boxing";
-                case 19:
-                    return "snooker";
-                case 20:
+                case 269467:
                     return "tabletennis";
-                case 23:
+                case 91189:
                     return "volleyball";
-                case 31:
+                case 271554:
                     return "badminton";
-                case 117:
-                    return "mma";
-                case 137:
-                    return "esoccer";
-                case 153:
-                    return "ebasketball";
-                case 195:
-                    return "eicehockey";
+                case 10915624:
+                    return "esports";
+                case 6:
+                    return "cricket";
+                case 437727:
+                    return "squash";
+                case 8:
+                    return "darts";
+                case 99614:
+                    return "handball";
+                case 17:
+                    return "americanfootball";
+                case 491393:
+                    return "futsal";
+                case 7950337:
+                    return "beachvolleyball";
+                case 300115:
+                    return "ufc";
+                case 73744:
+                    return "rugby";
                 default:
                     return "unsupported";
             }
