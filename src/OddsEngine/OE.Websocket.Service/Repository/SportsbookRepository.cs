@@ -1417,9 +1417,9 @@ namespace OE.WebSocket.Service.Repository
             if (betBuilderSportIds.Contains(message.SpId) && message.FiTyId == (int)FixtureType.Match)
             {
                 if (message.FiStId == (int)FixtureStatus.Prematch)
-                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Prematch == true);
+                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Prematch == 1);
                 else if (message.FiStId == (int)FixtureStatus.Live)
-                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Live == true);
+                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Live == 1);
             }
 
             var markets = new List<OutgoingMarket>();
@@ -1765,9 +1765,9 @@ namespace OE.WebSocket.Service.Repository
             if (betBuilderSportIds.Contains(message.SpId) && message.FiTyId == (int)FixtureType.Match)
             {
                 if (message.FiStId == (int)FixtureStatus.Prematch)
-                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Prematch == true);
+                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Prematch == 1);
                 else if (message.FiStId == (int)FixtureStatus.Live)
-                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Live == true);
+                    isBetBuilder = betBuilderMarketTemplates.BetBuilderMarketTemplates.Any(c => c.SportId == message.SpId && c.Live == 1);
 
             }
 
@@ -1828,11 +1828,11 @@ namespace OE.WebSocket.Service.Repository
                 if (betBuilderMarketTemplate != null)
                 {
                     var isQuarterMarket = Convert.ToDecimal(market.Li).ToString("0.00").Contains(".25") || Convert.ToDecimal(market.Li).ToString("0.00").Contains(".75") ? true : false;
-                    if (!isQuarterMarket && message.FiStId == (int)FixtureStatus.Prematch && betBuilderMarketTemplate.Prematch == true)
+                    if (!isQuarterMarket && message.FiStId == (int)FixtureStatus.Prematch && betBuilderMarketTemplate.Prematch == 1)
                     {
                         isMarketBetBuilder = true;
                     }
-                    else if (!isQuarterMarket && message.FiStId == (int)FixtureStatus.Live && betBuilderMarketTemplate.Live == true)
+                    else if (!isQuarterMarket && message.FiStId == (int)FixtureStatus.Live && betBuilderMarketTemplate.Live == 1)
                     {
                         isMarketBetBuilder = true;
                     }
@@ -2106,8 +2106,8 @@ namespace OE.WebSocket.Service.Repository
     {
         public int SportId { get; set; }
         public string MaTeId { get; set; }
-        public bool Prematch { get; set; }
-        public bool Live { get; set; }
+        public int Prematch { get; set; }
+        public int Live { get; set; }
     }
 
     #endregion
