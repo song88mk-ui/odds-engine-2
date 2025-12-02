@@ -2106,8 +2106,8 @@ namespace OE.WebSocket.Service.Repository
     {
         public int SportId { get; set; }
         public string MaTeId { get; set; }
-        public int Prematch { get; set; }
-        public int Live { get; set; }
+        public short Prematch { get; set; }
+        public short Live { get; set; }
     }
 
     #endregion
