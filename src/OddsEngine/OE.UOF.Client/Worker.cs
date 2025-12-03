@@ -161,9 +161,9 @@ namespace OE.UOF.Client
                         break;
 
                     case MessageType.ON_MARKET_CANCEL:
-                        ProcessMessageWithValidation<SportModel>(payload, msg =>
+                        ProcessMessageWithValidation<OnMarketCancellationMessage>(payload, msg =>
                             {
-                                _clientRepository.ProcessMarketCancellation(payload, _messageBrokerExternal, correlationId);
+                                _clientRepository.ProcessMarketCancellation(msg, _messageBrokerExternal, correlationId);
                             });
                         break;
 

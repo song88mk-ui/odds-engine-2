@@ -228,11 +228,8 @@ namespace OE.UOF.Client.Repository
             }
         }
 
-        public void ProcessMarketCancellation(string payload, IMessageBroker messageBroker, string correlationId)
+        public void ProcessMarketCancellation(OnMarketCancellationMessage message, IMessageBroker messageBroker, string correlationId)
         {
-            //TODO: see comments below
-            //var message = JsonSerializer.Deserialize<OnBetCancellationMessage>(payload);
-
             //if (message.FixtureSpecifier.Contains("s88:match"))
             //    return;
 
@@ -240,38 +237,25 @@ namespace OE.UOF.Client.Repository
             //if (message.SportId > 1000)
             //    return;
 
-            //var finalPayload = new
-            //{
-            //    fixtureId = message.FixtureId,
-            //    sport = new
-            //    {
-            //        Id = message.Sport.Id
-            //    },
-            //    sportId = message.SportId,
-            //    fixtureSpecifier = message.FixtureSpecifier,
-            //    markets = message.Markets.Select(s => new
-            //    {
-            //        marketTemplate = new 
-            //        {
-            //            Id = s.MarketTemplate.Id,
-            //            specifier = s.MarketTemplate.Specifier
-            //        },
-            //        MaTeId = s.MaTeId,
-            //        marketSpecifier = s.MarketSpecifier,
-            //        startTime = s.StartTime,
-            //        endTime = s.EndTime,
-            //        voidReason = s.VoidReason
-            //    }).ToList(),
-            //    timeStampSent = message.TimestampSent,
-            //    timeStampReceived = message.TimestampReceived,
-            //    timeStampDispatched = message.TimestampDispatched,
-            //    raw = message.Raw
+            var finalPayload = new
+            {
+                sportId = message.SpId,
+                fixtureSpecifier = message.FiSp,
+                markets = message.Ma.Select(s => new
+                {
+                    marketTemplateId = s.MaTeId,
+                    marketSpecifier = s.MaSp,
+                    startTime = s.StTi,
+                    endTime = s.EnTi,
+                    voidReason = s.VoRe
+                }).ToList(),
+                timeStampSent = message.TiSe,
+                timeStampReceived = message.TiRe
+            };
 
-            //};
+            var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
 
-            //var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-            //PublishMessage(messageBroker, payloadStr, "onmarketcancellation", $"uof.onmarketcancellation.{GetSportName(message.SportId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            PublishMessage(messageBroker, payloadStr, "onmarketcancellation", $"uof.onmarketcancellation.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
         public void ProcessHeartbeat(OFHeartbeatMessage message, IMessageBroker messageBroker, string correlationId)

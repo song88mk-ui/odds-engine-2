@@ -117,7 +117,12 @@ namespace OE.Adapter.Service
                                 payload,
                                 (msg) => _tradingRepository.ProcessOnBetStopGlobalMessage(_messageBroker, msg, correlationId)
                             );
-
+                            break;
+                        case MessageType.ON_MARKET_CANCEL:
+                            ProcessMessage<OnMarketCancellationMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessMarketCancellation(_messageBroker, msg, correlationId)
+                            );
                             break;
                     }
 

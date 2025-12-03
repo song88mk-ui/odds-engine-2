@@ -56,6 +56,11 @@ namespace OE.Adapter.Service.Repositories
             }
         }
 
+        public void ProcessMarketCancellation(IMessageBroker messageBroker, OnMarketCancellationMessage message, string correlationId)
+        {
+            PublishMessage(messageBroker, message, MessageType.ON_MARKET_CANCEL, correlationId);
+        }
+
         #endregion
 
         #region Utilities
