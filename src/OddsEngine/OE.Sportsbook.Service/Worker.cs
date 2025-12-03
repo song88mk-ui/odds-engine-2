@@ -67,7 +67,8 @@ namespace OE.Sportsbook.Service
                 await _sportsbookRepository.SetInitialData();
                 _logger.LogInformation("Connecting to RabbitMQ Server");
                 _messageBroker.Connect();
-            } catch (Exception e)
+            }
+            catch (Exception e)
             {
                 _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
                 throw e; // up to stack, so it can fail early
@@ -90,30 +91,31 @@ namespace OE.Sportsbook.Service
             var correlationId = ea.BasicProperties.CorrelationId;
 
             using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
-            try
-            {
-                activity?.SetTag("message.type", messageType);
-
-                switch (messageType)
+                try
                 {
-                    case MessageType.ON_FIXTURE_CHANGE:
-                        ProcessMessage<OnFixtureChangeMessage>(
-                            payload,
-                            (msg) => _sportsbookRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
-                        );
-                        break;
-                    case MessageType.ON_MARKET_CHANGE:
-                        ProcessMessage<OnMarketChangeMessage>(
-                            payload,
-                            (msg) => _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
-                        );
-                        break;
-                    case MessageType.ON_MARKET_SETTLEMENT:
-                        ProcessMessage<OnMarketSettlementMessage>(
-                            payload,
-                            (msg) => _sportsbookRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
-                        );
-                        break;
+                    activity?.SetTag("message.type", messageType);
+                    activity?.SetTag("payload", payload);
+
+                    switch (messageType)
+                    {
+                        case MessageType.ON_FIXTURE_CHANGE:
+                            ProcessMessage<OnFixtureChangeMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnFixtureChangeMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_MARKET_CHANGE:
+                            ProcessMessage<OnMarketChangeMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnMarketChangeMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_MARKET_SETTLEMENT:
+                            ProcessMessage<OnMarketSettlementMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                         case MessageType.ON_BET_STOP_GLOBAL:
                             ProcessMessage<OnBetStopGlobalMessage>(
                                 payload,
@@ -122,32 +124,31 @@ namespace OE.Sportsbook.Service
                             break;
                     }
 
-                if (_processedMessagesCounter.Enabled)
-                    _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
+                    if (_processedMessagesCounter.Enabled)
+                        _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
 
-                activity?.SetStatus(ActivityStatusCode.Ok);
-            }
-            catch (Exception ex)
-            {
-                if (_processedMessagesCounter.Enabled)
-                    _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                }
+                catch (Exception ex)
+                {
+                    if (_processedMessagesCounter.Enabled)
+                        _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
 
-                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    activity?.SetTag("stack.trace", ex.StackTrace);
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
 
-                _logger.LogError($"caught exception: {ex.Message}");
-                _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
-                _logger.LogError($"--> payload  : {payload}");
-            }
+                    _logger.LogError($"caught exception: {ex.Message}");
+                    _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
+                    _logger.LogError($"--> payload  : {payload}");
+                }
         }
         private void ProcessMessage<T>(string payload, Action<T> processor)
         {
             if (string.IsNullOrWhiteSpace(payload)) return;
 
-            _logger.LogDebug($"Payload received: {payload}");
             var message = JsonSerializer.Deserialize<T>(payload);
             if (message != null)
             {
-                _logger.LogInformation($"Message deserialized as: {message}");
                 processor(message);
             }
         }
@@ -161,7 +162,8 @@ namespace OE.Sportsbook.Service
                     var bytes = value as byte[];
                     return new[] { Encoding.UTF8.GetString(bytes) };
                 }
-            } catch (Exception) {}
+            }
+            catch (Exception) { }
 
             return Enumerable.Empty<string>();
         }

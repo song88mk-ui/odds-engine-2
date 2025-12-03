@@ -61,7 +61,8 @@ namespace OE.Adapter.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            try {
+            try
+            {
                 _logger.LogInformation("Connecting to RabbitMQ Server");
                 _messageBroker.Connect();
             }
@@ -87,10 +88,11 @@ namespace OE.Adapter.Service
             var correlationId = ea.BasicProperties.CorrelationId;
 
             using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
-            try
-            {
+                try
+                {
 
-                activity?.SetTag("message.type", messageType);
+                    activity?.SetTag("message.type", messageType);
+                    activity?.SetTag("payload", payload);
 
                     switch (messageType)
                     {
@@ -126,20 +128,21 @@ namespace OE.Adapter.Service
                             break;
                     }
 
-                if (_processedMessagesCounter.Enabled)
-                    _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
+                    if (_processedMessagesCounter.Enabled)
+                        _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
 
-                activity?.SetStatus(ActivityStatusCode.Ok);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"--> stacktrace  : {ex.StackTrace}");
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"--> stacktrace  : {ex.StackTrace}");
 
-                if (_processedMessagesCounter.Enabled)
-                    _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
+                    if (_processedMessagesCounter.Enabled)
+                        _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
 
-                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            }
+                    activity?.SetTag("stack.trace", ex.StackTrace);
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                }
         }
 
         private void ProcessMessage<T>(string payload, Action<T> processor)
@@ -162,7 +165,8 @@ namespace OE.Adapter.Service
                     var bytes = value as byte[];
                     return new[] { Encoding.UTF8.GetString(bytes) };
                 }
-            } catch (Exception) {}
+            }
+            catch (Exception) { }
 
             return Enumerable.Empty<string>();
         }
