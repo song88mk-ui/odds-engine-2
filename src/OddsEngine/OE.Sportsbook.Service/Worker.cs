@@ -143,9 +143,11 @@ namespace OE.Sportsbook.Service
         {
             if (string.IsNullOrWhiteSpace(payload)) return;
 
+            _logger.LogDebug($"Payload received: {payload}");
             var message = JsonSerializer.Deserialize<T>(payload);
             if (message != null)
             {
+                _logger.LogInformation($"Message deserialized as: {message}");
                 processor(message);
             }
         }

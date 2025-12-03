@@ -283,6 +283,8 @@ namespace OE.Sportsbook.Service.Repositories
 
             foreach (var market in message.Ma)
             {
+                _logger.LogInformation($"Prepare to Market model with Id {market.Id} MaId {market.MaId} PrMaId {market.PrMaId}");
+
                 markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id),
                     Builders<Market>.Update
                         .Set(s => s.Id, market.Id)
@@ -317,6 +319,8 @@ namespace OE.Sportsbook.Service.Repositories
 
                 foreach (var selection in market.Se)
                 {
+                    _logger.LogInformation($"Prepare to Selection model with Id {selection.Id} MaId {market.MaId} SeId {selection.SeId}");
+
                     selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
                         Builders<Selection>.Update
                             .Set(s => s.Id, selection.Id)
