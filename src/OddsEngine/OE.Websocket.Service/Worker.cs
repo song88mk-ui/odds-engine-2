@@ -266,79 +266,81 @@ namespace OE.Websocket.Service
 
 
             using (var activity = _activitySource.StartActivity($"{e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
-            try
-            {
-                activity?.SetTag("message.type", messageType);
-
-                switch (messageType)
+                try
                 {
-                    case "OnOddsChange":
-                        var onOddsChange = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
+                    activity?.SetTag("message.type", messageType);
 
-                        _messagesMarketCount.Add(onOddsChange);
-                        _messagesTopFixtures.Add(onOddsChange);
-                        _messagesTopLeagues.Add(onOddsChange);
-                        _messagesMainMarketsOddsChange.Add(onOddsChange);
-                        _messagesAllMarketsOddsChange.Add(onOddsChange);
-                        break;
+                    switch (messageType)
+                    {
+                        case "OnOddsChange":
+                            var onOddsChange = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
+
+                            _messagesMarketCount.Add(onOddsChange);
+                            _messagesTopFixtures.Add(onOddsChange);
+                            _messagesTopLeagues.Add(onOddsChange);
+                            _messagesMainMarketsOddsChange.Add(onOddsChange);
+                            _messagesAllMarketsOddsChange.Add(onOddsChange);
+                            break;
 
                         //TODO:
-                    //case "OnBetStopFixture":
-                    //    var onBetStop = JsonSerializer.Deserialize<OnInternalBetStopFixtureMessage>(payload);
-                    //    await _sportsbookRepository.ProcessBetStopFixture(onBetStop, _hubConnection);
-                    //    break;
+                        //case "OnBetStopFixture":
+                        //    var onBetStop = JsonSerializer.Deserialize<OnInternalBetStopFixtureMessage>(payload);
+                        //    await _sportsbookRepository.ProcessBetStopFixture(onBetStop, _hubConnection);
+                        //    break;
 
-                    case "OnBetStopGlobal":
-                        var onBetStopGlobal = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
-                        await _sportsbookRepository.ProcessBetStopGlobal(onBetStopGlobal, _hubConnection);
-                        break;
+                        case "OnBetStopGlobal":
+                            var onBetStopGlobal = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
+                            await _sportsbookRepository.ProcessBetStopGlobal(onBetStopGlobal, _hubConnection);
+                            break;
 
-                    case "OnBetStatus":
-                        var onBetStatus = JsonSerializer.Deserialize<IncomingBetStatus>(payload);
-                        _messagesBetStatus.Add(onBetStatus);
-                        break;
+                        case "OnBetStatus":
+                            var onBetStatus = JsonSerializer.Deserialize<IncomingBetStatus>(payload);
+                            _messagesBetStatus.Add(onBetStatus);
+                            break;
 
-                    case "OnCashOutChange":
-                        var onCashOutChange = JsonSerializer.Deserialize<IncomingCashOutChange>(payload);
-                        _messagesCashOut.Add(onCashOutChange);
-                        break;
+                        case "OnCashOutChange":
+                            var onCashOutChange = JsonSerializer.Deserialize<IncomingCashOutChange>(payload);
+                            _messagesCashOut.Add(onCashOutChange);
+                            break;
 
-                    case "OnWalletChange":
-                        var onWalletChange = JsonSerializer.Deserialize<IncomingWalletChange>(payload);
-                        _messagesWallet.Add(onWalletChange);
-                        break;
+                        case "OnWalletChange":
+                            var onWalletChange = JsonSerializer.Deserialize<IncomingWalletChange>(payload);
+                            _messagesWallet.Add(onWalletChange);
+                            break;
 
-                    case "OnVisitFavorites":
-                        var onVisitFavorites = JsonSerializer.Deserialize<IncomingVisitFavorites>(payload);
-                        _messagesFavorites.Add(onVisitFavorites);
-                        break;
-                    case "OnRemoveUserFavorites":
-                        var onRemoveFavorites = JsonSerializer.Deserialize<IncomingVisitFavorites>(payload);
-                        _messagesRemoveFavorites.Add(onRemoveFavorites);
-                        break;
-                    case "OnVisitBoostedFixtures":
-                        var onVisitBoostedFixtures = JsonSerializer.Deserialize<IncomingVisitBoostedFixtures>(payload);
-                        _messagesBoostedFixtures.Add(onVisitBoostedFixtures);
-                        break;
-                    case "OnPayableChange":
-                        var onPayableChange = JsonSerializer.Deserialize<IncomingPayableChange>(payload);
-                        _messagesPayable.Add(onPayableChange);
-                        break;
-                    case "OnMarketSortOrderChange":
-                        _messagesMarketSortOrder.Add(true);
-                        break;
+                        case "OnVisitFavorites":
+                            var onVisitFavorites = JsonSerializer.Deserialize<IncomingVisitFavorites>(payload);
+                            _messagesFavorites.Add(onVisitFavorites);
+                            break;
+                        case "OnRemoveUserFavorites":
+                            var onRemoveFavorites = JsonSerializer.Deserialize<IncomingVisitFavorites>(payload);
+                            _messagesRemoveFavorites.Add(onRemoveFavorites);
+                            break;
+                        case "OnVisitBoostedFixtures":
+                            var onVisitBoostedFixtures = JsonSerializer.Deserialize<IncomingVisitBoostedFixtures>(payload);
+                            _messagesBoostedFixtures.Add(onVisitBoostedFixtures);
+                            break;
+                        case "OnPayableChange":
+                            var onPayableChange = JsonSerializer.Deserialize<IncomingPayableChange>(payload);
+                            _messagesPayable.Add(onPayableChange);
+                            break;
+                        case "OnMarketSortOrderChange":
+                            _messagesMarketSortOrder.Add(true);
+                            break;
 
+                    }
+                    activity?.SetStatus(ActivityStatusCode.Ok);
                 }
-                activity?.SetStatus(ActivityStatusCode.Ok);
-            }
-            catch (Exception exception)
-            {
-                activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
-                _logger.LogError(exception, "error processing message: {trace}", exception.StackTrace);
-                // abruptly terminate the process and let the operating system
-                // supervisor handles its job of restarting it
-                System.Environment.Exit(1);
-            }
+                catch (Exception exception)
+                {
+
+                    activity?.SetTag("stack.trace", exception.StackTrace);
+                    activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
+                    _logger.LogError(exception, "error processing message: {trace}", exception.StackTrace);
+                    // abruptly terminate the process and let the operating system
+                    // supervisor handles its job of restarting it
+                    System.Environment.Exit(1);
+                }
         }
 
         private IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
@@ -350,7 +352,8 @@ namespace OE.Websocket.Service
                     var bytes = value as byte[];
                     return new[] { Encoding.UTF8.GetString(bytes) };
                 }
-            } catch (Exception) {}
+            }
+            catch (Exception) { }
 
             return Enumerable.Empty<string>();
         }

@@ -118,81 +118,83 @@ namespace OE.UOF.Client
             var correlationId = ea.BasicProperties.CorrelationId;
 
             using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
-            try
-            {
-                activity?.SetTag("message.type", messageType);
-                activity?.SetTag("client.code", _clientCode);
-
-                ResetDate();
-
-                switch (messageType)
+                try
                 {
-                    case MessageType.ON_FIXTURE_CHANGE:
-                        ProcessMessageWithValidation<OnFixtureChangeMessage>(payload, msg =>
-                            {
-                                _clientRepository.ProcessFixtureChange(msg, _messageBrokerExternal, correlationId );
+                    activity?.SetTag("message.type", messageType);
+                    activity?.SetTag("client.code", _clientCode);
 
-                                _clientRepository.UpdateFixtureConfiguration(msg, _messageBroker, _fixtureConfigurations, _configurations);
-                            });
-                        break;
-                    case MessageType.ON_MARKET_CHANGE:
-                        ProcessMessageWithValidation<OnMarketChangeMessage>(payload, msg =>
-                            {
-                                _clientRepository.ProcessMarketChange(msg, _messageBrokerExternal, correlationId, _fixtureConfigurations, _configurations);
+                    ResetDate();
 
-                                //_clientRepository.UpdateFixtureConfiguration(msg, _messageBroker, _fixtureConfigurations, _configurations);
-                            });
-                        break;
-                    case MessageType.ON_BET_STOP_FIXTURE:
-                        ProcessMessageWithValidation<SportModel>(payload, msg =>
-                            {
-                                _clientRepository.ProcessBetStop(payload, _messageBrokerExternal, correlationId);
-                            });
-                        break;
-                    case MessageType.ON_BET_STOP_GLOBAL:
-                        ProcessMessage<OnBetStopGlobalMessage>(payload, msg => _clientRepository.ProcessBetStopGlobal(msg, _messageBrokerExternal, correlationId));
-                        break;
+                    switch (messageType)
+                    {
+                        case MessageType.ON_FIXTURE_CHANGE:
+                            ProcessMessageWithValidation<OnFixtureChangeMessage>(payload, msg =>
+                                {
+                                    _clientRepository.ProcessFixtureChange(msg, _messageBrokerExternal, correlationId);
 
-                    case MessageType.ON_MARKET_SETTLEMENT:
-                        ProcessMessageWithValidation<OnMarketSettlementMessage>(payload, msg =>
-                            {
-                                _clientRepository.ProcessMarketSettlement(msg, _messageBrokerExternal, correlationId);
-                            });
-                        break;
+                                    _clientRepository.UpdateFixtureConfiguration(msg, _messageBroker, _fixtureConfigurations, _configurations);
+                                });
+                            break;
+                        case MessageType.ON_MARKET_CHANGE:
+                            ProcessMessageWithValidation<OnMarketChangeMessage>(payload, msg =>
+                                {
+                                    _clientRepository.ProcessMarketChange(msg, _messageBrokerExternal, correlationId, _fixtureConfigurations, _configurations);
 
-                    case MessageType.ON_MARKET_CANCEL:
-                        ProcessMessageWithValidation<OnMarketCancellationMessage>(payload, msg =>
-                            {
-                                _clientRepository.ProcessMarketCancellation(msg, _messageBrokerExternal, correlationId);
-                            });
-                        break;
+                                    //_clientRepository.UpdateFixtureConfiguration(msg, _messageBroker, _fixtureConfigurations, _configurations);
+                                });
+                            break;
+                        case MessageType.ON_BET_STOP_FIXTURE:
+                            ProcessMessageWithValidation<SportModel>(payload, msg =>
+                                {
+                                    _clientRepository.ProcessBetStop(payload, _messageBrokerExternal, correlationId);
+                                });
+                            break;
+                        case MessageType.ON_BET_STOP_GLOBAL:
+                            ProcessMessage<OnBetStopGlobalMessage>(payload, msg => _clientRepository.ProcessBetStopGlobal(msg, _messageBrokerExternal, correlationId));
+                            break;
 
-                    case "OnHeartbeat":
-                        ProcessMessage<OFHeartbeatMessage>(payload, msg => _clientRepository.ProcessHeartbeat(msg, _messageBrokerExternal, correlationId));
-                        break;
+                        case MessageType.ON_MARKET_SETTLEMENT:
+                            ProcessMessageWithValidation<OnMarketSettlementMessage>(payload, msg =>
+                                {
+                                    _clientRepository.ProcessMarketSettlement(msg, _messageBrokerExternal, correlationId);
+                                });
+                            break;
+
+                        case MessageType.ON_MARKET_CANCEL:
+                            ProcessMessageWithValidation<OnMarketCancellationMessage>(payload, msg =>
+                                {
+                                    _clientRepository.ProcessMarketCancellation(msg, _messageBrokerExternal, correlationId);
+                                });
+                            break;
+
+                        case "OnHeartbeat":
+                            ProcessMessage<OFHeartbeatMessage>(payload, msg => _clientRepository.ProcessHeartbeat(msg, _messageBrokerExternal, correlationId));
+                            break;
+                    }
+
+                    if (_forwardedMessagesCounter.Enabled)
+                        _forwardedMessagesCounter.Add(1, new KeyValuePair<string, object?>("client.code", _clientCode));
+
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+
                 }
-
-                if (_forwardedMessagesCounter.Enabled)
-                    _forwardedMessagesCounter.Add(1, new KeyValuePair<string, object?>("client.code", _clientCode));
-
-                activity?.SetStatus(ActivityStatusCode.Ok);
-
-            }
-            catch (Exception ex)
-            {
-                activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-
-                _logger.LogError(ex, $"trace: {ex.StackTrace}");
-                var errorMessage = new
+                catch (Exception ex)
                 {
-                    CorrelationId = correlationId,
-                    Message = ex.Message,
-                    StackTrace = ex.StackTrace,
-                    Payload = payload
-                };
 
-                _messageBroker.Publish(errorMessage, $"{messageType}Error", "r.error.engine.uof.client", correlationId);
-            }
+                    activity?.SetTag("stack.trace", ex.StackTrace);
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+
+                    _logger.LogError(ex, $"trace: {ex.StackTrace}");
+                    var errorMessage = new
+                    {
+                        CorrelationId = correlationId,
+                        Message = ex.Message,
+                        StackTrace = ex.StackTrace,
+                        Payload = payload
+                    };
+
+                    _messageBroker.Publish(errorMessage, $"{messageType}Error", "r.error.engine.uof.client", correlationId);
+                }
         }
 
         private void ProcessMessageWithValidation<T>(string payload, Action<T> handler)
@@ -266,7 +268,8 @@ namespace OE.UOF.Client
                     var bytes = value as byte[];
                     return new[] { Encoding.UTF8.GetString(bytes) };
                 }
-            } catch (Exception) {}
+            }
+            catch (Exception) { }
 
             return Enumerable.Empty<string>();
         }
