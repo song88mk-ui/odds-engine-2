@@ -93,13 +93,15 @@ namespace OE.Sportsbook.Service.Repositories
             }
 
 
+            _logger.LogInformation($"message --> {JsonSerializer.Serialize(message)}");
+
             _logger.LogInformation($"payload --> {JsonSerializer.Serialize(payload)}");
 
             var data = ToMarketAndSelection(message, correlationId);
 
             if (data.Item1.Length > 0)
             {
-                _logger.LogInformation($"data.Item1 --> {data.Item1}");
+                _logger.LogInformation($"data.Item1 --> {JsonSerializer.Serialize(data.Item1)}");
 
                 BulkWrite(_marketCollection, data.Item1);
             }
@@ -109,7 +111,7 @@ namespace OE.Sportsbook.Service.Repositories
 
             if (data.Item2.Length > 0)
             {
-                _logger.LogInformation($"data.Item2 --> {data.Item2}");
+                _logger.LogInformation($"data.Item2 --> {JsonSerializer.Serialize(data.Item2)}");
 
                 BulkWrite(_selectionCollection, data.Item2);
             }
@@ -578,6 +580,7 @@ namespace OE.Sportsbook.Service.Repositories
                 //    MatchStatusCode = s.MatchStatusCode,
                 //    PeriodType = s.PeriodType
                 //}).ToList()
+                Ma = markets
             };
         }
 
