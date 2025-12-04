@@ -92,15 +92,30 @@ namespace OE.Sportsbook.Service.Repositories
                 //payload.FixtureStatusName = FixtureStatus.Closed.ToString();
             }
 
+
+            _logger.LogInformation($"payload --> {JsonSerializer.Serialize(payload)}");
+
             var data = ToMarketAndSelection(message, correlationId);
 
             if (data.Item1.Length > 0)
+            {
+                _logger.LogInformation($"data.Item1 --> {data.Item1}");
+
                 BulkWrite(_marketCollection, data.Item1);
+            }
+            else
+                _logger.LogInformation($"data.Item1 has no data");
+
 
             if (data.Item2.Length > 0)
-                BulkWrite(_selectionCollection, data.Item2);
+            {
+                _logger.LogInformation($"data.Item2 --> {data.Item2}");
 
-                        _logger.LogInformation($"Process Market Change Start");
+                BulkWrite(_selectionCollection, data.Item2);
+            }
+            else
+                _logger.LogInformation($"data.Item2 has no data");
+
 
             // TODO: Betstop Logic
 
@@ -168,7 +183,7 @@ namespace OE.Sportsbook.Service.Repositories
                 IsBetStop = message.IsBetStop,
                 CorrelationId = correlationId
             };
-            
+
             _IsBetStopGlobally = message.IsBetStop;
             messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.{MessageType.ON_BET_STOP_GLOBAL.ToLower()}", Guid.NewGuid().ToString());
         }
@@ -414,7 +429,7 @@ namespace OE.Sportsbook.Service.Repositories
             {
                 collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 _logger.LogError($"error: {ex.Message}-{ex.StackTrace}");
                 throw;
