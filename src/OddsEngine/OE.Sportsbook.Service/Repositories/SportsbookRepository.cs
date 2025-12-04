@@ -349,7 +349,6 @@ namespace OE.Sportsbook.Service.Repositories
                             .SetOnInsert(s => s.FiId, message.FiId)
                             .SetOnInsert(s => s.MaId, market.MaId)
                             .SetOnInsert(s => s.SeId, selection.SeId)
-                            .Set(s => s.ChTyId, message.ChTyId)
                             .Set(s => s.SpId, message.SpId)
                             .Set(s => s.SegId, message.SegId)
                             .Set(s => s.LeId, message.LeId)
