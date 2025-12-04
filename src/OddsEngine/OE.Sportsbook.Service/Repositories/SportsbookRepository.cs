@@ -307,7 +307,6 @@ namespace OE.Sportsbook.Service.Repositories
 
                 markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id),
                     Builders<Market>.Update
-                        .Set(s => s.Id, market.Id)
                         .Set(s => s.ChTyId, message.ChTyId)
                         .Set(s => s.PrFiId, message.PrFiId)
                         .Set(s => s.PrMaId, market.PrMaId)
@@ -343,7 +342,6 @@ namespace OE.Sportsbook.Service.Repositories
 
                     selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
                         Builders<Selection>.Update
-                            .Set(s => s.Id, selection.Id)
                             .Set(s => s.ChTyId, message.ChTyId)
                             .Set(s => s.PrFiId, message.PrFiId)
                             .Set(s => s.PrMaId, market.PrMaId)
@@ -385,6 +383,8 @@ namespace OE.Sportsbook.Service.Repositories
 
             return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
         }
+
+
         private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketSettlementMessage message, string correlationId)
         {
             var markets = new List<WriteModel<Market>>();
