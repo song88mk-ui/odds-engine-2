@@ -430,8 +430,6 @@ namespace OE.Sportsbook.Service.Repositories
             try
             {
                 var result = collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
-
-                _logger.LogInformation($"Bulkwrite: {JsonSerializer.Serialize(result)}");
             }
             catch (Exception ex)
             {
