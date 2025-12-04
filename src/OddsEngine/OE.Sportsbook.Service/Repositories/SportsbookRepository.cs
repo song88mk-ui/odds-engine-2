@@ -316,7 +316,6 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.SpId, message.SpId)
                         .Set(s => s.SegId, message.SegId)
                         .Set(s => s.LeId, message.LeId)
-                        .Set(s => s.FiId, message.FiId)
                         .Set(s => s.MaTeId, market.MaTeId)
                         .Set(s => s.MaNa, market.MaNa)
                         .Set(s => s.Li, market.Li)
@@ -337,50 +336,47 @@ namespace OE.Sportsbook.Service.Repositories
                 )
                 { IsUpsert = true });
 
-                //Temporarily disabled
-                //foreach (var selection in market.Se)
-                //{
-                //    _logger.LogInformation($"Prepare to Selection model with Id {selection.Id} MaId {market.MaId} SeId {selection.SeId}");
+                foreach (var selection in market.Se)
+                {
+                    _logger.LogInformation($"Prepare to Selection model with Id {selection.Id} MaId {market.MaId} SeId {selection.SeId}");
 
-                //    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
-                //        Builders<Selection>.Update
-                //            .Set(s => s.ChTyId, message.ChTyId)
-                //            .Set(s => s.PrFiId, message.PrFiId)
-                //            .Set(s => s.PrMaId, market.PrMaId)
-                //            .Set(s => s.PrSeId, selection.PrSeId)
-                //            //.SetOnInsert(s => s.FiId, message.FiId)
-                //            //.SetOnInsert(s => s.MaId, market.MaId)
-                //            //.SetOnInsert(s => s.SeId, selection.SeId)
-                //            .Set(s => s.ChTyId, message.ChTyId)
-                //            .Set(s => s.SpId, message.SpId)
-                //            .Set(s => s.SegId, message.SegId)
-                //            .Set(s => s.LeId, message.LeId)
-                //            .Set(s => s.FiId, message.FiId)
-                //            .Set(s => s.MaId, market.MaId)
-                //            .Set(s => s.MaTeId, market.MaTeId)
-                //            .Set(s => s.SeTeId, selection.SeTeId)
-                //            .Set(s => s.SeNa, selection.SeNa)
-                //            .Set(s => s.Od, selection.Od)
-                //            .Set(s => s.IsAc, selection.IsAc)
-                //            //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
-                //            //.Set(s => s.SeStId, 0)  TODO
-                //            //.Set(s => s.SeStNa, "Pending")  TODO
-                //            .Set(s => s.SeSp, selection.SeSp)
-                //            .Set(s => s.FiStDa, message.FiStDa)
-                //            .Set(s => s.FiStId, message.FiStId)
-                //            .Set(s => s.MaStId, market.MaStId)
-                //            .Set(s => s.CoId, correlationId)
-                //            .Set(s => s.Pr, selection.Pr)
-                //            .Set(s => s.WoPr, selection.WoPr)
-                //            .Set(s => s.LoPr, selection.LoPr)
-                //            .Set(s => s.VoPr, selection.VoPr)
-                //            .Set(s => s.HaWoPr, selection.HaWoPr)
-                //            .Set(s => s.HaLoPr, selection.HaLoPr)
-                //    //TODO
-                //    //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
-                //    )
-                //    { IsUpsert = true });
-                //}
+                    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
+                        Builders<Selection>.Update
+                            .Set(s => s.ChTyId, message.ChTyId)
+                            .Set(s => s.PrFiId, message.PrFiId)
+                            .Set(s => s.PrMaId, market.PrMaId)
+                            .Set(s => s.PrSeId, selection.PrSeId)
+                            .SetOnInsert(s => s.FiId, message.FiId)
+                            .SetOnInsert(s => s.MaId, market.MaId)
+                            .SetOnInsert(s => s.SeId, selection.SeId)
+                            .Set(s => s.ChTyId, message.ChTyId)
+                            .Set(s => s.SpId, message.SpId)
+                            .Set(s => s.SegId, message.SegId)
+                            .Set(s => s.LeId, message.LeId)
+                            .Set(s => s.MaTeId, market.MaTeId)
+                            .Set(s => s.SeTeId, selection.SeTeId)
+                            .Set(s => s.SeNa, selection.SeNa)
+                            .Set(s => s.Od, selection.Od)
+                            .Set(s => s.IsAc, selection.IsAc)
+                            //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
+                            //.Set(s => s.SeStId, 0)  TODO
+                            //.Set(s => s.SeStNa, "Pending")  TODO
+                            .Set(s => s.SeSp, selection.SeSp)
+                            .Set(s => s.FiStDa, message.FiStDa)
+                            .Set(s => s.FiStId, message.FiStId)
+                            .Set(s => s.MaStId, market.MaStId)
+                            .Set(s => s.CoId, correlationId)
+                            .Set(s => s.Pr, selection.Pr)
+                            .Set(s => s.WoPr, selection.WoPr)
+                            .Set(s => s.LoPr, selection.LoPr)
+                            .Set(s => s.VoPr, selection.VoPr)
+                            .Set(s => s.HaWoPr, selection.HaWoPr)
+                            .Set(s => s.HaLoPr, selection.HaLoPr)
+                    //TODO
+                    //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
+                    )
+                    { IsUpsert = true });
+                }
             }
 
             return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
