@@ -12,6 +12,7 @@ using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Telemetry;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
 
 namespace OE.Sportsbook.Service.Repositories
 {
@@ -77,6 +78,8 @@ namespace OE.Sportsbook.Service.Repositories
             if (!message.Ma.Any())
                 return;
 
+            _logger.LogInformation($"Process Market Change Start");
+
             var payload = PrepareInternalOddsChangeMessage(message, correlationId);
 
             if (payload.Ma.Count > 0
@@ -96,6 +99,8 @@ namespace OE.Sportsbook.Service.Repositories
 
             if (data.Item2.Length > 0)
                 BulkWrite(_selectionCollection, data.Item2);
+
+                        _logger.LogInformation($"Process Market Change Start");
 
             // TODO: Betstop Logic
 
@@ -408,6 +413,11 @@ namespace OE.Sportsbook.Service.Repositories
             try
             {
                 collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
+            }
+            catch(Exception ex)
+            {
+                _logger.LogError($"error: {ex.Message}-{ex.StackTrace}");
+                throw;
             }
             finally
             {
