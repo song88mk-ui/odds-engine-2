@@ -97,7 +97,7 @@ namespace OE.Sportsbook.Service.Repositories
 
             _logger.LogInformation($"payload --> {JsonSerializer.Serialize(payload)}");
 
-            var data = ToMarketAndSelection(message, correlationId);
+            var data = ToMarketAndSelectionChange(message, correlationId);
 
             if (data.Item1.Length > 0)
             {
@@ -298,22 +298,20 @@ namespace OE.Sportsbook.Service.Repositories
            };
         }
 
-        private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketChangeMessage message, string correlationId)
+        private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelectionChange(OnMarketChangeMessage message, string correlationId)
         {
             var markets = new List<WriteModel<Market>>();
             var selections = new List<WriteModel<Selection>>();
 
             foreach (var market in message.Ma)
             {
-                _logger.LogInformation($"Prepare to Market model with Id {market.Id} MaId {market.MaId} PrMaId {market.PrMaId}");
-
                 markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id),
                     Builders<Market>.Update
                         .Set(s => s.ChTyId, message.ChTyId)
                         .Set(s => s.PrFiId, message.PrFiId)
                         .Set(s => s.PrMaId, market.PrMaId)
-                        .SetOnInsert(s => s.FiId, message.FiId)
-                        .SetOnInsert(s => s.MaId, market.MaId)
+                        //.SetOnInsert(s => s.FiId, message.FiId)
+                        //.SetOnInsert(s => s.MaId, market.MaId)
                         .Set(s => s.SpId, message.SpId)
                         .Set(s => s.SegId, message.SegId)
                         .Set(s => s.LeId, message.LeId)
@@ -348,9 +346,9 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.PrFiId, message.PrFiId)
                             .Set(s => s.PrMaId, market.PrMaId)
                             .Set(s => s.PrSeId, selection.PrSeId)
-                            .SetOnInsert(s => s.FiId, message.FiId)
-                            .SetOnInsert(s => s.MaId, market.MaId)
-                            .SetOnInsert(s => s.SeId, selection.SeId)
+                            //.SetOnInsert(s => s.FiId, message.FiId)
+                            //.SetOnInsert(s => s.MaId, market.MaId)
+                            //.SetOnInsert(s => s.SeId, selection.SeId)
                             .Set(s => s.ChTyId, message.ChTyId)
                             .Set(s => s.SpId, message.SpId)
                             .Set(s => s.SegId, message.SegId)

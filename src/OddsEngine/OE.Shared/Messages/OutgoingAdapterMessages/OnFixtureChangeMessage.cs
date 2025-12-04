@@ -19,7 +19,6 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string HoId { get; set; }
         public string AwId { get; set; }
         public string Sc { get; set; }
-        public string FiSp { get; set; }
         public bool IsOfLi { get; set; }
         public int HoReCa { get; set; }
         public int AwReCa { get; set; }
