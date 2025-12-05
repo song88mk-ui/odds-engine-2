@@ -78,8 +78,6 @@ namespace OE.Sportsbook.Service.Repositories
             if (!message.Ma.Any())
                 return;
 
-            _logger.LogInformation($"Process Market Change Start");
-
             var payload = PrepareInternalOddsChangeMessage(message, correlationId);
 
             if (payload.Ma.Count > 0
@@ -93,31 +91,16 @@ namespace OE.Sportsbook.Service.Repositories
             }
 
 
-            _logger.LogInformation($"message --> {JsonSerializer.Serialize(message)}");
-
-            _logger.LogInformation($"payload --> {JsonSerializer.Serialize(payload)}");
+            _logger.LogInformationEx($"message --> {JsonSerializer.Serialize(message)}");
 
             var data = ToMarketAndSelectionChange(message, correlationId);
 
             if (data.Item1.Length > 0)
-            {
-                _logger.LogInformation($"data.Item1 --> {JsonSerializer.Serialize(data.Item1)}");
-
                 BulkWrite(_marketCollection, data.Item1);
-            }
-            else
-                _logger.LogInformation($"data.Item1 has no data");
 
 
             if (data.Item2.Length > 0)
-            {
-                _logger.LogInformation($"data.Item2 --> {JsonSerializer.Serialize(data.Item2)}");
-
                 BulkWrite(_selectionCollection, data.Item2);
-            }
-            else
-                _logger.LogInformation($"data.Item2 has no data");
-
 
             // TODO: Betstop Logic
 
@@ -177,7 +160,7 @@ namespace OE.Sportsbook.Service.Repositories
             if (message == null || (_IsBetStopGlobally == message.IsBetStop))
                 return;
 
-            _logger.LogWarning($"Incoming OnBetStopGlobalMessage change the status ! : from {_IsBetStopGlobally} to {message.IsBetStop}");
+            _logger.LogWarningEx($"Incoming OnBetStopGlobalMessage change the status ! : from {_IsBetStopGlobally} to {message.IsBetStop}");
             BulkWrite(_bettingStatusCollection, ToDBBettingStatus(message));
 
             var payload = new
@@ -203,25 +186,6 @@ namespace OE.Sportsbook.Service.Repositories
             _selectionCollection = _db.GetCollection<Selection>("Selection");
             _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
         }
-
-        //private FixtureProject GetFixtureProject(int chTyId, string providerFixtureId)
-        //{
-        //    var filter = Builders<Fixture>.Filter.Eq(f => f.ChTyId, chTyId) &
-        //                 Builders<Fixture>.Filter.Eq(f => f.PrFiId, providerFixtureId);
-        //    var project = Builders<Fixture>.Projection
-        //                    .Include(c => c.FiId)
-        //                    .Include(c => c.ChTyId)
-        //                    .Include(c => c.PrFiId)
-        //                    .Include(c => c.SpId)
-        //                    .Include(c => c.SegId)
-        //                    .Include(c => c.LeId)
-        //                    .Include(c => c.FiStDa)
-        //                    .Include(c => c.FiStId);
-
-        //    var result = _fixtureCollection.Find(filter).Project<FixtureProject>(project).FirstOrDefault();
-
-        //    return result;
-        //}
 
         private WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)
         {
@@ -338,8 +302,6 @@ namespace OE.Sportsbook.Service.Repositories
 
                 foreach (var selection in market.Se)
                 {
-                    _logger.LogInformation($"Prepare to Selection model with Id {selection.Id} MaId {market.MaId} SeId {selection.SeId}");
-
                     selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
                         Builders<Selection>.Update
                             .Set(s => s.ChTyId, message.ChTyId)
@@ -428,7 +390,7 @@ namespace OE.Sportsbook.Service.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError($"error: {ex.Message}-{ex.StackTrace}");
+                _logger.LogErrorEx($"error: {ex.Message}-{ex.StackTrace}");
                 throw;
             }
             finally
@@ -592,7 +554,7 @@ namespace OE.Sportsbook.Service.Repositories
             var existingBettingStatusData = _bettingStatusCollection.Find(filter).FirstOrDefault();
 
             _IsBetStopGlobally = existingBettingStatusData?.IsBeSo ?? false;
-            _logger.LogWarning($"BetStopGlobally exhibited in: {_IsBetStopGlobally}");
+            _logger.LogWarningEx($"BetStopGlobally exhibited in: {_IsBetStopGlobally}");
         }
         #endregion
     }

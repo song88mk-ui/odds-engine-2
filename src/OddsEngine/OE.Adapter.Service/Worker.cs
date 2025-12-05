@@ -13,6 +13,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
 using System.Text.Json;
+using OE.Shared.Extensions;
 
 namespace OE.Adapter.Service
 {
@@ -53,7 +54,7 @@ namespace OE.Adapter.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError($"caught exception on stop: {ex.Message}");
+                _logger.LogErrorEx($"caught exception on stop: {ex.Message}");
             }
 
             return base.StopAsync(cancellationToken);
@@ -63,12 +64,12 @@ namespace OE.Adapter.Service
         {
             try
             {
-                _logger.LogInformation("Connecting to RabbitMQ Server");
+                _logger.LogInformationEx("Connecting to RabbitMQ Server");
                 _messageBroker.Connect();
             }
             catch (Exception e)
             {
-                _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
+                _logger.LogErrorEx($"Error connecting to RabbitMQ: {e.Message}");
                 throw e;
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
@@ -92,7 +93,7 @@ namespace OE.Adapter.Service
                 {
 
                     activity?.SetTag("message.type", messageType);
-                    activity?.SetTag("payload", payload);
+                    _logger.LogInformationEx(payload);
 
                     switch (messageType)
                     {
@@ -135,7 +136,7 @@ namespace OE.Adapter.Service
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"--> stacktrace  : {ex.StackTrace}");
+                    _logger.LogErrorEx($"--> stacktrace  : {ex.StackTrace}", ex);
 
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
