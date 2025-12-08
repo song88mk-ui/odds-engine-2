@@ -127,6 +127,12 @@ namespace OE.Adapter.Service
                                 (msg) => _tradingRepository.ProcessMarketCancellation(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_BET_STOP_FIXTURE:
+                            ProcessMessage<OnBetStopFixtureMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnBetStopFixture(_messageBroker, msg, correlationId)
+                            );
+                            break;
                     }
 
                     if (_processedMessagesCounter.Enabled)

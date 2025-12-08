@@ -60,6 +60,10 @@ namespace OE.Adapter.Service.Repositories
         {
             PublishMessage(messageBroker, message, MessageType.ON_MARKET_CANCEL, correlationId);
         }
+        public void ProcessOnBetStopFixture(IMessageBroker messageBroker, OnBetStopFixtureMessage message, string correlationId)
+        {
+            PublishMessage(messageBroker, message, MessageType.ON_BET_STOP_FIXTURE, correlationId);
+        }
 
         #endregion
 
@@ -95,6 +99,7 @@ namespace OE.Adapter.Service.Repositories
                 messageBroker.Publish(payload, messageType, $"r.oe.adapter.{messageType.ToLower()}.{instanceName}", correlationId);
             }
         }
+
 
         #endregion
     }
