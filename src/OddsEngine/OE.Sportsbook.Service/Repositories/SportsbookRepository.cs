@@ -70,6 +70,11 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
+            if(string.IsNullOrEmpty(message.SpNa))
+            {
+                _logger.LogInformationEx($"null SpNa --> {JsonSerializer.Serialize(message)}");
+            }
+
             BulkWrite(_fixtureCollection, ToFixture(message));
         }
 
@@ -77,6 +82,11 @@ namespace OE.Sportsbook.Service.Repositories
         {
             if (!message.Ma.Any())
                 return;
+
+            if (string.IsNullOrEmpty(message.SpNa))
+            {
+                _logger.LogInformationEx($"null SpNa --> {JsonSerializer.Serialize(message)}");
+            }
 
             var payload = PrepareInternalOddsChangeMessage(message, correlationId);
 
@@ -89,9 +99,6 @@ namespace OE.Sportsbook.Service.Repositories
                 //payload.FixtureStatusId = (int)FixtureStatus.Closed;
                 //payload.FixtureStatusName = FixtureStatus.Closed.ToString();
             }
-
-
-            _logger.LogInformationEx($"message --> {JsonSerializer.Serialize(message)}");
 
             var data = ToMarketAndSelectionChange(message, correlationId);
 
@@ -129,7 +136,7 @@ namespace OE.Sportsbook.Service.Repositories
             foreach (var market in message.Ma)
             {
                 var marketColection = _marketCollection.Find(f => f.Id == market.Id).FirstOrDefault();
-                var fixtureSpecifier = ""; // TODO: Aries;
+                var fixtureSpecifier = message.FiSp;
 
                 if (marketColection is null)
                     continue;
