@@ -96,7 +96,7 @@ namespace OE.Adapter.Service
                     _logger.LogInformationEx(payload);
 
                     switch (messageType)
-                    {
+                    {//
                         case MessageType.ON_FIXTURE_CHANGE:
                             ProcessMessage<OnFixtureChangeMessage>(
                                 payload,

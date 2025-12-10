@@ -23,8 +23,8 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string MaSp { get; set; }
         public string MaNa { get; set; }
         public int SoOr { get; set; }
-        public string ClCo { get; set; }
-        public string ClCoMa { get; set; }
+        public string ClCo { get; set; } = string.Empty;
+        public string ClCoMa { get; set; } = string.Empty;
         public List<SelectionMessage> Se { get; set; } = new List<SelectionMessage>();
     }
 

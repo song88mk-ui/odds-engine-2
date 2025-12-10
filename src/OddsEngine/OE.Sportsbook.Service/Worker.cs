@@ -97,7 +97,7 @@ namespace OE.Sportsbook.Service
                     activity?.SetTag("payload", payload);
 
                     switch (messageType)
-                    {
+                    {//
                         case MessageType.ON_FIXTURE_CHANGE:
                             ProcessMessage<OnFixtureChangeMessage>(
                                 payload,

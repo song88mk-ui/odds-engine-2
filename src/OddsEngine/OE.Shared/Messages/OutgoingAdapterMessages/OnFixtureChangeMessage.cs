@@ -30,7 +30,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public int ToTi { get; set; }
         public string Fa { get; set; }
         public int SoOr { get; set; }
-        public string ClCo { get; set; }
+        public string ClCo { get; set; } = string.Empty;
         public string CoId { get; set; }
         public bool IsSu { get; set; }
         public bool? IsBo { get; set; }

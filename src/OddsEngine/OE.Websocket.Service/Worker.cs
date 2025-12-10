@@ -174,7 +174,7 @@ namespace OE.Websocket.Service
             _logger = logger;
             _messageBroker = messageBroker;
             _sportsbookRepository = sportsbookRepository;
-
+            //
             if (bool.Parse(_configuration["Custom:UseMessagePack"]))
             {
                 _logger.LogInformation("Using messagepack serialization protocol");

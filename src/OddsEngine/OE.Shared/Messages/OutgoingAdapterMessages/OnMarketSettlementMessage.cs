@@ -1,7 +1,4 @@
-﻿using MongoDB.Bson.Serialization.Serializers;
-using OE.Shared.Enums;
-using OE.Shared.Messages.OutgoingAdapterMessages.Base;
-using System;
+﻿using OE.Shared.Messages.OutgoingAdapterMessages.Base;
 using System.Collections.Generic;
 
 namespace OE.Shared.Messages.OutgoingAdapterMessages

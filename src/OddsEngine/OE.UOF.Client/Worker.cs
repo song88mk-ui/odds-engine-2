@@ -119,7 +119,7 @@ namespace OE.UOF.Client
 
             using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
                 try
-                {
+                {//
                     activity?.SetTag("message.type", messageType);
                     activity?.SetTag("client.code", _clientCode);
 
