@@ -1,11 +1,13 @@
 ﻿using Microsoft.IdentityModel.Tokens;
 using OE.Shared.Constants;
+using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.Shared.Utilities;
 using OE.UOF.Client.Models;
+using OE.UOF.Client.Telemetry;
 using System.Diagnostics;
 using System.Text.Json;
 
@@ -23,6 +25,7 @@ namespace OE.UOF.Client.Repository
         private readonly bool _asianClient = false;
         private readonly List<string> _languageCodes = new List<string>();
         private readonly List<string> _MaTeIds = new List<string> { "16", "18", "66", "68" };
+        private readonly ActivitySource _activitySource;
 
         private readonly JsonSerializerOptions _options;
 
@@ -30,7 +33,7 @@ namespace OE.UOF.Client.Repository
 
         #region Ctor
 
-        public ClientRepository(IConfiguration configuration, IMemCache memCache, IPlatformRepository platformRepository)
+        public ClientRepository(IConfiguration configuration, IMemCache memCache, IPlatformRepository platformRepository, Instrumentation instrumentation)
         {
             _configuration = configuration;
             _memCache = memCache;
@@ -39,6 +42,7 @@ namespace OE.UOF.Client.Repository
             _clientCode = _configuration["Custom:ClientCode"];
             _asianClient = Convert.ToBoolean(_configuration["Custom:AsianClient"]);
             _languageCodes = _configuration["Custom:LanguageCodes"].Split(',').Select(s => s).ToList();
+            _activitySource = instrumentation.ActivitySource;
 
             if (_httpClient == null)
             {
@@ -68,19 +72,30 @@ namespace OE.UOF.Client.Repository
 
             var payloadStr = string.Empty;
 
-            var payload = new
+            using (var activity = _activitySource.StartActivity("UOFClient ProcessFixture"))
             {
-                SportId = message.SpId,
-                FixtureSpecifier = message.FiSp,
-                ChangeTypeId = (int)FixtureChangeType.Other,
-                ChangeTypeName = FixtureChangeType.Other.ToString(),
-                FixtureStatusId = message.FiStId,
-                FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
-                TimeStampSent = message.TiSe,
-                TimeStampReceived = message.TiRe
-            };
 
-            PublishMessage(messageBroker, payload, MessageType.ON_FIXTURE_CHANGE.ToLower(), $"uof.{MessageType.ON_FIXTURE_CHANGE.ToLower()}.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                activity?.SetTag("provider.fixture.id", message.PrFiId);
+                activity?.SetTag("fixture.id", message.FiId);
+                activity?.SetTag("fixture.timestamp", message.FiStDa);
+                activity?.SetTag("fixture.sport", GetSportName(message.SpId));
+
+                var payload = new
+                {
+                    SportId = message.SpId,
+                    FixtureSpecifier = message.FiSp,
+                    ChangeTypeId = (int)FixtureChangeType.Other,
+                    ChangeTypeName = FixtureChangeType.Other.ToString(),
+                    FixtureStatusId = message.FiStId,
+                    FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
+                    TimeStampSent = message.TiSe,
+                    TimeStampReceived = message.TiRe
+                };
+
+                activity?.SetTag("outgoing.payload", JsonSerializer.Serialize(payload));
+
+                PublishMessage(messageBroker, payload, MessageType.ON_FIXTURE_CHANGE.ToLower(), $"uof.{MessageType.ON_FIXTURE_CHANGE.ToLower()}.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            }
         }
 
         public void ProcessMarketChange(OnMarketChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
@@ -89,55 +104,66 @@ namespace OE.UOF.Client.Repository
 
             var payloadStr = string.Empty;
 
-            var finalPayload = PrepareOddsChangeMessage(message);
-
-            finalPayload.Markets = message.Ma.Select(s => new OFMarketMessage
+            using (var activity = _activitySource.StartActivity("ProcessMarkets"))
             {
-                MarketTemplateId = s.MaTeId,
-                MarketName = s.MaNa,
-                Line = s.Li,
-                MarketStatusId = s.MaStId,
-                MarketStatusName = ((MarketStatus)s.MaStId).ToString(),
-                MarketSpecifier = s.MaSp,
-                //TODO: check the comment below
-                //NextBetStop = s.NextBetStop,
-                //StartTime = s.StartTime,
-                //EndTime = s.EndTime,
-                //MarketNameTranslations = s.MarketTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-                //    .Select(market => new OFMarketTranslation
-                //    {
-                //        LanguageCode = market.LanguageCode,
-                //        MarketName = market.MarketName
-                //    }).ToList(),
-                Selections = s.Se.Select(se => new OFSelectionMessage
+                activity?.SetTag("market.fixture.id", message.FiId);
+                activity?.SetTag("market.provider.fixture.id", message.PrFiId);
+                activity?.SetTag("market.count", message.Ma.Count());
+                activity?.SetTag("market.fixture.timestamp", message.FiStDa);
+                activity?.SetTag("market.sport", GetSportName(message.SpId));
+
+                var finalPayload = PrepareOddsChangeMessage(message);
+
+                finalPayload.Markets = message.Ma.Select(s => new OFMarketMessage
                 {
-                    SelectionTemplateId = se.SeTeId,
-                    SelectionName = se.SeNa,
-                    Odds = se.Od,
-                    IsActive = se.IsAc,
-                    Probability = se.Pr,
-                    VoidProbability = se.VoPr,
-                    WonProbability = se.WoPr,
-                    LostProbability = se.LoPr,
-                    HalfWonProbability = se.HaWoPr,
-                    HalfLostProbability = se.HaLoPr,
-                    SelectionSpecifier = se.SeSp,
+                    MarketTemplateId = s.MaTeId,
+                    MarketName = s.MaNa,
+                    Line = s.Li,
+                    MarketStatusId = s.MaStId,
+                    MarketStatusName = ((MarketStatus)s.MaStId).ToString(),
+                    MarketSpecifier = s.MaSp,
                     //TODO: check the comment below
-                    //SelectionNameTranslations = se.SelectionTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
-                    //    .Select(s => new OFSelectionTranslation
+                    //NextBetStop = s.NextBetStop,
+                    //StartTime = s.StartTime,
+                    //EndTime = s.EndTime,
+                    //MarketNameTranslations = s.MarketTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                    //    .Select(market => new OFMarketTranslation
                     //    {
-                    //        LanguageCode = s.LanguageCode,
-                    //        SelectionName = s.SelectionName
+                    //        LanguageCode = market.LanguageCode,
+                    //        MarketName = market.MarketName
                     //    }).ToList(),
-                }).ToList()
-            }).ToList();
+                    Selections = s.Se.Select(se => new OFSelectionMessage
+                    {
+                        SelectionTemplateId = se.SeTeId,
+                        SelectionName = se.SeNa,
+                        Odds = se.Od,
+                        IsActive = se.IsAc,
+                        Probability = se.Pr,
+                        VoidProbability = se.VoPr,
+                        WonProbability = se.WoPr,
+                        LostProbability = se.LoPr,
+                        HalfWonProbability = se.HaWoPr,
+                        HalfLostProbability = se.HaLoPr,
+                        SelectionSpecifier = se.SeSp,
+                        //TODO: check the comment below
+                        //SelectionNameTranslations = se.SelectionTranslations.Where(c => _languageCodes.Contains(c.LanguageCode))
+                        //    .Select(s => new OFSelectionTranslation
+                        //    {
+                        //        LanguageCode = s.LanguageCode,
+                        //        SelectionName = s.SelectionName
+                        //    }).ToList(),
+                    }).ToList()
+                }).ToList();
 
-            if (message.Ma.Count > 0)
-            {
-                PublishBetStopMessage(messageBroker, message, correlationId);
+                if (message.Ma.Count > 0)
+                {
+                    activity?.SetTag("market.betstopmessage", true);
+                    PublishBetStopMessage(messageBroker, message, correlationId);
+                }
+
+                activity?.SetTag("market.outgoing.payload", JsonSerializer.Serialize(finalPayload));
+                PublishMessage(messageBroker, finalPayload, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
             }
-
-            PublishMessage(messageBroker, finalPayload, "onoddschange", $"uof.onoddschange.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
         }
 
         public void ProcessBetStop(string payload, IMessageBroker messageBroker, string correlationId)
@@ -182,15 +208,19 @@ namespace OE.UOF.Client.Repository
 
             var payloadStr = string.Empty;
 
-            if (message == null)
-                return;
-
-            var finalPayload = new
+            using (var activity = _activitySource.StartActivity("ProcessBetStopGlobal"))
             {
-                isBetStop = message.IsBetStop
-            };
+                if (message == null)
+                    return;
 
-            PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                var finalPayload = new
+                {
+                    isBetStop = message.IsBetStop
+                };
+
+                activity?.SetTag("betstopglobal.outgoing.payload", JsonSerializer.Serialize(finalPayload));
+                PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            }
         }
 
         public void ProcessMarketSettlement(OnMarketSettlementMessage message, IMessageBroker messageBroker, string correlationId)
@@ -205,26 +235,36 @@ namespace OE.UOF.Client.Repository
             //if (message.SportId > 1000)
             //    return;
 
-            foreach (var market in message.Ma)
+            using (var activity = _activitySource.StartActivity("ProcessMarketSettlement"))
             {
-                var finalPayload = new
-                {
-                    sportId = market.SpId,
-                    fixtureSpecifier = message.FiSp,
-                    selections = market.Se.Select(selection => new
-                    {
-                        marketTemplateId = market.MaTeId,
-                        marketSpecifier = market.MaSp,
-                        selectionTemplateId = selection.SeTeId,
-                        result = selection.SeStId,
-                        voidFactor = Helper.GetVoidFactor((SettlementStatus)selection.SeStId),
-                        deadHeatFactor = 0
-                    }).ToList(),
-                    timeStampSent = message.TiSe,
-                    timeStampReceived = message.TiRe
-                };
 
-                PublishMessage(messageBroker, finalPayload, MessageType.ON_MARKET_SETTLEMENT.ToLower(), $"uof.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}.{GetSportName(market.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                activity?.SetTag("marketsettlement.fixture.id", message.FiId);
+                activity?.SetTag("marketsettlement.provider.fixture.id", message.PrFiId);
+                activity?.SetTag("marketsettlement.ma.count", message.Ma.Count());
+
+                foreach (var market in message.Ma)
+                {
+                    var finalPayload = new
+                    {
+                        sportId = market.SpId,
+                        fixtureSpecifier = message.FiSp,
+                        selections = market.Se.Select(selection => new
+                        {
+                            marketTemplateId = market.MaTeId,
+                            marketSpecifier = market.MaSp,
+                            selectionTemplateId = selection.SeTeId,
+                            result = selection.SeStId,
+                            voidFactor = Helper.GetVoidFactor((SettlementStatus)selection.SeStId),
+                            deadHeatFactor = 0
+                        }).ToList(),
+                        timeStampSent = message.TiSe,
+                        timeStampReceived = message.TiRe
+                    };
+
+                    activity?.SetTag("marketsettlement.sport", GetSportName(market.SpId));
+                    activity?.SetTag("marketsettlement.outgoing.payload", JsonSerializer.Serialize(finalPayload));
+                    PublishMessage(messageBroker, finalPayload, MessageType.ON_MARKET_SETTLEMENT.ToLower(), $"uof.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}.{GetSportName(market.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                }
             }
         }
 
@@ -237,25 +277,34 @@ namespace OE.UOF.Client.Repository
             //if (message.SportId > 1000)
             //    return;
 
-            var finalPayload = new
+            using (var activity = _activitySource.StartActivity("ProcessMarketCancellation"))
             {
-                sportId = message.SpId,
-                fixtureSpecifier = message.FiSp,
-                markets = message.Ma.Select(s => new
+                activity?.SetTag("marketcancellation.sport", GetSportName(message.SpId));
+                activity?.SetTag("marketcancellation.fixture.id", message.FiId);
+                activity?.SetTag("marketcancellation.provider.fixture.id", message.PrFiId);
+                activity?.SetTag("marketcancellation.ma.count", message.Ma.Count());
+
+                var finalPayload = new
                 {
-                    marketTemplateId = s.MaTeId,
-                    marketSpecifier = s.MaSp,
-                    startTime = s.StTi,
-                    endTime = s.EnTi,
-                    voidReason = s.VoRe
-                }).ToList(),
-                timeStampSent = message.TiSe,
-                timeStampReceived = message.TiRe
-            };
+                    sportId = message.SpId,
+                    fixtureSpecifier = message.FiSp,
+                    markets = message.Ma.Select(s => new
+                    {
+                        marketTemplateId = s.MaTeId,
+                        marketSpecifier = s.MaSp,
+                        startTime = s.StTi,
+                        endTime = s.EnTi,
+                        voidReason = s.VoRe
+                    }).ToList(),
+                    timeStampSent = message.TiSe,
+                    timeStampReceived = message.TiRe
+                };
 
-            var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
+                var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
 
-            PublishMessage(messageBroker, payloadStr, "onmarketcancellation", $"uof.onmarketcancellation.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                activity?.SetTag("marketcancellation.outgoing.payload", payloadStr);
+                PublishMessage(messageBroker, payloadStr, "onmarketcancellation", $"uof.onmarketcancellation.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+            }
         }
 
         public void ProcessHeartbeat(OFHeartbeatMessage message, IMessageBroker messageBroker, string correlationId)

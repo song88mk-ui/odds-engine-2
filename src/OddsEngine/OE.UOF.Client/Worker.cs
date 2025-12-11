@@ -122,6 +122,7 @@ namespace OE.UOF.Client
                 {//
                     activity?.SetTag("message.type", messageType);
                     activity?.SetTag("client.code", _clientCode);
+                    activity?.SetTag("correlation.id", correlationId);
 
                     ResetDate();
 
