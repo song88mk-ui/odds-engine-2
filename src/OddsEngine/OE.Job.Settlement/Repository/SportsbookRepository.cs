@@ -71,7 +71,8 @@ namespace OE.Job.Settlement.Repository
 
                 try
                 {
-                    if (fixture.FiStDa < DateTime.UtcNow && fixture.IsOfLi == false && fixture.FiStId == 0)
+                    if ((fixture.FiStDa < DateTime.UtcNow && fixture.IsOfLi == false && fixture.FiStId == 0)
+                        || (fixture.FiTyId == (int)FixtureType.Match && fixture.FiStDa < DateTime.UtcNow.AddDays(-1)))
                     {
                         var payload = new OnFixtureChangeMessage
                         {

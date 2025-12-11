@@ -1,7 +1,14 @@
 using OE.Job.Settlement;
+using OE.Job.Settlement.Repository;
+using OE.Shared.Utilities;
 
-var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddHostedService<Worker>();
-
-var host = builder.Build();
-host.Run();
+Host.CreateDefaultBuilder(args)
+    .ConfigureServices((context, services) =>
+    {
+        services.AddHttpClient();
+        services.AddSingleton<IMessageBroker, MessageBroker>();
+        services.AddSingleton<ISportsbookRepository, SportsbookRepository>();
+        services.AddHostedService<Worker>();
+    })
+    .Build()
+    .Run();
