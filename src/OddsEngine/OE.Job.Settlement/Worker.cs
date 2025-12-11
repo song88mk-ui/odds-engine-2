@@ -18,13 +18,16 @@ namespace OE.Job.Settlement
 
         public override Task StartAsync(CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Starting worker, connecting to message broker");
             _messageBroker.Connect();
+            _logger.LogInformation("Connected.");
 
             return base.StartAsync(cancellationToken);
         }
 
         public override Task StopAsync(CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Stopping worker");
             _messageBroker.Dispose();
             return base.StopAsync(cancellationToken);
         }
@@ -35,8 +38,9 @@ namespace OE.Job.Settlement
             {
                 try
                 {
+                    _logger.LogInformation("Processing settlements");
                     await _sportsbookRepository.ProcessSettlement(_messageBroker);
-                    _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                    _logger.LogInformation("Done at: {time}", DateTimeOffset.Now);
                     await Task.Delay(300000, stoppingToken);
                 }
                 catch (Exception ex)
