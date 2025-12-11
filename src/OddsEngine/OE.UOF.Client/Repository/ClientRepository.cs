@@ -1,6 +1,4 @@
-﻿using Microsoft.IdentityModel.Tokens;
-using OE.Shared.Constants;
-using OE.Shared.Data.Sportsbook.MongoDB.Collections;
+﻿using OE.Shared.Constants;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
@@ -172,7 +170,7 @@ namespace OE.UOF.Client.Repository
             //TODO: see comments below
             //var message = JsonSerializer.Deserialize<OnBetStopFixtureMessage>(payload);
 
-            //if (message.SportId > 1000)
+            //if (message.SportId.IsVirtualSportId())
             //    return;
 
             //var finalPayload = new
@@ -232,7 +230,7 @@ namespace OE.UOF.Client.Repository
             //    return;
 
             //// TODO
-            //if (message.SportId > 1000)
+            //if (message.SportId.IsVirtualSportId())
             //    return;
 
             using (var activity = _activitySource.StartActivity("ProcessMarketSettlement"))
@@ -274,7 +272,7 @@ namespace OE.UOF.Client.Repository
             //    return;
 
             //// TODO
-            //if (message.SportId > 1000)
+            //if (message.SportId.IsVirtualSportId())
             //    return;
 
             using (var activity = _activitySource.StartActivity("ProcessMarketCancellation"))

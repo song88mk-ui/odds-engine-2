@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using OE.WebSocket.Service.Messages;
 using OE.Shared.Enums;
+using OE.Shared.Extensions;
 using OE.Shared.Utilities;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
@@ -80,12 +81,12 @@ namespace OE.WebSocket.Service.Repository
 
                 var finalMarkets = new List<MarketMessage>();
 
-                if (message.FiTyId == (int)FixtureType.Match || (message.SpId > 1000 && message.FiTyId == (int)FixtureType.Outright))
+                if (message.FiTyId == (int)FixtureType.Match || (message.SpId.IsVirtualSportId() && message.FiTyId == (int)FixtureType.Outright))
                     finalMarkets = message.Ma.Where(c => mainMarkets.Item2.Contains(c.MaTeId)).ToList();
                 else
                     finalMarkets = message.Ma;
 
-                if (message.SpId > 1000 || message.FiTyId == (int)FixtureType.Outright)
+                if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
                     await ProcessMatchOddsChangeForMainMarkets(message, hubConnection, finalMarkets);
                 }
@@ -107,7 +108,7 @@ namespace OE.WebSocket.Service.Repository
         {
             try
             {
-                if (message.SpId > 1000 || message.FiTyId == (int)FixtureType.Outright)
+                if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
                     await ProcessMatchOddsChangeForAllMarkets(message, hubConnection);
                 }
@@ -248,7 +249,7 @@ namespace OE.WebSocket.Service.Repository
             try
             {
                 if (message.FiTyId == (int)FixtureType.Outright) return;
-                if (message.SpId > 1000) return;
+                if (message.SpId.IsVirtualSportId()) return;
 
                 var isTopFixtureExisting = _memCache.GetCache<TopCache>("TF");
 
@@ -275,7 +276,7 @@ namespace OE.WebSocket.Service.Repository
             try
             {
                 if (message.FiTyId == (int)FixtureType.Outright) return;
-                if (message.SpId > 1000) return;
+                if (message.SpId.IsVirtualSportId()) return;
 
                 var isTopFixtureExisting = _memCache.GetCache<TopCache>($"TL:{message.SpId}");
 
@@ -319,7 +320,7 @@ namespace OE.WebSocket.Service.Repository
                         if (fixtureDetails != null)
                         {
                             var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToList();
-                            var marketToAdd = message.SpId > 1000 || message.FiTyId == (int)FixtureType.Outright ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToList() : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToList();                     
+                            var marketToAdd = message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToList() : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToList();                     
                             var marketToAddFromAPI = fixtureDetails.Markets.Select(s => Convert.ToInt64(s.MarketId)).ToList();
 
                             var currentMarketIds = marketToAdd;
@@ -346,7 +347,7 @@ namespace OE.WebSocket.Service.Repository
                     }
 
                     var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToList();
-                    var marketToAdd = message.SpId > 1000 || message.FiTyId == (int)FixtureType.Outright ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToList() : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToList();
+                    var marketToAdd = message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToList() : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToList();
 
                     var currentMarketIds = cache.MarketIds;
 
