@@ -6,6 +6,14 @@ COPY src/OddsEngine/OE.Job.KeepAlive OE.Job.KeepAlive
 
 WORKDIR /src/OE.Job.KeepAlive
 
+ARG NUGET_PASSWORD
+
+RUN dotnet nuget add source \
+  --username FlyingCockatoo \
+  --password ${NUGET_PASSWORD} \
+  --store-password-in-clear-text \
+  --name github "https://nuget.pkg.github.com/FlyingCockatoo/index.json"
+
 RUN dotnet restore
 RUN dotnet build \
   --no-restore \
