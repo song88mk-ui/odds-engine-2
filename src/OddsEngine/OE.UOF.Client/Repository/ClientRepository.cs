@@ -24,6 +24,7 @@ namespace OE.UOF.Client.Repository
         private readonly List<string> _languageCodes = new List<string>();
         private readonly List<string> _MaTeIds = new List<string> { "16", "18", "66", "68" };
         private readonly ActivitySource _activitySource;
+        private readonly ILogger<ClientRepository> _logger;
 
         private readonly JsonSerializerOptions _options;
 
@@ -31,11 +32,16 @@ namespace OE.UOF.Client.Repository
 
         #region Ctor
 
-        public ClientRepository(IConfiguration configuration, IMemCache memCache, IPlatformRepository platformRepository, Instrumentation instrumentation)
+        public ClientRepository(IConfiguration configuration,
+                IMemCache memCache,
+                IPlatformRepository platformRepository,
+                Instrumentation instrumentation,
+                ILogger<ClientRepository> logger)
         {
             _configuration = configuration;
             _memCache = memCache;
             _platformRepository = platformRepository;
+            _logger = logger;
 
             _clientCode = _configuration["Custom:ClientCode"];
             _asianClient = Convert.ToBoolean(_configuration["Custom:AsianClient"]);
@@ -706,7 +712,8 @@ namespace OE.UOF.Client.Repository
 
             if (message.FiTyId == (int)FixtureType.Match)
             {
-                var scoreSplit = message.Sc.Split('-');
+                var scoreString = string.IsNullOrEmpty(message.Sc) ? "0-0" : message.Sc;
+                var scoreSplit = scoreString.Split('-');
 
                 homeScore = scoreSplit.First().Trim();
                 awayScore = scoreSplit.Last().Trim();
