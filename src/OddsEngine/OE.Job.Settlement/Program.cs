@@ -2,6 +2,7 @@ using OE.Job.Settlement;
 using OE.Job.Settlement.Repository;
 using OE.Shared.Utilities;
 using Serilog;
+using OE.Job.Settlement.Telemetry;
 
 Host.CreateDefaultBuilder(args)
     .UseSerilog((context, _, serilog) =>
@@ -10,6 +11,11 @@ Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices((context, services) =>
     {
+        services.AddSingleton<Instrumentation>();
+        services.AddTelemetry(new TelemetrySettings(
+                    ServiceName: Instrumentation.ActivitySourceName,
+                    ActivitySourceName: Instrumentation.ActivitySourceName,
+                    MeterName: Instrumentation.MeterName));
         services.AddHttpClient();
         services.AddSingleton<IMessageBroker, MessageBroker>();
         services.AddSingleton<ISportsbookRepository, SportsbookRepository>();

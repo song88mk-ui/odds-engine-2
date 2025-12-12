@@ -7,6 +7,13 @@ COPY src/OddsEngine/OE.Shared OE.Shared
 
 WORKDIR /src/OE.Job.Settlement
 
+ARG NUGET_PASSWORD
+
+RUN dotnet nuget add source \
+  --username FlyingCockatoo \
+  --password ${NUGET_PASSWORD} \
+  --store-password-in-clear-text \
+  --name github "https://nuget.pkg.github.com/FlyingCockatoo/index.json"
 
 RUN  dotnet restore
 

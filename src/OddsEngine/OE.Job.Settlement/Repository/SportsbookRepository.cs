@@ -1,10 +1,13 @@
 ﻿using MongoDB.Driver;
+using OE.Job.Settlement.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Utilities;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace OE.Job.Settlement.Repository
 {
@@ -20,16 +23,19 @@ namespace OE.Job.Settlement.Repository
         private readonly string _apiKey;
         private readonly bool _editSportsbook;
 
+        private readonly Counter<long> _jobRunProcessedTotal;
+
         private IMongoCollection<Fixture> fixtureCollection;
 
         #endregion
 
         #region Ctor
 
-        public SportsbookRepository(ILogger<SportsbookRepository> logger, HttpClient httpClient, IConfiguration configuration)
+        public SportsbookRepository(ILogger<SportsbookRepository> logger, HttpClient httpClient, IConfiguration configuration, Instrumentation instrumentation)
         {
             _logger = logger;
             _configuration = configuration;
+            _jobRunProcessedTotal = instrumentation.JobRunProcessedTotal;
 
             var client = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
             _db = client.GetDatabase("Sportsbook");
@@ -103,6 +109,10 @@ namespace OE.Job.Settlement.Repository
                         };
 
                         messageBroker.Publish(payload, MessageType.ON_FIXTURE_CHANGE, $"r.bg.receiver.{MessageType.ON_FIXTURE_CHANGE.ToLower()}", Guid.NewGuid().ToString());
+
+                        if (_jobRunProcessedTotal.Enabled)
+                            _jobRunProcessedTotal.Add(1);
+
                         _logger.LogInformationEx($"{DateTime.UtcNow} : {fixture.SpNa} - {fixture.FiNa} - {fixture.FiStDa}");
 
                         continue;
