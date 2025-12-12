@@ -6,6 +6,14 @@ COPY src/OddsEngine/OE.Websocket.Service OE.Websocket.Service
 
 WORKDIR /src/OE.Websocket.Service
 
+ARG NUGET_PASSWORD
+
+RUN dotnet nuget add source \
+  --username FlyingCockatoo \
+  --password ${NUGET_PASSWORD} \
+  --store-password-in-clear-text \
+  --name github "https://nuget.pkg.github.com/FlyingCockatoo/index.json"
+
 RUN dotnet restore
 RUN dotnet build \
   --no-restore \
