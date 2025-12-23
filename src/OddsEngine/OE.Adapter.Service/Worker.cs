@@ -54,7 +54,7 @@ namespace OE.Adapter.Service
             }
             catch (Exception ex)
             {
-                _logger.LogErrorEx($"caught exception on stop: {ex.Message}");
+                _logger.LogError($"caught exception on stop: {ex.Message}");
             }
 
             return base.StopAsync(cancellationToken);
@@ -64,12 +64,13 @@ namespace OE.Adapter.Service
         {
             try
             {
-                _logger.LogInformationEx("Connecting to RabbitMQ Server");
+                _logger.LogInformation("Connecting to RabbitMQ Server");
                 _messageBroker.Connect();
+                _logger.LogInformation("Processing incoming messages");
             }
             catch (Exception e)
             {
-                _logger.LogErrorEx($"Error connecting to RabbitMQ: {e.Message}");
+                _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
                 throw e;
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
@@ -93,10 +94,10 @@ namespace OE.Adapter.Service
                 {
 
                     activity?.SetTag("message.type", messageType);
-                    _logger.LogInformationEx(payload);
+                    _logger.LogInformation("{messageType} - {@payload}", messageType, payload);
 
                     switch (messageType)
-                    {//
+                    {
                         case MessageType.ON_FIXTURE_CHANGE:
                             ProcessMessage<OnFixtureChangeMessage>(
                                 payload,
@@ -142,12 +143,11 @@ namespace OE.Adapter.Service
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogErrorEx($"--> stacktrace  : {ex.StackTrace}", ex);
+                    _logger.LogError("{exception} {@stacktrace}", ex.Message, ex.StackTrace);
 
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
 
-                    activity?.SetTag("stack.trace", ex.StackTrace);
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 }
         }
