@@ -179,6 +179,46 @@ namespace OE.Sportsbook.Service.Repositories
             _IsBetStopGlobally = message.IsBetStop;
             messageBroker.Publish(payload, MessageType.ON_BET_STOP_GLOBAL, $"r.oe.sb.engine.{MessageType.ON_BET_STOP_GLOBAL.ToLower()}", Guid.NewGuid().ToString());
         }
+
+        public void ProcessOnBetStopFixtureMessage(IMessageBroker messageBroker, OnBetStopFixtureMessage message, string correlationId)
+        {
+            if (message == null || String.IsNullOrEmpty(message.PrFiId))
+                return;
+
+            _logger.LogWarningEx($"Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
+
+            var fixture = _fixtureCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
+            if (fixture != null)
+            {
+
+                BulkWrite(_fixtureCollection, ToDBFixtureBettingStatus(message));
+
+                if (message.SetActiveMarketsToInactive)
+                {
+                    List<long> activeMarketList = GetActiveMarketIds(message.PrFiId);
+                    if (activeMarketList.Count > 0)
+                    {
+                        BulkWrite(_marketCollection, ToMarketInactiveStatus(activeMarketList));
+                    }
+                }
+
+                var payload = new
+                {
+                    id = fixture.Id,
+                    PrFiId = message.PrFiId,
+                    TiSe = message.TiSe,
+                    TiRe = message.TiRe,
+                    FiId = message.FiId,
+                    ChTyId = message.ChTyId,
+                    FiSp = message.FiSp,
+                    IsBetStop = message.IsBetStop,
+                    SetActiveMarketsToInactive = message.SetActiveMarketsToInactive,
+                    CorrelationId = correlationId
+                };
+
+                messageBroker.Publish(payload, MessageType.ON_BET_STOP_FIXTURE, $"r.oe.sb.engine.{MessageType.ON_BET_STOP_FIXTURE.ToLower()}", Guid.NewGuid().ToString());
+            }
+        }
         #endregion
 
         #region Utilities
@@ -256,6 +296,34 @@ namespace OE.Sportsbook.Service.Repositories
                     new UpdateOneModel<Fixture>(filter, updateFixture)
                     { IsUpsert = true }
             };
+        }
+
+        private WriteModel<Fixture>[] ToDBFixtureBettingStatus(OnBetStopFixtureMessage message)
+        {
+            return new WriteModel<Fixture>[]
+            {
+                new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq("PrFiId", message.PrFiId),
+                    Builders<Fixture>.Update                        
+                        .Set(s => s.IsSu, message.IsBetStop))
+                { IsUpsert = false }
+            };
+        }
+
+        private WriteModel<Market>[] ToMarketInactiveStatus(List<long> markets)
+        {
+            var marketResult = new List<WriteModel<Market>>();
+
+            foreach (var marketId in markets)
+            {
+                marketResult.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("MaId", marketId),
+                    Builders<Market>.Update
+                        .Set(s => s.MaId, marketId)
+                        .Set(s => s.MaStId, (int)MarketStatus.Inactive)
+                        .Set(s => s.MaStNa, MarketStatus.Inactive.ToString()))
+                { IsUpsert = false });
+            }
+
+            return marketResult.ToArray();
         }
 
         private WriteModel<BettingStatus>[] ToDBBettingStatus(OnBetStopGlobalMessage message)
@@ -563,6 +631,19 @@ namespace OE.Sportsbook.Service.Repositories
             _IsBetStopGlobally = existingBettingStatusData?.IsBeSo ?? false;
             _logger.LogWarningEx($"BetStopGlobally exhibited in: {_IsBetStopGlobally}");
         }
+
+        private List<long> GetActiveMarketIds(String fixtureId)
+        {
+            var marketStatusIds = new int[] { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
+
+            var filter = Builders<Market>.Filter.Where(c => c.PrFiId == fixtureId && marketStatusIds.Contains(c.MaStId));
+            var projection = Builders<Market>.Projection.Include(c => c.MaId).Include(c => c.PrFiId);
+
+            var result = _marketCollection.Find(filter).Project<MarketStatusProjection>(projection).ToList();
+
+            return result != null ? result.Select(s => s.MaId).ToList() : new List<long>();
+        }
+
         #endregion
     }
 }

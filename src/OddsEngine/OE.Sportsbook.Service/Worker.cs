@@ -122,6 +122,12 @@ namespace OE.Sportsbook.Service
                                 (msg) => _sportsbookRepository.ProcessOnBetStopGlobalMessage(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_BET_STOP_FIXTURE:
+                            ProcessMessage<OnBetStopFixtureMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnBetStopFixtureMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                     }
 
                     if (_processedMessagesCounter.Enabled)
