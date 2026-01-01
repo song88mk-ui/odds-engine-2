@@ -40,4 +40,11 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public string LaCo { get; set; }
         public string MaNa { get; set; }
     }
+
+    public class MarketStatusProjection
+    {
+        [BsonId]
+        public long MaId { get; set; }
+        public string PrFiId { get; set; }
+    }
 }
