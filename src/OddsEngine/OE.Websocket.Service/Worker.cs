@@ -268,6 +268,7 @@ namespace OE.Websocket.Service
             var messageType = e.BasicProperties.Type;
             var correlationId = e.BasicProperties.CorrelationId;
 
+            _logger.LogInformation($"{messageType}:{e.RoutingKey}:{payload}");
 
             using (var activity = _activitySource.StartActivity($"{e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
                 try
