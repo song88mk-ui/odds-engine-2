@@ -191,6 +191,7 @@ namespace OE.Websocket.Service
                                     })
                                     .WithAutomaticReconnect()
                                     .Build();
+
             }
             else
             {
@@ -253,6 +254,9 @@ namespace OE.Websocket.Service
 
             _messageBroker.MessageReceived += MessageReceivedEvent;
             _logger.LogInformation("connected. processing incoming messages");
+
+            var connectionId = await _hubConnection.InvokeAsync<string>("GetConnectionId");
+            _logger.LogInformation($"connectionId: {connectionId}");
         }
 
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
