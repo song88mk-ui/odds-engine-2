@@ -93,7 +93,8 @@ namespace OE.UOF.Client.Repository
                     FixtureStatusId = message.FiStId,
                     FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
                     TimeStampSent = message.TiSe,
-                    TimeStampReceived = message.TiRe
+                    TimeStampReceived = message.TiRe,
+                    CorrelationId = correlationId
                 };
 
                 activity?.SetTag("outgoing.payload", JsonSerializer.Serialize(payload));
