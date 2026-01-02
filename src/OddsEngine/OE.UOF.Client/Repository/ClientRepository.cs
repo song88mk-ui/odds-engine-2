@@ -170,41 +170,23 @@ namespace OE.UOF.Client.Repository
             }
         }
 
-        public void ProcessBetStop(string payload, IMessageBroker messageBroker, string correlationId)
+        public void ProcessBetStop(OnBetStopFixtureMessage message, IMessageBroker messageBroker, string correlationId)
         {
+            if (message.SpId.IsVirtualSportId())
+                return;
 
-            //TODO: see comments below
-            //var message = JsonSerializer.Deserialize<OnBetStopFixtureMessage>(payload);
+            var payload = new
+            {
+                SportId = message.SpId,
+                FixtureSpecifier = message.FiSp,
+                IsBetStop = message.IsBetStop,
+                TimeStampSent = message.TiSe,
+                TimeStampReceived = message.TiRe
+            };
 
-            //if (message.SportId.IsVirtualSportId())
-            //    return;
+            PublishMessage(messageBroker, payload, "onbetstopfixture", $"uof.onbetstop.{GetSportName(message.SpId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
 
-            //var finalPayload = new
-            //{
-            //    fixtureId = message.FixtureId,
-            //    sportId = message.SportId,
-            //    fixtureSpecifier = message.FixtureSpecifier,
-            //    isBetStop = message.IsBetStop,
-            //    setActiveMarketToInactive = message.SetActiveMarketsToInactive,
-            //    timeStampSent = message.TimestampSent,
-            //    timeStampReceived = message.TimestampReceived,
-            //    timeStampDispatched = message.TimestampDispatched,
-            //    raw = message.Raw
-            //};
-
-            //var betStopFixture = new BetStopFixtureModel
-            //{
-            //    FixtureId = message.FixtureId,
-            //    FixtureSpecifier = message.FixtureSpecifier,
-            //    IsBetStop = message.IsBetStop,
-            //    CorrelationId = correlationId,
-            //};
-
-            //var payloadStr = JsonSerializer.Serialize(finalPayload, _options);
-
-            //PublishMessage(messageBroker, payloadStr, "onbetstopfixture", $"uof.onbetstop.{GetSportName(message.SportId)}", $"{DateTime.UtcNow.ToEpochTimestamp()}");
-
-            //_memCache.AddOrUpdateCache($"BetStopFixture:{message.FixtureSpecifier}", betStopFixture, 24);
+            //_memCache.AddOrUpdateCache($"BetStopFixture:{message.FiSp}", payload, 24);
         }
 
         public void ProcessBetStopGlobal(OnBetStopGlobalMessage message, IMessageBroker messageBroker, string correlationId)

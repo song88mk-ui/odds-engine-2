@@ -145,9 +145,9 @@ namespace OE.UOF.Client
                                 });
                             break;
                         case MessageType.ON_BET_STOP_FIXTURE:
-                            ProcessMessageWithValidation<SportModel>(payload, msg =>
+                            ProcessMessageWithValidation<OnBetStopFixtureMessage>(payload, msg =>
                                 {
-                                    _clientRepository.ProcessBetStop(payload, _messageBrokerExternal, correlationId);
+                                    _clientRepository.ProcessBetStop(msg, _messageBrokerExternal, correlationId);
                                 });
                             break;
                         case MessageType.ON_BET_STOP_GLOBAL:
