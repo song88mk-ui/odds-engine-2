@@ -128,6 +128,12 @@ namespace OE.Sportsbook.Service
                                 (msg) => _sportsbookRepository.ProcessOnBetStopFixtureMessage(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_MARKET_CANCEL:
+                            ProcessMessage<OnMarketCancellationMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnMarketCancellationMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                     }
 
                     if (_processedMessagesCounter.Enabled)

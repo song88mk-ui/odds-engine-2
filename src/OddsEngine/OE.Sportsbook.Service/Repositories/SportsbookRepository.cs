@@ -219,6 +219,47 @@ namespace OE.Sportsbook.Service.Repositories
                 messageBroker.Publish(payload, MessageType.ON_BET_STOP_FIXTURE, $"r.oe.sb.engine.{MessageType.ON_BET_STOP_FIXTURE.ToLower()}", Guid.NewGuid().ToString());
             }
         }
+        public void ProcessOnMarketCancellationMessage(IMessageBroker messageBroker, OnMarketCancellationMessage message, string correlationId)
+        {
+            var fixtureId = message.FiId;
+
+            if (fixtureId == 0) return;
+
+            var marketIds = new List<string>();
+
+            foreach (var market in message.Ma)
+            {
+                var marketId = market.MaId;
+
+                var onBetCancellationPayload = new
+                {
+                    MarketId = marketId,
+                    MarketStatus = BetStatus.Cancelled,
+                    Reason = market.VoRe,
+                    SettlementScore = string.Empty, // TODO: check with product team
+                    StartTime = market.StTi,
+                    EndTime = market.EnTi
+                };
+
+                if (!marketIds.Contains(marketId))
+                {
+                    var topMarketMessage = new
+                    {
+                        SportId = message.SpId,
+                        FixtureId = fixtureId,
+                        MarketId = marketId,
+                        MarketStatusId = (int)MarketStatus.Cancelled,
+                        MarketStatusName = MarketStatus.Cancelled.ToString(),
+                    };
+
+                    marketIds.Add(marketId);
+
+                    messageBroker.Publish(onBetCancellationPayload, MessageType.ON_MARKET_CANCEL, $"r.client.topmarket.settlement", Guid.NewGuid().ToString());
+                }
+
+                messageBroker.Publish(onBetCancellationPayload, "OnBetCancellation", "r.oe.bet.settlement", Guid.NewGuid().ToString().ToUpper());
+            }
+        }
         #endregion
 
         #region Utilities

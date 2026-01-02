@@ -18,6 +18,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
     }
     public class MarketBetCancellationMessage
     {
+        public string MaId { get; set; }
         public string MaTeId { get; set; } //TBR
         public string MaSp { get; set; } //TBR
         public string VoRe { get; set; }
