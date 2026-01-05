@@ -206,7 +206,7 @@ namespace OE.UOF.Client.Repository
                 };
 
                 activity?.SetTag("betstopglobal.outgoing.payload", JsonSerializer.Serialize(finalPayload));
-                PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL, $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
+                PublishMessage(messageBroker, finalPayload, MessageType.ON_BET_STOP_GLOBAL.ToLower(), $"uof.onbetstopglobal", $"{DateTime.UtcNow.ToEpochTimestamp()}");
             }
         }
 

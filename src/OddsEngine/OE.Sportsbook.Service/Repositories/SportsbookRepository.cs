@@ -70,7 +70,7 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
-            if(string.IsNullOrEmpty(message.SpNa))
+            if (string.IsNullOrEmpty(message.SpNa))
             {
                 _logger.LogInformationEx($"null SpNa --> {JsonSerializer.Serialize(message)}");
             }
@@ -113,8 +113,7 @@ namespace OE.Sportsbook.Service.Repositories
 
             //var fixture = _memCache.GetCache($"{FIXTURE_PREFIX}:{message.PrFiId}", () => GetFixtureProject(message.PrFiId), 24);
 
-            messageBroker.Publish(payload, MessageType.ON_FIXTURE_CHANGE, $"r.oe.sb.engine.onoddschange", Guid.NewGuid().ToString());
-
+            messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.onoddschange", Guid.NewGuid().ToString());
         }
 
         public void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId)
@@ -158,7 +157,7 @@ namespace OE.Sportsbook.Service.Repositories
                     message.TiRe
                 };
 
-                messageBroker.Publish(payload, MessageType.ON_MARKET_SETTLEMENT, $"r.oe.sb.engine.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}", Guid.NewGuid().ToString());
+                messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.sb.engine.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}", Guid.NewGuid().ToString());
             }
         }
 
@@ -257,7 +256,7 @@ namespace OE.Sportsbook.Service.Repositories
                     messageBroker.Publish(onBetCancellationPayload, MessageType.ON_MARKET_CANCEL, $"r.client.topmarket.settlement", Guid.NewGuid().ToString());
                 }
 
-                messageBroker.Publish(onBetCancellationPayload, "OnBetCancellation", "r.oe.bet.settlement", Guid.NewGuid().ToString().ToUpper());
+                messageBroker.Publish(onBetCancellationPayload, MessageType.ON_BET_CANCELLATION, "r.oe.bet.settlement", Guid.NewGuid().ToString().ToUpper());
             }
         }
         #endregion
@@ -344,7 +343,7 @@ namespace OE.Sportsbook.Service.Repositories
             return new WriteModel<Fixture>[]
             {
                 new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq("PrFiId", message.PrFiId),
-                    Builders<Fixture>.Update                        
+                    Builders<Fixture>.Update
                         .Set(s => s.IsSu, message.IsBetStop))
                 { IsUpsert = false }
             };
