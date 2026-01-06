@@ -295,7 +295,6 @@ namespace OE.Sportsbook.Service.Repositories
                 .Set(s => s.FiStNa, message.FiStNa)
                 .Set(s => s.FiTyId, message.FiTyId)
                 .Set(s => s.FiTyNa, message.FiTyNa)
-                .Set(s => s.Sc, message.Sc)
                 .Set(s => s.IsOfLi, message.IsOfLi)
                 .Set(s => s.HoReCa, message.HoReCa)
                 .Set(s => s.AwReCa, message.AwReCa)
@@ -323,6 +322,10 @@ namespace OE.Sportsbook.Service.Repositories
             //.Set(s => s.LeBeId, message.LeBeId) TODO
             //.Set(s => s.PeSc, message.PeSc) TODO
             //.Set(s => s.CuSe, message.CuSe) TODO
+
+            if(!string.IsNullOrEmpty(message.Sc))
+                updateFixture = updateFixture.Set(
+                    s => s.Sc, message.Sc);
 
             if (message.Fa != FavoriteSelection.None.ToString())
             {
