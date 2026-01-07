@@ -1,10 +1,12 @@
-﻿using OE.Adapter.Service.Telemetry;
+﻿using Microsoft.Extensions.Logging;
+using OE.Adapter.Service.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Enums;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingAdapterMessages.Base;
 using OE.Shared.Utilities;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace OE.Adapter.Service.Repositories
 {
@@ -13,6 +15,7 @@ namespace OE.Adapter.Service.Repositories
         #region Fields
 
         private readonly IHelper _helper;
+        private readonly ILogger<TradingRepository> _logger;
         private const ChannelType _bgProvider = ChannelType.BG;
         private readonly ActivitySource _activitySource;
 
@@ -20,9 +23,10 @@ namespace OE.Adapter.Service.Repositories
 
         #region Ctor
 
-        public TradingRepository(IHelper helper, Instrumentation instrumentation)
+        public TradingRepository(IHelper helper, ILogger<TradingRepository> logger, Instrumentation instrumentation)
         {
             _helper = helper;
+            _logger = logger;
             _activitySource = instrumentation.ActivitySource;
         }
 
@@ -91,12 +95,21 @@ namespace OE.Adapter.Service.Repositories
 
         private void PublishMessage<T>(IMessageBroker messageBroker, T payload, string messageType, string correlationId) where T : OutgoingAdapterMessageBase
         {
-            using (var activity = _activitySource.StartActivity("publish.message"))
+            try
             {
-                var instanceName = _helper.GetInstanceName(payload.PrFiId);
-                activity?.SetTag("sb.engine.service.id", instanceName);
+                using (var activity = _activitySource.StartActivity("publish.message"))
+                {
+                    var instanceName = _helper.GetInstanceName(payload.PrFiId);
+                    activity?.SetTag("sb.engine.service.id", instanceName);
 
-                messageBroker.Publish(payload, messageType, $"r.oe.adapter.{messageType.ToLower()}.{instanceName}", correlationId);
+                    messageBroker.Publish(payload, messageType, $"r.oe.adapter.{messageType.ToLower()}.{instanceName}", correlationId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"{messageType} {JsonSerializer.Serialize<T>(payload)} {ex.Message}" );
+                _logger.LogError($"{messageType} {ex.StackTrace}");
+                throw;
             }
         }
 
