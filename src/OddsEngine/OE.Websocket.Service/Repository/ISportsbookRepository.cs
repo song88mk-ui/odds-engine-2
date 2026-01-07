@@ -10,6 +10,7 @@ namespace OE.WebSocket.Service.Repository
         //TODO: uncomment
         //Task ProcessBetStopFixture(OnInternalBetStopFixtureMessage onBetStop, HubConnection hubConnection);
         Task ProcessBetStopGlobal(OnBetStopGlobalMessage onBetStopGlobal, HubConnection hubConnection);
+        Task ProcessBetStopFixture(OnBetStopFixtureMessage onBetStopFixtureMessage, HubConnection hubConnection);
         Task ProcessBetStatus(IncomingBetStatus onBetStatus, HubConnection hubConnection);
         Task ProcessCashOutChange(IncomingCashOutChange onCashOutChange, HubConnection hubConnection);
         Task ProcessWalletChange(IncomingWalletChange onWalletChange, HubConnection hubConnection);

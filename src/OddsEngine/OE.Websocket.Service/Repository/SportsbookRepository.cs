@@ -126,33 +126,6 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        //TODO:
-        //public async Task ProcessBetStopFixture(OnInternalBetStopFixtureMessage message, HubConnection hubConnection)
-        //{
-        //    try
-        //    {
-        //        var payload = new OutgoingBetStopFixture
-        //        {
-        //            Gr = GetGroups(_clientCode, message),
-        //            Pa = new BetStopFixture
-        //            {
-        //                FiId = message.FiId.ToString(),
-        //                IsBeSt = message.IsBetStop,
-        //                SeAcMaToIn = true
-        //            }
-        //        };
-
-        //        if (_publishedToWebSocketCounter.Enabled)
-        //            _publishedToWebSocketCounter.Add(1,
-        //                    new KeyValuePair<string, object?>("method", "PublishBetStopFixture"),
-        //                    new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-        //        await PublishToWebSocket("PublishBetStopFixture", hubConnection, payload);
-        //    }
-        //    catch (Exception)
-        //    {
-        //    }
-        //}
-
         public async Task ProcessBetStopGlobal(OnBetStopGlobalMessage message, HubConnection hubConnection)
         {
             try
@@ -171,6 +144,34 @@ namespace OE.WebSocket.Service.Repository
             catch (Exception e)
             {
                 _logger.LogError(e, "error processing bet stop global");
+            }
+        }
+
+        public async Task ProcessBetStopFixture(OnBetStopFixtureMessage message, HubConnection hubConnection)
+        {
+            try
+            {
+                var payload = new OutgoingBetStopFixture
+                {
+                    Gr = GetGroups(_clientCode, message),
+                    Pa = new BetStopFixture
+                    {
+                        FiId = message.FiId.ToString(),
+                        IsBeSt = message.IsBetStop,
+                        SeAcMaToIn = message.SetActiveMarketsToInactive
+                    }
+                };
+
+                if (_publishedToWebSocketCounter.Enabled)
+                    _publishedToWebSocketCounter.Add(1,
+                            new KeyValuePair<string, object?>("method", "PublishBetStopFixture"),
+                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
+                await PublishToWebSocket("PublishBetStopFixture", hubConnection, payload);
+
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "error processing bet stop fixture");
             }
         }
 
@@ -1283,90 +1284,89 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
-        //TODO: 
-        //private List<string> GetGroups(string clientCode, OnInternalBetStopFixtureMessage message)
-        //{
-        //    var result = new List<string>
-        //    {
-        //        $"endpoint:{clientCode}:fixturedetails:{message.FiId}"
-        //    };
+        private List<string> GetGroups(string clientCode, OnBetStopFixtureMessage message)
+        {
+            var result = new List<string>
+            {
+                $"endpoint:{clientCode}:fixturedetails:{message.FiId}"
+            };
 
-        //    if (message.FiStId == (int)FixtureStatus.Live)
-        //    {
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:livefixtures");
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:livefixtures");
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:livefixtures");
-        //    }
+            if (message.FiStId == (int)FixtureStatus.Live)
+            {
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:livefixtures");
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:livefixtures");
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:livefixtures");
+            }
 
-        //    if (message.FiStId == (int)FixtureStatus.Prematch &&
-        //        message.FiStDt.Month == DateTime.UtcNow.Month &&
-        //        message.FiStDt.Day == DateTime.UtcNow.Day &&
-        //        message.FiStDt.Year == DateTime.UtcNow.Year &&
-        //        message.FiTyId == (int)FixtureType.Match)
-        //    {
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:todayfixtures");
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:todayfixtures");
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:todayfixtures");
+            if (message.FiStId == (int)FixtureStatus.Prematch &&
+                message.FiStDa.Month == DateTime.UtcNow.Month &&
+                message.FiStDa.Day == DateTime.UtcNow.Day &&
+                message.FiStDa.Year == DateTime.UtcNow.Year &&
+                message.FiTyId == (int)FixtureType.Match)
+            {
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:todayfixtures");
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:todayfixtures");
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:todayfixtures");
 
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:dailyfixtures");
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:dailyfixtures");
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:dailyfixtures");
-        //    }
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:dailyfixtures");
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:dailyfixtures");
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:dailyfixtures");
+            }
 
-        //    if (message.FiStId == (int)FixtureStatus.Prematch &&
-        //        message.FiTyId == (int)FixtureType.Outright)
-        //    {
-        //        result.Add($"endpoint:{clientCode}:sports:{message.SpId}:outrightfixtures");
-        //    }
+            if (message.FiStId == (int)FixtureStatus.Prematch &&
+                message.FiTyId == (int)FixtureType.Outright)
+            {
+                result.Add($"endpoint:{clientCode}:sports:{message.SpId}:outrightfixtures");
+            }
 
-        //    result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:fixtures");
-        //    result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:fixtures");
+            result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:fixtures");
+            result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:fixtures");
 
-        //    var topLeagues = _memCache.GetCache<TopLeague>($"TLL:{message.SpId}");
+            var topLeagues = _memCache.GetCache<TopLeague>($"TLL:{message.SpId}");
 
-        //    if (topLeagues != null)
-        //    {
-        //        var temp = topLeagues.SegmentLeagueIds.Where(c => c.Item1 == message.SegId && c.Item2 == message.LeId).FirstOrDefault();
+            if (topLeagues != null)
+            {
+                var temp = topLeagues.SegmentLeagueIds.Where(c => c.Item1 == message.SegId && c.Item2 == message.LeId).FirstOrDefault();
 
-        //        if (temp != null)
-        //            result.Add($"endpoint:{clientCode}:sports:{message.SpId}:topleaguefixtures");
-        //    }
+                if (temp != null)
+                    result.Add($"endpoint:{clientCode}:sports:{message.SpId}:topleaguefixtures");
+            }
 
-        //    var topFixtures = _memCache.GetCache<TopFixture>("TFL");
+            var topFixtures = _memCache.GetCache<TopFixture>("TFL");
 
-        //    if (topFixtures != null)
-        //    {
-        //        if (topFixtures.FiIds.Any(c => c == message.FiId))
-        //            result.Add($"endpoint:{clientCode}:topfixtures");
-        //    }
+            if (topFixtures != null)
+            {
+                if (topFixtures.FiIds.Any(c => c == message.FiId))
+                    result.Add($"endpoint:{clientCode}:topfixtures");
+            }
 
-        //    var leagueFavorites = _memCache.GetCache<Favorites>($"fli:{message.SpId}:{message.LeId}");
+            var leagueFavorites = _memCache.GetCache<Favorites>($"fli:{message.SpId}:{message.LeId}");
 
-        //    if (leagueFavorites != null)
-        //    {
-        //        Parallel.ForEach(leagueFavorites.UserIds, userId =>
-        //        {
-        //            result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
-        //        });
-        //    }
+            if (leagueFavorites != null)
+            {
+                Parallel.ForEach(leagueFavorites.UserIds, userId =>
+                {
+                    result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
+                });
+            }
 
-        //    var fixtureFavorites = _memCache.GetCache<Favorites>($"ffi:{message.SpId}:{message.FiId}");
+            var fixtureFavorites = _memCache.GetCache<Favorites>($"ffi:{message.SpId}:{message.FiId}");
 
-        //    if (fixtureFavorites != null)
-        //    {
-        //        Parallel.ForEach(fixtureFavorites.UserIds, userId =>
-        //        {
-        //            result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
-        //        });
-        //    }
+            if (fixtureFavorites != null)
+            {
+                Parallel.ForEach(fixtureFavorites.UserIds, userId =>
+                {
+                    result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
+                });
+            }
 
-        //    var boostedFixtures = _memCache.GetCache<List<long>>("bf");
+            var boostedFixtures = _memCache.GetCache<List<long>>("bf");
 
-        //    if (boostedFixtures != null && boostedFixtures.Contains(message.FiId))
-        //        result.Add($"endpoint:{clientCode}:boostedfixtures");
+            if (boostedFixtures != null && boostedFixtures.Contains(message.FiId))
+                result.Add($"endpoint:{clientCode}:boostedfixtures");
 
-        //    return result;
-        //}
+            return result;
+        }
 
         private string PrepareSelectionName(string MaTeId, string selectionTemplateId, string selectionName, string line)
         {

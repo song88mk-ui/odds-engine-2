@@ -210,6 +210,12 @@ namespace OE.Sportsbook.Service.Repositories
                     FiId = message.FiId,
                     ChTyId = message.ChTyId,
                     FiSp = message.FiSp,
+                    SpId = message.SpId,
+                    FiStId = fixture.FiStId,
+                    SegId = fixture.SegId,
+                    LeId = fixture.LeId,
+                    FiTyId = fixture.FiTyId,
+                    FiStDa = fixture.FiStDa,
                     IsBetStop = message.IsBetStop,
                     SetActiveMarketsToInactive = message.SetActiveMarketsToInactive,
                     CorrelationId = correlationId

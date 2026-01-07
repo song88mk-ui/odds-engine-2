@@ -297,6 +297,10 @@ namespace OE.Websocket.Service
                             var onBetStopGlobal = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
                             await _sportsbookRepository.ProcessBetStopGlobal(onBetStopGlobal, _hubConnection);
                             break;
+                        case "OnBetStopFixture":
+                            var onBetStopFixture = JsonSerializer.Deserialize<OnBetStopFixtureMessage>(payload);
+                            await _sportsbookRepository.ProcessBetStopFixture(onBetStopFixture, _hubConnection);
+                            break;
 
                         case "OnBetStatus":
                             var onBetStatus = JsonSerializer.Deserialize<IncomingBetStatus>(payload);
