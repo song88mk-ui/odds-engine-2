@@ -14,6 +14,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using OE.Shared.Constants;
 
 namespace OE.Websocket.Service
 {
@@ -265,19 +266,19 @@ namespace OE.Websocket.Service
             Baggage.Current = parentContext.Baggage;
 
             var payload = Encoding.UTF8.GetString(e.Body);
-            var messageType = e.BasicProperties.Type;
+            var msgType = e.BasicProperties.Type;
             var correlationId = e.BasicProperties.CorrelationId;
 
-            _logger.LogInformation($"{messageType}:{e.RoutingKey}:{payload}");
+            _logger.LogInformation($"{msgType}:{e.RoutingKey}:{payload}");
 
             using (var activity = _activitySource.StartActivity($"{e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
                 try
                 {
-                    activity?.SetTag("message.type", messageType);
+                    activity?.SetTag("message.type", msgType);
 
-                    switch (messageType)
+                    switch (msgType)
                     {
-                        case "OnOddsChange":
+                        case MessageType.ON_ODDS_CHANGE:
                             var onOddsChange = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
 
                             _messagesMarketCount.Add(onOddsChange);
@@ -293,11 +294,11 @@ namespace OE.Websocket.Service
                         //    await _sportsbookRepository.ProcessBetStopFixture(onBetStop, _hubConnection);
                         //    break;
 
-                        case "OnBetStopGlobal":
+                        case MessageType.ON_BET_STOP_GLOBAL:
                             var onBetStopGlobal = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
                             await _sportsbookRepository.ProcessBetStopGlobal(onBetStopGlobal, _hubConnection);
                             break;
-                        case "OnBetStopFixture":
+                        case MessageType.ON_BET_STOP_FIXTURE:
                             var onBetStopFixture = JsonSerializer.Deserialize<OnBetStopFixtureMessage>(payload);
                             await _sportsbookRepository.ProcessBetStopFixture(onBetStopFixture, _hubConnection);
                             break;
