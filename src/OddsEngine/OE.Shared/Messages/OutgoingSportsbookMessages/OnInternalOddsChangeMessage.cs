@@ -57,9 +57,9 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string PrMaId { get; set; }
         public string Li { get; set; }
         public int MaStId { get; set; }
-        public int MaStNa { get; set; }
+        public string MaStNa { get; set; }
         public int CaStId { get; set; }
-        public int CaStNa { get; set; }
+        public string CaStNa { get; set; }
         public string MaSp { get; set; }
         public string MaNa { get; set; }
         public int SoOr { get; set; }

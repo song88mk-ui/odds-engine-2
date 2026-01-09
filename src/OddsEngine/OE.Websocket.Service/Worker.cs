@@ -261,7 +261,7 @@ namespace OE.Websocket.Service
         }
 
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
-        {
+        {//
             var parentContext = Propagator.Extract(default, e.BasicProperties, this.ExtractTraceFromBasicProperties);
             Baggage.Current = parentContext.Baggage;
 

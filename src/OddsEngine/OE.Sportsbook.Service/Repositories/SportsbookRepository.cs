@@ -602,12 +602,15 @@ namespace OE.Sportsbook.Service.Repositories
                     MaTeId = market.MaTeId,
                     Li = market.Li,
                     MaStId = market.MaStId,
+                    MaStNa = market.MaStNa,
                     CaStId = market.CaStId,
                     MaSp = market.MaSp,
                     MaNa = market.MaNa,
                     SoOr = GetSortOrder(market.MaTeId),
                     ClCo = market.ClCo,
                     ClCoMa = market.ClCoMa,
+                    CaStNa = market.CaStNa,
+                    PrMaId = market.PrMaId,
                     //MarketTranslations = market.MarketTranslations, //TODO
                     Se = selections
                 });
