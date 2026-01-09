@@ -15,7 +15,7 @@
         public const string ON_HEART_BEAT = "OnHeartBeat";
 
         // Internal
-        public const string ON_ODDS_CHANGE = "OnOddschange";
+        public const string ON_ODDS_CHANGE = "OnOddsChange";
         public const string ON_BET_SETTLEMENT = "OnBetSettlement";
         public const string ON_BET_CANCELLATION = "OnBetCancellation";
 

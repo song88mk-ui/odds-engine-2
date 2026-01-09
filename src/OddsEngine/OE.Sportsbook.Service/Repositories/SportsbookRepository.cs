@@ -98,6 +98,8 @@ namespace OE.Sportsbook.Service.Repositories
                 //TODO: ToUpdateFixtureCollectionStatus
                 //payload.FixtureStatusId = (int)FixtureStatus.Closed;
                 //payload.FixtureStatusName = FixtureStatus.Closed.ToString();
+
+                //TODO: publish to onFixtureChange to close fixture
             }
 
             var data = ToMarketAndSelectionChange(message, correlationId);
