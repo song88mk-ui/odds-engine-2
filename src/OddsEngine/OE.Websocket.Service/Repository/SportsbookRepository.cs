@@ -219,8 +219,9 @@ namespace OE.WebSocket.Service.Repository
                             new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
                 await PublishToWebSocket("PublishCashOutChange", hubConnection, payload);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error ProcessCashOutChange");
             }
         }
 
@@ -472,8 +473,9 @@ namespace OE.WebSocket.Service.Repository
                     _mainMarketTemplates.Add(new Tuple<int, List<string>>(item.Key, marketTemplates));
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error ProcessMainMarketTemplates");
             }
         }
 
@@ -495,8 +497,9 @@ namespace OE.WebSocket.Service.Repository
                     _memCache.AddOrUpdateCache(key, new ClientMarketSortOrder { MaTeIds = item.MaTeIds.Split(',').ToList() }, DateTimeOffset.UtcNow.AddYears(1));
                 }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error ProcessMarketSortOrder");
             }
         }
 
@@ -509,8 +512,9 @@ namespace OE.WebSocket.Service.Repository
                 foreach (var item in result.Result.Fixtures)
                     _memCache.AddOrUpdateCache($"fso:{item.SportId}:{item.SegmentId}:{item.LeagueId}", new FixtureSortOrder { SortOrder = item.SortOrder }, DateTimeOffset.UtcNow.AddYears(1));
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error ProcessFixtureSortOrder");
             }
         }
 
@@ -524,8 +528,9 @@ namespace OE.WebSocket.Service.Repository
 
                 _memCache.AddOrUpdateCache(key, result.Result, DateTimeOffset.UtcNow.AddYears(1));
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error ProcessBetBuilderMarketTemplates");
             }
         }
 
@@ -539,8 +544,9 @@ namespace OE.WebSocket.Service.Repository
 
                 _memCache.AddOrUpdateCache(key, result.Result, DateTimeOffset.UtcNow.AddYears(1));
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                _logger.LogError(e, "error ProcessMarketTemplatePlayerProps");
             }
         }
 
@@ -575,7 +581,7 @@ namespace OE.WebSocket.Service.Repository
             {
                 await hubConnection.SendAsync(method, _clientCode, payload);
             }
-            catch (Exception)
+            catch (Exception e)
             {
             }
         }
