@@ -32,8 +32,10 @@ namespace OE.Shared.Utilities
         private string _consumerName = string.Empty;
         private string _routingKey = string.Empty;
         private string _prefetchCount = string.Empty;
-        private bool _isExclusive = false;
-        private bool _isPriority = false;
+        private string _tlsServerName = string.Empty;
+        private bool   _tlsEnabled = false;
+        private bool   _isExclusive = false;
+        private bool   _isPriority = false;
 
         private ConnectionFactory _externalConnectionFactory;
         private IConnection _externalConnection;
@@ -112,6 +114,14 @@ namespace OE.Shared.Utilities
             _password = _configuration["MessageBroker:Password"];
             _virtualHost = _configuration["MessageBroker:VirtualHost"];
             _exchange = _configuration["MessageBroker:Exchange"];
+            _tlsServerName  = _configuration["MessageBroker:ServerName"] ?? _hostName;
+            _tlsEnabled = _configuration.GetValue<bool>("MessageBroker:TlsEnabled", false);
+
+            var clientProperties = new Dictionary<string, object>
+            {
+                { "host_name", Environment.MachineName },
+                { "application_name", "Song88 Platform" }
+            };
 
             var suffix = "";
 
@@ -135,21 +145,16 @@ namespace OE.Shared.Utilities
             {
                 if (_connectionFactory == null)
                 {
-                    var clientProperties = new Dictionary<string, object>
-                    {
-                        { "host_name", Environment.MachineName },
-                        { "application_name", "Song88 Platform" }
-                    };
-
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
-                        Port = 5672,
+                        Port = _tlsEnabled ? 5671 : 5672,
                         UserName = _userName,
                         Password = _password,
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
+                        Ssl = new SslOption { Enabled = _tlsEnabled, ServerName = _tlsServerName},
                         ClientProperties = clientProperties
                     };
                 }
@@ -211,19 +216,30 @@ namespace OE.Shared.Utilities
             _consumerName = _configuration["MessageBroker:Consumer"];
             _routingKey = _configuration["MessageBroker:RoutingKey"];
             _prefetchCount = string.IsNullOrEmpty(_configuration["MessageBroker:PrefetchCount"]) ? "1000" : _configuration["MessageBroker:PrefetchCount"];
+            _tlsServerName  = _configuration["MessageBroker:ServerName"] ?? _hostName;
+            _tlsEnabled = _configuration.GetValue<bool>("MessageBroker:TlsEnabled");
+
+            var clientProperties = new Dictionary<string, object>
+            {
+                { "host_name", Environment.MachineName },
+                { "application_name", "Song88 Platform" }
+            };
 
             if (_connection == null)
             {
                 if (_connectionFactory == null)
+
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
-                        Port = 5672,
+                        Port = _tlsEnabled ? 5671 : 5672,
                         UserName = _userName,
                         Password = _password,
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
-                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
+                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
+                        Ssl = new SslOption { Enabled = _tlsEnabled, ServerName = _tlsServerName},
+                        ClientProperties = clientProperties
                     };
 
                 _connection = _connectionFactory.CreateConnection();
