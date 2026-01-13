@@ -10,6 +10,7 @@ using System.Text.Json;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.WebSocket.Service.Telemetry;
+using System.Text.Json.Serialization;
 
 namespace OE.WebSocket.Service.Repository
 {
@@ -2017,6 +2018,7 @@ namespace OE.WebSocket.Service.Repository
 
     public class SelectorMarketTemplateDTO
     {
+        [JsonPropertyName("marketTemplateId")]
         public string MaTeId { get; set; }
     }
 
