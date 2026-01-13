@@ -88,7 +88,8 @@ namespace OE.WebSocket.Service.Repository
                  finalMarkets = message.Ma;
                 
                 _logger.LogInformation($"ProcessOddsChangeForMainMarkets: {JsonSerializer.Serialize(finalMarkets)}");
-   
+                _logger.LogInformation($"ProcessOddsChangeForMainMarkets: {JsonSerializer.Serialize(message.Ma)}");
+
                 if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
                     await ProcessMatchOddsChangeForMainMarkets(message, hubConnection, finalMarkets);
