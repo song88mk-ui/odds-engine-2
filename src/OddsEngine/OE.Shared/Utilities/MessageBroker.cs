@@ -41,6 +41,7 @@ namespace OE.Shared.Utilities
         private IModel _externalModel;
 
         private string _externalHostName = string.Empty;
+        private int    _externalPort = 5672; // default non-tls
         private string _externalUserName = string.Empty;
         private string _externalPassword = string.Empty;
         private string _externalVirtualHost = string.Empty;
@@ -48,7 +49,6 @@ namespace OE.Shared.Utilities
         private string _externalQueue = string.Empty;
         private string _externalConsumerName = string.Empty;
         private string _externalRoutingKey = string.Empty;
-        private int _externalPort = 5671;
 
         private static readonly ActivitySource _activitySource = new ActivitySource(nameof(MessageBroker));
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
@@ -78,11 +78,7 @@ namespace OE.Shared.Utilities
             _externalQueue = _configuration["ExternalMessageBroker:Queue"];
             _externalConsumerName = _configuration["ExternalMessageBroker:Consumer"];
             _externalRoutingKey = _configuration["ExternalMessageBroker:RoutingKey"];
-
-            var portSection = _configuration.GetSection("ExternalMessageBroker:Port");
-
-            if (portSection.Exists())
-                _externalPort = int.Parse(_configuration["ExternalMessageBroker:Port"]);
+            _externalPort = _configuration.GetValue<int>("ExternalMessageBroker:Port", 5672);
 
             PrepareExternalConnection();
         }
