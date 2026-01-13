@@ -84,8 +84,10 @@ namespace OE.WebSocket.Service.Repository
                 if (message.FiTyId == (int)FixtureType.Match || (message.SpId.IsVirtualSportId() && message.FiTyId == (int)FixtureType.Outright))
                     finalMarkets = message.Ma.Where(c => mainMarkets.Item2.Contains(c.MaTeId)).ToList();
                 else
-                    finalMarkets = message.Ma;
-
+                 finalMarkets = message.Ma;
+                
+                _logger.LogInformation($"ProcessOddsChangeForMainMarkets: {JsonSerializer.Serialize(finalMarkets)}");
+   
                 if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
                     await ProcessMatchOddsChangeForMainMarkets(message, hubConnection, finalMarkets);
@@ -472,6 +474,7 @@ namespace OE.WebSocket.Service.Repository
                     var marketTemplates = item.SelectMany(s => s.MarketTemplates).Select(s => s.MaTeId).Distinct().ToList();
                     _mainMarketTemplates.Add(new Tuple<int, List<string>>(item.Key, marketTemplates));
                 }
+                _logger.LogInformation($"ProcessMainMarketTemplates: {JsonSerializer.Serialize(_mainMarketTemplates)}");
             }
             catch (Exception e)
             {
