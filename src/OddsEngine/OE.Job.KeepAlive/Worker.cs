@@ -23,7 +23,9 @@ namespace OE.Job.KeepAlive
 
         public override Task StartAsync(CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Connecting to RabbitMQ Server");
             _messageBroker.Connect();
+            _logger.LogInformation("Connected, running...");
 
             return base.StartAsync(cancellationToken);
         }
@@ -36,6 +38,7 @@ namespace OE.Job.KeepAlive
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _logger.LogInformation("Running Heartbeat publish loop()");
             while (true)
             {
                 try
