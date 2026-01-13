@@ -24,6 +24,7 @@ namespace OE.Shared.Utilities
         private readonly IConfiguration _configuration;
 
         private string _hostName = string.Empty;
+        private int    _hostPort = 5672; // default non-tls
         private string _userName = string.Empty;
         private string _password = string.Empty;
         private string _virtualHost = string.Empty;
@@ -32,8 +33,6 @@ namespace OE.Shared.Utilities
         private string _consumerName = string.Empty;
         private string _routingKey = string.Empty;
         private string _prefetchCount = string.Empty;
-        private string _tlsServerName = string.Empty;
-        private bool   _tlsEnabled = false;
         private bool   _isExclusive = false;
         private bool   _isPriority = false;
 
@@ -110,12 +109,11 @@ namespace OE.Shared.Utilities
             _isExclusive = string.IsNullOrEmpty(_configuration["MessageBroker:IsExclusive"]) ? false : Convert.ToBoolean(_configuration["MessageBroker:IsExclusive"]);
             _isPriority = string.IsNullOrEmpty(_configuration["MessageBroker:IsPriority"]) ? false : Convert.ToBoolean(_configuration["MessageBroker:IsPriority"]);
             _hostName = _configuration["MessageBroker:Host"];
+            _hostPort = _configuration.GetValue<int>("MessageBroker:Port", 5672);
             _userName = _configuration["MessageBroker:Username"];
             _password = _configuration["MessageBroker:Password"];
             _virtualHost = _configuration["MessageBroker:VirtualHost"];
             _exchange = _configuration["MessageBroker:Exchange"];
-            _tlsServerName  = _configuration["MessageBroker:ServerName"] ?? _hostName;
-            _tlsEnabled = _configuration.GetValue<bool>("MessageBroker:TlsEnabled", false);
 
             var clientProperties = new Dictionary<string, object>
             {
@@ -148,13 +146,13 @@ namespace OE.Shared.Utilities
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
-                        Port = _tlsEnabled ? 5671 : 5672,
+                        Port = _hostPort,
                         UserName = _userName,
                         Password = _password,
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _tlsEnabled, ServerName = _tlsServerName},
+                        Ssl = new SslOption { Enabled = _hostPort == 5671 ? true : false, ServerName = _hostName },
                         ClientProperties = clientProperties
                     };
                 }
@@ -216,8 +214,7 @@ namespace OE.Shared.Utilities
             _consumerName = _configuration["MessageBroker:Consumer"];
             _routingKey = _configuration["MessageBroker:RoutingKey"];
             _prefetchCount = string.IsNullOrEmpty(_configuration["MessageBroker:PrefetchCount"]) ? "1000" : _configuration["MessageBroker:PrefetchCount"];
-            _tlsServerName  = _configuration["MessageBroker:ServerName"] ?? _hostName;
-            _tlsEnabled = _configuration.GetValue<bool>("MessageBroker:TlsEnabled");
+            _hostPort = _configuration.GetValue<int>("MessageBroker:Port", 5672);
 
             var clientProperties = new Dictionary<string, object>
             {
@@ -232,13 +229,13 @@ namespace OE.Shared.Utilities
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
-                        Port = _tlsEnabled ? 5671 : 5672,
+                        Port = _hostPort,
                         UserName = _userName,
                         Password = _password,
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _tlsEnabled, ServerName = _tlsServerName},
+                        Ssl = new SslOption { Enabled = _hostPort == 5671 ? true : false, ServerName = _hostName },
                         ClientProperties = clientProperties
                     };
 
