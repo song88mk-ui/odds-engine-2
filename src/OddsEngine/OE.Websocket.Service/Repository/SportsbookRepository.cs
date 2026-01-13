@@ -245,8 +245,9 @@ namespace OE.WebSocket.Service.Repository
                             new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
                 await PublishToWebSocket("PublishWalletChange", hubConnection, payload);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessWalletChange");
             }
         }
 
@@ -272,8 +273,9 @@ namespace OE.WebSocket.Service.Repository
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessTopFixtures");
             }
         }
 
@@ -299,8 +301,9 @@ namespace OE.WebSocket.Service.Repository
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessTopLeagues");
             }
         }
 
@@ -369,8 +372,9 @@ namespace OE.WebSocket.Service.Repository
                     _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds }, DateTimeOffset.UtcNow.AddDays(7));
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessMarketCount");
             }
         }
 
@@ -659,7 +663,7 @@ namespace OE.WebSocket.Service.Repository
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/fixturedetails?FiId={FiId}");
+                var response = await _httpClient.GetAsync($"v1/sportsbook/fixturedetails?fixtureId={FiId}");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
