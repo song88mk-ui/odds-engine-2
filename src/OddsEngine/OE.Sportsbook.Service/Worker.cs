@@ -51,9 +51,9 @@ namespace OE.Sportsbook.Service
             {
                 _messageBroker.Dispose();
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                _logger.LogError($"caught exception on stop: {ex.Message}");
+                _logger.LogError(ex, "Error stopping service: {message}", e.Message);
             }
 
             return base.StopAsync(cancellationToken);
@@ -71,7 +71,7 @@ namespace OE.Sportsbook.Service
             }
             catch (Exception e)
             {
-                _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
+                _logger.LogError(ex, "Error running service: {message}", e.Message);
                 throw e; // up to stack, so it can fail early
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
@@ -95,7 +95,6 @@ namespace OE.Sportsbook.Service
                 try
                 {
                     activity?.SetTag("message.type", messageType);
-                    activity?.SetTag("payload", payload);
 
                     switch (messageType)
                     {
@@ -147,12 +146,10 @@ namespace OE.Sportsbook.Service
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
 
-                    activity?.SetTag("stack.trace", ex.StackTrace);
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
 
-                    _logger.LogError($"caught exception: {ex.Message}");
-                    _logger.LogError($"--> stacktrace  : {ex.StackTrace}");
-                    _logger.LogError($"--> payload  : {payload}");
+                    _logger.LogError("Error processing message: Exception: {message}, StackTrace: {@stackTrace}, Payload: {@payload}",
+                            ex.Message, ex.StackTrace, payload);
                 }
         }
         private void ProcessMessage<T>(string payload, Action<T> processor)
