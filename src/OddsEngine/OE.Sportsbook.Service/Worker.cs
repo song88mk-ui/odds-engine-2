@@ -67,6 +67,7 @@ namespace OE.Sportsbook.Service
                 await _sportsbookRepository.SetInitialData();
                 _logger.LogInformation("Connecting to RabbitMQ Server");
                 _messageBroker.Connect();
+                _logger.LogInformation("Connected. Processing Incoming messages");
             }
             catch (Exception e)
             {
