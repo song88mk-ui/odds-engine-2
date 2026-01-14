@@ -53,7 +53,7 @@ namespace OE.Sportsbook.Service
             }
             catch (Exception e)
             {
-                _logger.LogError(ex, "Error stopping service: {message}", e.Message);
+                _logger.LogError(e, "Error stopping service: {message}", e.Message);
             }
 
             return base.StopAsync(cancellationToken);
@@ -71,8 +71,8 @@ namespace OE.Sportsbook.Service
             }
             catch (Exception e)
             {
-                _logger.LogError(ex, "Error running service: {message}", e.Message);
-                throw e; // up to stack, so it can fail early
+                _logger.LogError(e, "Error running service: {message}", e.Message);
+                throw; // up to stack, so it can fail early
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
         }
