@@ -1647,7 +1647,7 @@ namespace OE.WebSocket.Service.Repository
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
-                            SeId = s.SeTeId.ToString(),
+                            SeId = s.SeId.ToString(),
                             SeNa = s.SeNa,
                             DeOd = s.Od.ToString("0.00"),
                             MaOd = GetMalayOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
