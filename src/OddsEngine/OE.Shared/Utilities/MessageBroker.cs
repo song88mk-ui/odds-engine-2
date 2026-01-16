@@ -117,9 +117,6 @@ namespace OE.Shared.Utilities
             _virtualHost = _configuration["MessageBroker:VirtualHost"];
             _exchange = _configuration["MessageBroker:Exchange"];
 
-            _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}",
-                    _hostName, _hostPort, _hostPort == 5671 ? true : false);
-
             var clientProperties = new Dictionary<string, object>
             {
                 { "host_name", Environment.MachineName },
@@ -148,7 +145,9 @@ namespace OE.Shared.Utilities
             {
                 if (_connectionFactory == null)
                 {
-                    _logger.LogInformation("Creating initial connection using ConnectionFactory");
+                    _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}",
+                            _hostName, _hostPort, _hostPort == 5671 ? true : false);
+
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
@@ -231,6 +230,9 @@ namespace OE.Shared.Utilities
             if (_connection == null)
             {
                 if (_connectionFactory == null)
+
+                    _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}; ManualAck",
+                            _hostName, _hostPort, _hostPort == 5671 ? true : false);
 
                     _connectionFactory = new ConnectionFactory
                     {
@@ -376,7 +378,6 @@ namespace OE.Shared.Utilities
                 channel.BasicPublish(_exchange, routingKey, properties, payloadBytes);
             }
         }
-
 
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
         {
