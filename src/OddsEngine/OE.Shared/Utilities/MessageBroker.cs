@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using OE.Shared.Models;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
@@ -19,6 +20,7 @@ namespace OE.Shared.Utilities
         private IConnection _connection;
         private IModel _model;
         private EventingBasicConsumer _consumer;
+        private readonly ILogger<MessageBroker> _logger;
 
         private readonly object _lock = new object();
 
@@ -35,7 +37,7 @@ namespace OE.Shared.Utilities
         private string _queue = string.Empty;
         private string _consumerName = string.Empty;
         private string _routingKey = string.Empty;
-        private string _prefetchCount = string.Empty;
+        private ushort _prefetchCount = 1000;
         private bool   _isExclusive = false;
         private bool   _isPriority = false;
 
@@ -56,9 +58,10 @@ namespace OE.Shared.Utilities
         private static readonly ActivitySource _activitySource = new ActivitySource(nameof(MessageBroker));
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
 
-        public MessageBroker(IConfiguration configuration)
+        public MessageBroker(IConfiguration configuration, ILogger<MessageBroker> logger)
         {
             _configuration = configuration;
+            _logger = logger;
         }
 
         public void Acknowledge(BasicDeliverEventArgs e)
@@ -105,14 +108,17 @@ namespace OE.Shared.Utilities
 
         public void Connect()
         {
-            _isExclusive = string.IsNullOrEmpty(_configuration["MessageBroker:IsExclusive"]) ? false : Convert.ToBoolean(_configuration["MessageBroker:IsExclusive"]);
-            _isPriority = string.IsNullOrEmpty(_configuration["MessageBroker:IsPriority"]) ? false : Convert.ToBoolean(_configuration["MessageBroker:IsPriority"]);
+            _isExclusive = _configuration.GetValue<bool>("MessageBroker:IsExclusive",  false);
+            _isPriority = _configuration.GetValue<bool>("MessageBroker:IsPriority", false);
             _hostName = _configuration["MessageBroker:Host"];
             _hostPort = _configuration.GetValue<int>("MessageBroker:Port", 5672);
             _userName = _configuration["MessageBroker:Username"];
             _password = _configuration["MessageBroker:Password"];
             _virtualHost = _configuration["MessageBroker:VirtualHost"];
             _exchange = _configuration["MessageBroker:Exchange"];
+
+            _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}",
+                    _hostName, _hostPort, _hostPort == 5671 ? true : false);
 
             var clientProperties = new Dictionary<string, object>
             {
@@ -135,13 +141,14 @@ namespace OE.Shared.Utilities
             }
             _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{suffix}" : _configuration["MessageBroker:Queue"];
             _consumerName = _configuration["MessageBroker:Consumer"];
-            _routingKey = _configuration["MessageBroker:RoutingKey"];
-            _prefetchCount = string.IsNullOrEmpty(_configuration["MessageBroker:PrefetchCount"]) ? "1000" : _configuration["MessageBroker:PrefetchCount"];
+            _routingKey = _configuration.GetValue<string>("MessageBroker:RoutingKey", "");
+            _prefetchCount = _configuration.GetValue<ushort>("MessageBroker:PrefetchCount", 1000);
 
             if (_connection == null)
             {
                 if (_connectionFactory == null)
                 {
+                    _logger.LogInformation("Creating initial connection using ConnectionFactory");
                     _connectionFactory = new ConnectionFactory
                     {
                         HostName = _hostName,
@@ -193,7 +200,7 @@ namespace OE.Shared.Utilities
                     foreach (var routingKey in _routingKey.Split('|'))
                         _model.QueueBind(_queue, _exchange, routingKey.ToLower(), null);
 
-                    _model.BasicQos(0, Convert.ToUInt16(_prefetchCount), false);
+                    _model.BasicQos(0, _prefetchCount, false);
                     _consumer = new EventingBasicConsumer(_model);
                     _consumer.Received += HandleMessage;
 
@@ -211,8 +218,8 @@ namespace OE.Shared.Utilities
             _exchange = _configuration["MessageBroker:Exchange"];
             _queue = _configuration["MessageBroker:Queue"];
             _consumerName = _configuration["MessageBroker:Consumer"];
-            _routingKey = _configuration["MessageBroker:RoutingKey"];
-            _prefetchCount = string.IsNullOrEmpty(_configuration["MessageBroker:PrefetchCount"]) ? "1000" : _configuration["MessageBroker:PrefetchCount"];
+            _routingKey = _configuration.GetValue<string>("MessageBroker:RoutingKey", "");
+            _prefetchCount = _configuration.GetValue<ushort>("MessageBroker:PrefetchCount", 1000);
             _hostPort = _configuration.GetValue<int>("MessageBroker:Port", 5672);
 
             var clientProperties = new Dictionary<string, object>
@@ -251,7 +258,7 @@ namespace OE.Shared.Utilities
                     foreach (var routingKey in _routingKey.Split('|'))
                         _model.QueueBind(_queue, _exchange, routingKey, null);
 
-                    _model.BasicQos(0, Convert.ToUInt16(_prefetchCount), false);
+                    _model.BasicQos(0, _prefetchCount, false);
                     _consumer = new EventingBasicConsumer(_model);
                     _consumer.Received += HandleMessageWithManualAck;
 
@@ -494,6 +501,7 @@ namespace OE.Shared.Utilities
 
             lock(_lock)
             {
+                Connect(); // default connect
                 if (_connection == null || !_connection.IsOpen)
                 {
                     _connection = _connectionFactory.CreateConnection();
