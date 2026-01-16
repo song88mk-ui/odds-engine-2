@@ -19,6 +19,9 @@ namespace OE.Shared.Utilities
         private IConnection _connection;
         private IModel _model;
         private EventingBasicConsumer _consumer;
+
+        private readonly object _lock = new object();
+
         public event EventHandler<BasicDeliverEventArgs> MessageReceived;
 
         private readonly IConfiguration _configuration;
@@ -336,6 +339,38 @@ namespace OE.Shared.Utilities
           }
         }
 
+        public void CPublish<T>(T payload, string messageType, string routingKey, string correlationId)
+        {
+            var activityName = $"{routingKey} send";
+            using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
+            {
+                var conn = GetConnection();
+                using var channel = conn.CreateModel();
+
+                var properties = channel.CreateBasicProperties();
+                properties.CorrelationId = correlationId;
+                properties.DeliveryMode = 2;
+                properties.Type = messageType;
+
+                ActivityContext contextToInject = default;
+                if (activity != null)
+                {
+                  contextToInject = activity.Context;
+                }
+                else if (Activity.Current != null)
+                {
+                  contextToInject = Activity.Current.Context;
+                }
+
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+
+                var payloadBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+
+                channel.BasicPublish(_exchange, routingKey, properties, payloadBytes);
+            }
+        }
+
+
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
         {
           var activityName = $"{routingKey} send";
@@ -362,6 +397,37 @@ namespace OE.Shared.Utilities
 
             _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
           }
+        }
+
+        public void CPublish(string payload, string messageType, string routingKey, string correlationId)
+        {
+            var activityName = $"{routingKey} send";
+            using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
+            {
+                var conn = GetConnection();
+                using var channel = conn.CreateModel();
+
+                var properties = channel.CreateBasicProperties();
+                properties.CorrelationId = correlationId;
+                properties.DeliveryMode = 2;
+                properties.Type = messageType;
+
+                ActivityContext contextToInject = default;
+                if (activity != null)
+                {
+                  contextToInject = activity.Context;
+                }
+                else if (Activity.Current != null)
+                {
+                  contextToInject = Activity.Current.Context;
+                }
+
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+
+                var payloadBytes = Encoding.UTF8.GetBytes(payload);
+
+                channel.BasicPublish(_exchange, routingKey, properties, payloadBytes);
+            }
         }
 
         private void InjectTraceContextIntoBasicProperties(IBasicProperties props, string key, string value)
@@ -419,6 +485,21 @@ namespace OE.Shared.Utilities
 
             if (_connection != null)
                 _connection.Dispose();
+        }
+
+        private IConnection GetConnection()
+        {
+            if (_connection != null && _connection.IsOpen)
+                return _connection;
+
+            lock(_lock)
+            {
+                if (_connection == null || !_connection.IsOpen)
+                {
+                    _connection = _connectionFactory.CreateConnection();
+                }
+            }
+            return _connection;
         }
     }
 }
