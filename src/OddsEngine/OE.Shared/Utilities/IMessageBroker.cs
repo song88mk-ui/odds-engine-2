@@ -1,6 +1,8 @@
 ﻿using OE.Shared.Models;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
+using System.Collections.Generic;
 
 namespace OE.Shared.Utilities
 {
@@ -19,6 +21,7 @@ namespace OE.Shared.Utilities
         void Publish(string payload, string messageType, string routingKey, string correlationId);
         void CPublish<T>(T payload, string messageType, string routingKey, string correlationId);
         void CPublish(string payload, string messageType, string routingKey, string correlationId);
+        public IModel BindQueue(string queueName, Dictionary<string, object> options);
         void Dispose();
     }
 }

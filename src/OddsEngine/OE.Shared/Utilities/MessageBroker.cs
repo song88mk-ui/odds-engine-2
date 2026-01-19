@@ -208,6 +208,51 @@ namespace OE.Shared.Utilities
             }
         }
 
+        // helper to allow bindings of multple queues, returns an IModel where you can
+        // create an consumer and attach callbacks on message deliveries
+        // see the BG Engine Sportsbook for reference implementation
+        public IModel BindQueue(string queueName, Dictionary<string, object> options)
+        {
+            if (null == options)
+                throw new ArgumentNullException("options is null");
+
+            bool isExclusive = options.TryGetValue("exclusive", out var vIsExclusive)
+                ? Convert.ToBoolean(vIsExclusive) : false;
+            bool isPriority = options.TryGetValue("priority", out var vIsPriority)
+                ? Convert.ToBoolean(vIsPriority) : false;
+            ushort prefetchCount = options.TryGetValue("prefetch", out var vPrefetchCount)
+                ? Convert.ToUInt16(vPrefetchCount): Convert.ToUInt16(1000);
+
+            string routingKeys = options.TryGetValue("routingKeys", out var vRoutingKeys)
+                ? vRoutingKeys.ToString() : "";
+
+            IConnection conn = GetConnection(); // acquire connection
+
+            IModel channel = conn.CreateModel(); // create channel
+
+            channel.ExchangeDeclare(_exchange, "topic", true, false, null);
+
+            var queueOpts = new Dictionary<string, object>();
+
+            if (isPriority)
+            {
+                queueOpts.Add("x-max-priority", 10);
+            }
+
+            channel.QueueDeclare(queueName,
+                    durable: true,
+                    exclusive: isExclusive,
+                    autoDelete: isExclusive,
+                    arguments: queueOpts);
+
+            foreach (var key in routingKeys.Split('|'))
+                channel.QueueBind(queueName, _exchange, key.ToLower(), null);
+
+            channel.BasicQos(0, prefetchCount, false);
+
+            return channel;
+        }
+
         public void ConnectWithManualAck()
         {
             _hostName = _configuration["MessageBroker:Host"];
