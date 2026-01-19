@@ -159,7 +159,7 @@ namespace OE.Sportsbook.Service.Repositories
                     message.TiRe
                 };
 
-                messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.sb.engine.{MessageType.ON_MARKET_SETTLEMENT.ToLower()}", Guid.NewGuid().ToString());
+                messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.bet.settlement", Guid.NewGuid().ToString());
             }
         }
 
