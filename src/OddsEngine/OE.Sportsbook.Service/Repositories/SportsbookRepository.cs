@@ -136,30 +136,28 @@ namespace OE.Sportsbook.Service.Repositories
 
             foreach (var market in message.Ma)
             {
-                var marketColection = _marketCollection.Find(f => f.Id == market.Id).FirstOrDefault();
+                var marketColection = _marketCollection.Find(f => f.MaId == market.MaId).FirstOrDefault();
                 var fixtureSpecifier = message.FiSp;
 
                 if (marketColection is null)
                     continue;
 
-                var payload = new
+                foreach(var selection in market.Se)
                 {
-                    marketColection.Id,
-                    marketColection.MaId,
-                    marketColection?.SpId,
-                    market.MaStId,
-                    market.MaStNa,
-                    Se = market.Se.Select(selection => new
-                    {
-                        selection.Id,
-                        selection.SeId,
-                        selection.SeStId
-                    }),
-                    message.TiSe,
-                    message.TiRe
-                };
+                    var betStatus = selection.SeStId.GetBetStatus();
 
-                messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.bet.settlement", Guid.NewGuid().ToString());
+                    var payload = new
+                    {
+                        MarketId = market.MaId,
+                        SelectionId = selection.SeId,
+                        SelectionStatus = betStatus,
+                        //SettlementScore = message.Sc,
+                        DeadHeatFactor = 1
+                    };
+
+                    messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.bet.settlement", Guid.NewGuid().ToString());
+                }
+                
             }
         }
 

@@ -8,6 +8,7 @@
         Void = 3,
         HalfWon = 4,
         HalfLost = 5,
-        Cancelled = 6
+        Cancelled = 6,
+        CashedOut = 7
     }
 }
