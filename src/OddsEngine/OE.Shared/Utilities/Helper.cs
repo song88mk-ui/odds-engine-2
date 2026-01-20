@@ -7,25 +7,21 @@ namespace OE.Shared.Utilities
     {
         public string GetInstanceName(string providerFixtureId)
         {
-            var digit = providerFixtureId;
-            var lastDigit = digit.Substring(digit.Length - 1);
-            var secondLastDigit = digit.Substring(digit.Length - 2).Substring(0, 1);
+            if (string.IsNullOrEmpty(providerFixtureId) || providerFixtureId.Length < 2)
+                throw new ArgumentException("Invalid fixture id");
 
-            var result = lastDigit switch
-            {
-                "1" => Convert.ToInt32(secondLastDigit) % 2 == 0 ? "0" : "1",
-                "3" => Convert.ToInt32(secondLastDigit) % 2 == 0 ? "2" : "3",
-                "5" => Convert.ToInt32(secondLastDigit) % 2 == 0 ? "4" : "5",
-                "7" => Convert.ToInt32(secondLastDigit) % 2 == 0 ? "6" : "7",
-                "9" => Convert.ToInt32(secondLastDigit) % 2 == 0 ? "8" : "9",
-                _ => lastDigit,
-            };
+            int last = providerFixtureId[^1] - '0';
+            int secondLast = providerFixtureId[^2] - '0';
 
-            if (result.ToString().Length == 1)
-                return $"0{result}";
-            else
-                return result.ToString();
+            int baseDigit = (last / 2) * 2; // 0,2,4,6,8
+
+            int result = secondLast % 2 == 0
+                ? baseDigit
+                : baseDigit + 1;
+
+            return result.ToString("D2");
         }
+
         public static VoidFactor GetVoidFactor(BetStatus status)
         {
             var voidFactor = VoidFactor.Zero;
