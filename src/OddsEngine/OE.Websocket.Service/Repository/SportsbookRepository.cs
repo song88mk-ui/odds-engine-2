@@ -11,6 +11,7 @@ using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.WebSocket.Service.Telemetry;
 using System.Text.Json.Serialization;
+using System.Reflection.Metadata.Ecma335;
 
 namespace OE.WebSocket.Service.Repository
 {
@@ -1703,6 +1704,7 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
+                    StUr = message.StUr,
                     //TODO:
                     //SpNaTr = message.SportTranslations.Select(f => new OutgoingSportTranslation
                     //{

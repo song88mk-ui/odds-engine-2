@@ -36,5 +36,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public bool? IsBo { get; set; }
         public int CuSec { get; set; }
         public int CuSer { get; set; }
+
+        public string StUr { get; set; }
     }
 }

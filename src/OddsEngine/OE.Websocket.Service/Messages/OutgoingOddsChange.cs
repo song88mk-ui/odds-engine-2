@@ -42,6 +42,7 @@
         public int SoOr { get; set; }
         public int MaCo { get; set; }
         public bool IsBeBu { get; set; }
+        public string StUr { get; set; }
         public List<OutgoingSportTranslation> SpNaTr { get; set; }
         public List<OutgoingSegmentTranslation> SegNaTr { get; set; }
         public List<OutgoingLeagueTranslation> LeNaTr { get; set; }

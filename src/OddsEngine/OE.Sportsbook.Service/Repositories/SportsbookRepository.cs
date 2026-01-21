@@ -312,9 +312,9 @@ namespace OE.Sportsbook.Service.Repositories
                 .Set(s => s.IsSu, message.IsSu)
                 .Set(s => s.ClCo, message.ClCo)
                 .Set(s => s.HoId, message.HoId)
-                .Set(s => s.AwId, message.AwId);
+                .Set(s => s.AwId, message.AwId)
+                .Set(s => s.StUr, message.StUr);
             //s.Set(s => s.LiId, message.LiId) TODO
-            //.Set(s => s.StUr, message.StUr) TODO
             //.Set(s => s.ClMa, message.ClMa) TODO
             //.Set(s => s.GeAl, message.GeAl) TODO
             //.Set(s => s.IsBo, message.IsBo) TODO
@@ -329,7 +329,7 @@ namespace OE.Sportsbook.Service.Repositories
             //.Set(s => s.PeSc, message.PeSc) TODO
             //.Set(s => s.CuSe, message.CuSe) TODO
 
-            if(!string.IsNullOrEmpty(message.Sc))
+            if (!string.IsNullOrEmpty(message.Sc))
                 updateFixture = updateFixture.Set(
                     s => s.Sc, message.Sc);
 
