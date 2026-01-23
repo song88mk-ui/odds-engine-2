@@ -75,6 +75,11 @@ namespace OE.Sportsbook.Service.Repositories
                 _logger.LogInformationEx($"null SpNa --> {JsonSerializer.Serialize(message)}");
             }
 
+            if (string.IsNullOrEmpty(message.StUr))
+            {
+                _logger.LogWarning("null at StUr");
+            }
+
             BulkWrite(_fixtureCollection, ToFixture(message));
         }
 
@@ -313,7 +318,7 @@ namespace OE.Sportsbook.Service.Repositories
                 .Set(s => s.ClCo, message.ClCo)
                 .Set(s => s.HoId, message.HoId)
                 .Set(s => s.AwId, message.AwId)
-                .Set(s => s.StUr, message.StUr);
+                .Set(s => s.StUr, string.IsNullOrEmpty(message.StUr) ? "-" : message.StUr);
             //s.Set(s => s.LiId, message.LiId) TODO
             //.Set(s => s.ClMa, message.ClMa) TODO
             //.Set(s => s.GeAl, message.GeAl) TODO
