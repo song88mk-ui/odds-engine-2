@@ -8,9 +8,12 @@ using RabbitMQ.Client.Events;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 namespace OE.Shared.Utilities
 {
@@ -542,18 +545,58 @@ namespace OE.Shared.Utilities
 
         private IConnection GetConnection()
         {
-            if (_connection != null && _connection.IsOpen)
+            if (_connection?.IsOpen == true)
                 return _connection;
 
             lock(_lock)
             {
-                Connect(); // default connect
-                if (_connection == null || !_connection.IsOpen)
+                if (_connection?.IsOpen == true)
+                    return _connection;
+
+                const int maxRetries = 3;
+                var delay = TimeSpan.FromMilliseconds(200);
+
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
                 {
-                    _connection = _connectionFactory.CreateConnection();
+                    try
+                    {
+                        if (_connection != null)
+                        {
+                            try { _connection.Dispose(); }
+                            catch {}
+                            _connection = null;
+                        }
+                        Connect();
+                        return _connection;
+                    }
+                    catch (Exception e) when (RetryableException(e))
+                    {
+                        if (attempt == maxRetries)
+                        {
+                            _connection = null;
+                            throw new RetryableConnectionException(
+                                    $"Failed to establish connection after {maxRetries} attempts.",e);
+                        }
+
+                        Thread.Sleep(delay);
+                        delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * 2); // back off
+                    }
                 }
+                throw new RetryableConnectionException("Unexpected connection failure.", null);
             }
-            return _connection;
+        }
+
+        private static bool RetryableException(Exception e) {
+            return e is TimeoutException
+                || e is IOException
+                || e.InnerException is SocketException;
         }
     }
+
+    public sealed class RetryableConnectionException : Exception
+    {
+        public RetryableConnectionException(string message, Exception inner)
+            : base(message, inner) { }
+    }
+
 }
