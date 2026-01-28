@@ -314,63 +314,46 @@ namespace OE.WebSocket.Service.Repository
             {
                 var key = $"mc:{message.FiId}";
 
+                if (!_fixtureStatus.Contains(message.FiStId))
+                {
+                    _memCache.DeleteCache(key);
+                    return;
+                }
+
+                var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToHashSet();
+                var marketToAdd = _isOEEnabled == false || message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright
+                    ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToHashSet()
+                    : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToHashSet();
+
                 var cache = _memCache.GetCache<MarketCount>(key);
+                
+                HashSet<long> currentMarketIds;
 
                 if (cache == null)
                 {
-                    if (_fixtureStatus.Contains(message.FiStId) == false)
+                    var result = await GetFixtureDetails(message.FiId);
+                    if (result.StatusCode != StatusCode.Success)
                         return;
 
-                    var result = await GetFixtureDetails(message.FiId);
-
-                    if (result.StatusCode == StatusCode.Success)
-                    {
-                        var fixtureDetails = result.Result.Fixtures.FirstOrDefault();
-
-                        if (fixtureDetails != null)
-                        {
-                            var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToList();
-                            var marketToAdd = message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToList() : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToList();                     
-                            var marketToAddFromAPI = fixtureDetails.Markets.Select(s => Convert.ToInt64(s.MarketId)).ToList();
-
-                            var currentMarketIds = marketToAdd;
-
-                            foreach (var marketId in marketToAddFromAPI)
-                            {
-                                if (currentMarketIds.Contains(marketId) == false)
-                                    currentMarketIds.Add(marketId);
-                            }
-
-                            if (marketToRemove.Count > 0)
-                                currentMarketIds = currentMarketIds.Except(marketToRemove).ToList();
-
-                            _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds }, DateTimeOffset.UtcNow.AddDays(7));
-                        }
-                    }
+                    var fixture = result.Result.Fixtures.FirstOrDefault();
+                    if (fixture == null)
+                        return;
+                    
+                    currentMarketIds = fixture.Markets.Select(m => Convert.ToInt64(m.MarketId)).ToHashSet();
                 }
                 else
                 {
-                    if (_fixtureStatus.Contains(message.FiStId) == false)
-                    {
-                        _memCache.DeleteCache(key);
-                        return;
-                    }
+                    currentMarketIds = cache.MarketIds.ToHashSet();
 
-                    var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToList();
-                    var marketToAdd = message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToList() : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToList();
+                }
 
-                    var currentMarketIds = cache.MarketIds;
+                currentMarketIds.UnionWith(marketToAdd);
+                currentMarketIds.ExceptWith(marketToRemove);
 
-                    foreach (var marketId in marketToAdd)
-                    {
-                        if (currentMarketIds.Contains(marketId) == false)
-                            currentMarketIds.Add(marketId);
-                    }
-
-                    if (marketToRemove.Count > 0)
-                        currentMarketIds = currentMarketIds.Except(marketToRemove).ToList();
-
-                    _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds }, DateTimeOffset.UtcNow.AddDays(7));
+                var changed = cache == null || !currentMarketIds.SetEquals(cache?.MarketIds ?? Enumerable.Empty<long>());
+                if (changed)
+                {
+                    _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds.ToList() }, DateTimeOffset.UtcNow.AddDays(7));
                 }
             }
             catch (Exception ex)
