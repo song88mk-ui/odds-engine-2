@@ -38,7 +38,6 @@ namespace OE.Job.Cleanup.Repository
             _jobRunDeletedFixtures = instrumentation.JobRunDeletedFixtures;
 
             _sportRetention = _configuration.GetValue<int>("Custom:SportRetention", -30);
-            _logger.LogInformation("Using mongodb at: {url}", _configuration["Custom:MongoDB-Sportsbook"]);
 
             var mongoClient = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
             var db = mongoClient.GetDatabase("Sportsbook");
