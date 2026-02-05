@@ -63,10 +63,9 @@ namespace OE.Job.Cleanup.Repository
 
             var fixtureStatusFilter = Builders<Fixture>.Filter.In(f => f.FiStId, statusToBeDeleted);
             var fixtureTypeFilter = Builders<Fixture>.Filter.Eq(f => f.FiTyId, 0);
-            var fixtureSportFilter = Builders<Fixture>.Filter.Lt(f => f.SpId, 1000);
             var fixtureDateFilter = Builders<Fixture>.Filter.Lt(f => f.FiStDa, DateTime.UtcNow.AddDays(_sportRetention));
 
-            var fixtureFilter = fixtureStatusFilter & fixtureTypeFilter & fixtureSportFilter & fixtureDateFilter;
+            var fixtureFilter = fixtureStatusFilter & fixtureTypeFilter & fixtureDateFilter;
 
             var fixtureProjection = Builders<Fixture>.Projection
                 .Include(c => c.Id)
