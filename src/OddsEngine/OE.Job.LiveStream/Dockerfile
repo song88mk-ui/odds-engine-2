@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 COPY src/OddsEngine/OE.Shared OE.Shared
@@ -22,7 +22,7 @@ RUN dotnet publish \
   -o /app --no-restore && \
   rm -f /app/appsettings.*.json
 
-FROM mcr.microsoft.com/dotnet/aspnet:9.0
+FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 
 # We need the cert to connect to the DocumentDB cluster
