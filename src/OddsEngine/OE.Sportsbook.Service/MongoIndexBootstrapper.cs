@@ -59,6 +59,10 @@ namespace OE.Sportsbook.Service
                 new CreateIndexModel<Selection>(
                     Builders<Selection>.IndexKeys.Ascending(x => x.FiId).Ascending(x => x.MaStId).Ascending(x => x.MaTeId),
                     new CreateIndexOptions { Name = "idx_fiid_mastid_mateid" }
+                ),
+                new CreateIndexModel<Selection>(
+                    Builders<Selection>.IndexKeys.Ascending(x => x.MaId),
+                    new CreateIndexOptions { Name = "idx_maid" }
                 )
             };
 
