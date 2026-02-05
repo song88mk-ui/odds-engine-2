@@ -25,8 +25,6 @@ namespace OE.Job.LiveStream.Repository
             _logger = logger;
             _jobRunUpdatedFixtures = instrumentation.JobRunUpdatedFixtures;
 
-            _logger.LogInformation("Using mongodb at: {url}", _configuration["Custom:MongoDB-Sportsbook"]);
-
             var mongoClient = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
             var db = mongoClient.GetDatabase("Sportsbook");
 

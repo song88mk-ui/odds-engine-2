@@ -37,6 +37,8 @@ jobs:
             image: oev2-job-settlement
           - path: OE.Job.Cleanup
             image: oev2-job-cleanup
+          - path: OE.Job.LiveStream
+            image: oev2-job-livestream
     steps:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
