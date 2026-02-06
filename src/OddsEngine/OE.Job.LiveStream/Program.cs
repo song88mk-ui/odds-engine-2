@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OE.Job.LiveStream.Repository;
 using OE.Job.LiveStream.Telemetry;
+using OE.Job.LiveStream.Extensions;
 using Serilog;
 
 namespace OE.Job.LiveStream
@@ -27,6 +28,8 @@ namespace OE.Job.LiveStream
                         ServiceName: Instrumentation.ActivitySourceName,
                         ActivitySourceName: Instrumentation.ActivitySourceName,
                         MeterName: Instrumentation.MeterName));
+
+                    services.AddProviders();
                     services.AddSingleton<ISportsbookRepository, SportsbookRepository>();
                     services.AddHostedService<Worker>();
                 });
