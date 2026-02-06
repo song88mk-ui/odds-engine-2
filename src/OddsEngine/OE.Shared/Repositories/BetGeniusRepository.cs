@@ -86,6 +86,7 @@ namespace OE.Shared.Repositories
                     }
                     else
                     {
+                        _logger.LogError($"GetBetGeniusAuthorizationToken Error: {await response.Content.ReadAsStringAsync()}");
                         _memCache.DeleteCache(cacheKey);
 
                         activity?.SetStatus(ActivityStatusCode.Error, response.StatusCode.ToString());
@@ -140,7 +141,7 @@ namespace OE.Shared.Repositories
                 {
                     _httpClient.DefaultRequestHeaders.Clear();
                     _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                    _httpClient.DefaultRequestHeaders.Add("x-api-key", $"{_configuration["API:BetGenius:Key"]}");
+                    _httpClient.DefaultRequestHeaders.Add("x-api-key", $"{_configuration["Customer:BetGenius:Key"]}");
 
                     var env = _configuration["API:BetGenius:Env"];
 

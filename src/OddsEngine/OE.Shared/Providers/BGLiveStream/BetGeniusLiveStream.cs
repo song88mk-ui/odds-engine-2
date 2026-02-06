@@ -78,7 +78,7 @@ namespace OE.Shared.Providers.BGLiveStream
             }
             catch (Exception ex)
             {
-                _logger.LogError($"ProcessCancellation Error: {ex.Message}-{ex.StackTrace}");
+                _logger.LogError($"GetLiveStream Error: {ex.Message}-{ex.StackTrace}");
                 return (false, string.Empty);
             }
         }
