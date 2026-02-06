@@ -65,7 +65,7 @@ namespace OE.Shared.Repositories
 
                     var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 
-                    var response = await _httpClient.PostAsync($"oauth/token", content);
+                    var response = await _httpClient.PostAsync($"Auth-v1/PROD/login", content);
 
                     if (response.IsSuccessStatusCode)
                     {
