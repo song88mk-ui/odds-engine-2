@@ -309,8 +309,9 @@ namespace OE.Sportsbook.Service.Repositories
                 .Set(s => s.IsOfLi, message.IsOfLi)
                 .Set(s => s.HoReCa, message.HoReCa)
                 .Set(s => s.AwReCa, message.AwReCa)
-                .Set(s => s.CuPe, message.CuPeId)
+                .Set(s => s.CuPe, message.CuPe)
                 .Set(s => s.CuMi, message.CuMi)
+                .Set(s => s.CuSe, message.CuSe)
                 .Set(s => s.FiSp, message.FiSp)
                 .Set(s => s.FiSoOr, message.SoOr)
                 .Set(s => s.ToTi, message.ToTi)
@@ -332,7 +333,7 @@ namespace OE.Sportsbook.Service.Repositories
             //.Set(s => s.AwBeId, message.AwBeId) TODO
             //.Set(s => s.LeBeId, message.LeBeId) TODO
             //.Set(s => s.PeSc, message.PeSc) TODO
-            //.Set(s => s.CuSe, message.CuSe) TODO
+            
 
             if (!string.IsNullOrEmpty(message.Sc))
                 updateFixture = updateFixture.Set(
@@ -639,9 +640,9 @@ namespace OE.Sportsbook.Service.Repositories
                 IsOfLi = message.IsOfLi,
                 HoReCa = message.HoReCa,
                 AwReCa = message.AwReCa,
-                CuPeId = message.CuPeId,
                 CuPe = message.CuPe,
                 CuMi = message.CuMi,
+                CuSe = message.CuSe,
                 FiTyId = message.FiTyId,
                 FiTyNa = ((FixtureType)message.FiTyId).ToString(),
                 ToTi = message.ToTi,

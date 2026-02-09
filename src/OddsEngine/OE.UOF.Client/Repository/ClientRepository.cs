@@ -94,6 +94,9 @@ namespace OE.UOF.Client.Repository
                     FixtureStatusName = ((FixtureStatus)message.FiStId).ToString(),
                     TimeStampSent = message.TiSe,
                     TimeStampReceived = message.TiRe,
+                    CurrentPeriod = message.CuPe,
+                    CurrentMinute = message.CuMi,
+                    CurrentSecond = message.CuSe,
                     CorrelationId = correlationId
                 };
 
@@ -735,9 +738,9 @@ namespace OE.UOF.Client.Repository
                 //HomeReference = GetReferences(message.HomeBetradarId),
                 AwayId = message.AwId,
                 //AwayReference = GetReferences(message.AwayBetradarId),
-                CurrentPeriod = message.CuPeId,
+                CurrentPeriod = message.CuPe,
                 CurrentMinute = message.CuMi,
-                CurrentSecond = message.CuSec,
+                CurrentSecond = message.CuSe,
                 CurrentServer = message.CuSer,
                 //PeriodScores = message.PeriodScores.Select(s => new PeriodScoreMessage
                 //{

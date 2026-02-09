@@ -23,8 +23,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public bool IsOfLi { get; set; }
         public int HoReCa { get; set; }
         public int AwReCa { get; set; }
-        public int CuPeId { get; set; }
-        public string CuPe { get; set; }
+        public int CuPe { get; set; }
         public int CuMi { get; set; }
         public int FiTyId { get; set; }
         public string FiTyNa { get; set; }
@@ -43,7 +42,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string HoId { get; set; }
         public string AwId { get; set; }
         //public List<InternalPeriodScore> PeriodScores { get; set; }
-        public int CuSec { get; set; }
+        public int CuSe { get; set; }
         public int CuSer { get; set; }
         public long TiSe { get; set; }
         public long TiRe { get; set; }

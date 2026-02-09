@@ -39,6 +39,7 @@
         public string Sc { get; set; }
         public string CuPe { get; set; }
         public int CuMi { get; set; }
+        public int CuSe { get; set; }
         public int SoOr { get; set; }
         public int MaCo { get; set; }
         public bool IsBeBu { get; set; }
