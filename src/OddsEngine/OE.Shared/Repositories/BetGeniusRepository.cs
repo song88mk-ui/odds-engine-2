@@ -143,7 +143,7 @@ namespace OE.Shared.Repositories
                     _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
                     _httpClient.DefaultRequestHeaders.Add("x-api-key", $"{_configuration["Customer:BetGenius:Key"]}");
 
-                    var env = _configuration["API:BetGenius:Env"];
+                    var env = _configuration["Custom:BetGenius:Env"];
 
                     var response = await _httpClient.GetAsync($"Video-v3/{env}/fixtures/{fixtureId}");
 
