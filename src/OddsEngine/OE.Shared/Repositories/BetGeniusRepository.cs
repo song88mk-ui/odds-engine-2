@@ -40,7 +40,7 @@ namespace OE.Shared.Repositories
 
         public async Task<BaseResponseDTO<BGAuth>> GetBetGeniusAuthorizationToken()
         {
-            using(var activity = _activitySource.StartActivity("betgenius.authorization"))
+            using (var activity = _activitySource.StartActivity("betgenius.authorization"))
             {
                 var cacheKey = $"bg:auth";
                 var cache = _memCache.GetCache<BaseResponseDTO<BGAuth>>(cacheKey);
@@ -181,8 +181,22 @@ namespace OE.Shared.Repositories
                             _memCache.AddOrUpdateCache(cacheKey, result, DateTimeOffset.UtcNow.AddHours(5));
                             return result;
                         }
+                        var responseMessage = await response.Content.ReadAsStringAsync();
+                        _logger.LogError($"GetBetGeniusFixture Error: {responseMessage}");
 
-                        _logger.LogError($"GetBetGeniusFixture Error: {response.Content.ReadAsStringAsync()}");
+                        if (responseMessage.Contains("Fixture not found"))
+                        {
+                            var result = new BaseResponseDTO<BGEvent>
+                            {
+                                StatusCode = StatusCode.Bet_Not_Found,
+                                Message = StatusCode.Bet_Not_Found.ToString(),
+                                Result = new BGEvent()
+                            };
+
+                            _memCache.AddOrUpdateCache(cacheKey, result, DateTimeOffset.UtcNow.AddHours(5));
+                            return result;
+                        }
+
                         _memCache.DeleteCache(cacheKey);
 
                         return new BaseResponseDTO<BGEvent>
