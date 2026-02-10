@@ -64,6 +64,9 @@ namespace OE.Job.LiveStream.Repository
             _logger.LogInformation($"ProcessLiveStream: Got {fixtures.Count} fixture record(s)");
             foreach (var fixture in fixtures)
             {
+                if(fixture.Id == "92507724")
+                    _logger.LogInformation($"ProcessLiveStream: fixture {fixture}");
+
                 using var scope = _scopeFactory.CreateScope();
                 var providerFactory =
                     scope.ServiceProvider.GetRequiredService<ILiveStreamFactory>();

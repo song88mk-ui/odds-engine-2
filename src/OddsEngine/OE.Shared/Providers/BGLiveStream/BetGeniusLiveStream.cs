@@ -54,6 +54,11 @@ namespace OE.Shared.Providers.BGLiveStream
                     _logger.LogError($"GetLiveStream: GetBetGeniusFixture Failed: {result.Message}-{JsonSerializer.Serialize(result)}");
                     return (false, string.Empty);
                 }
+                else if (result.StatusCode == StatusCode.Bet_Not_Found)
+                {
+                    _logger.LogError($"GetLiveStream: GetBetGeniusFixture Not Found: {fixtureId}");
+                    return (false, string.Empty);
+                }
 
                 _logger.LogInformation($"GetLiveStream: GetBetGeniusFixture Result : {JsonSerializer.Serialize(result)}");
                 

@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using OE.Shared.Models.Provider.BetGenius;
 using OE.Shared.Models.Responses;
+using System.Net;
 
 namespace OE.Shared.Repositories
 {
@@ -166,11 +167,23 @@ namespace OE.Shared.Repositories
                     }
                     else
                     {
+                        activity?.SetStatus(ActivityStatusCode.Error, response.StatusCode.ToString());
+
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            var result = new BaseResponseDTO<BGEvent>
+                            {
+                                StatusCode = StatusCode.Bet_Not_Found,
+                                Message = StatusCode.Bet_Not_Found.ToString(),
+                                Result = new BGEvent()
+                            };
+
+                            _memCache.AddOrUpdateCache(cacheKey, result, DateTimeOffset.UtcNow.AddHours(5));
+                            return result;
+                        }
 
                         _logger.LogError($"GetBetGeniusFixture Error: {response.Content.ReadAsStringAsync()}");
                         _memCache.DeleteCache(cacheKey);
-
-                        activity?.SetStatus(ActivityStatusCode.Error, response.StatusCode.ToString());
 
                         return new BaseResponseDTO<BGEvent>
                         {
