@@ -142,7 +142,7 @@ namespace OE.Shared.Repositories
                 {
                     _httpClient.DefaultRequestHeaders.Clear();
                     _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                    _httpClient.DefaultRequestHeaders.Add("x-api-key", $"{_configuration["Customer:BetGenius:Key"]}");
+                    _httpClient.DefaultRequestHeaders.Add("x-api-key", $"{_configuration["Custom:BetGenius:Key"]}");
 
                     var env = _configuration["Custom:BetGenius:Env"];
 
