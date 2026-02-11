@@ -147,6 +147,8 @@ namespace OE.Adapter.Service
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
 
+                    _messageBroker.Publish(payload, messageType, $"r.oe.adapter.error", correlationId);
+
                     activity?.SetTag("payload", payload);
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 }
