@@ -94,7 +94,6 @@ namespace OE.Adapter.Service
                 {
 
                     activity?.SetTag("message.type", messageType);
-                    _logger.LogInformation("{messageType} - {@payload}", messageType, payload);
 
                     switch (messageType)
                     {
