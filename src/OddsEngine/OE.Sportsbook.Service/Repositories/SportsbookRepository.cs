@@ -127,43 +127,51 @@ namespace OE.Sportsbook.Service.Repositories
         {
             if (!message.Ma.Any())
                 return;
-
-            var timestamp = DateTime.UtcNow.ToEpochTimestamp();
-
-            var data = ToMarketAndSelection(message, correlationId);
-
-
-            if (data.Item1.Length > 0)
-                BulkWrite(_marketCollection, data.Item1);
-
-            if (data.Item2.Length > 0)
-                BulkWrite(_selectionCollection, data.Item2);
-
-            foreach (var market in message.Ma)
+            try
             {
-                var marketColection = _marketCollection.Find(f => f.MaId == market.MaId).FirstOrDefault();
-                var fixtureSpecifier = message.FiSp;
+                var timestamp = DateTime.UtcNow.ToEpochTimestamp();
 
-                if (marketColection is null)
-                    continue;
+                var data = ToMarketAndSelection(message, correlationId);
 
-                foreach(var selection in market.Se)
+
+                if (data.Item1.Length > 0)
+                    BulkWrite(_marketCollection, data.Item1);
+
+                if (data.Item2.Length > 0)
+                    BulkWrite(_selectionCollection, data.Item2);
+
+                foreach (var market in message.Ma)
                 {
-                    var betStatus = selection.SeStId.GetBetStatus();
+                    var marketColection = _marketCollection.Find(f => f.MaId == market.MaId).FirstOrDefault();
+                    var fixtureSpecifier = message.FiSp;
 
-                    var payload = new
+                    if (marketColection is null)
+                        continue;
+
+                    foreach (var selection in market.Se)
                     {
-                        MarketId = market.MaId,
-                        SelectionId = selection.SeId,
-                        SelectionStatus = betStatus,
-                        //SettlementScore = message.Sc,
-                        DeadHeatFactor = 1
-                    };
+                        var betStatus = selection.SeStId.GetBetStatus();
 
-                    messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.bet.settlement", Guid.NewGuid().ToString());
+                        var payload = new
+                        {
+                            MarketId = market.MaId,
+                            SelectionId = selection.SeId,
+                            SelectionStatus = betStatus,
+                            //SettlementScore = message.Sc,
+                            DeadHeatFactor = 1
+                        };
+
+                        messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.bet.settlement", Guid.NewGuid().ToString());
+                    }
+
                 }
-                
             }
+            catch (Exception ex)
+            {
+                _logger.LogErrorEx($"ProcessOnMarketSettlementMessage Error: {ex.Message}--> {JsonSerializer.Serialize(message)}");
+                throw;
+            }
+            
         }
 
         public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
