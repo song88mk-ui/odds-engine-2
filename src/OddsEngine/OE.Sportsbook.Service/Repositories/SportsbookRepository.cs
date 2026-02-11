@@ -499,7 +499,7 @@ namespace OE.Sportsbook.Service.Repositories
                 //        ss => new MarketTranslationMDB 
                 //            { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray())
                 )
-                { IsUpsert = true });
+                { IsUpsert = false });
 
                 foreach (var selection in market.Se)
                 {
@@ -512,7 +512,7 @@ namespace OE.Sportsbook.Service.Repositories
                     //TODO
                     //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
                     )
-                    { IsUpsert = true });
+                    { IsUpsert = false });
                 }
             }
 
