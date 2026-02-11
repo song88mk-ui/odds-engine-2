@@ -143,7 +143,7 @@ namespace OE.Adapter.Service
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("{exception} {@stacktrace}", ex.Message, ex.StackTrace);
+                    _logger.LogErrorEx($"OEAdapter Error: {ex.Message} {ex.StackTrace} {payload}");
 
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
