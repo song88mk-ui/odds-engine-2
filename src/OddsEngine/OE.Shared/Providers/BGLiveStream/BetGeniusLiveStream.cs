@@ -58,15 +58,15 @@ namespace OE.Shared.Providers.BGLiveStream
                 _logger.LogInformation($"GetLiveStreams: GetBetGeniusFixtures Result : {JsonSerializer.Serialize(result)}");
 
                 var fixtures = result.Result;
-                if (fixtures == null || !fixtures.Any())
+                if (fixtures.Data == null || !fixtures.Data.Any())
                 {
                     _logger.LogInformation("GetLiveStreams: No LiveStreams available");
                     return new List<string>();
                 }
 
-                _logger.LogInformation($"GetLiveStreams Result: {fixtures.Count}");
+                _logger.LogInformation($"GetLiveStreams Result: {fixtures.Data.Count}");
 
-                var liveStreams = fixtures.Select(s => s.Id.ToString()).ToList();
+                var liveStreams = fixtures.Data.Select(s => s.Id.ToString()).ToList();
 
                 return liveStreams;
             }

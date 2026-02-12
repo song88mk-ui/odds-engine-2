@@ -11,7 +11,6 @@ using System.Diagnostics;
 using OE.Shared.Models.Provider.BetGenius;
 using OE.Shared.Models.Responses;
 using System.Net;
-using System.Collections.Generic;
 
 namespace OE.Shared.Repositories
 {
@@ -224,7 +223,7 @@ namespace OE.Shared.Repositories
             } // activity
         }
 
-        public async Task<BaseResponseDTO<List<BGEvent>>> GetBetGeniusFixtures(string token)
+        public async Task<BaseResponseDTO<BGEvents>> GetBetGeniusFixtures(string token)
         {
             using (var activity = _activitySource.StartActivity("betgenius.fixtures"))
             {
@@ -241,11 +240,11 @@ namespace OE.Shared.Repositories
 
                     if (response.IsSuccessStatusCode)
                     {
-                        var initialResult = JsonSerializer.Deserialize<List<BGEvent>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        var initialResult = JsonSerializer.Deserialize<BGEvents>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
 
                         activity?.SetStatus(ActivityStatusCode.Ok);
 
-                        var result = new BaseResponseDTO<List<BGEvent>>
+                        var result = new BaseResponseDTO<BGEvents>
                         {
                             StatusCode = StatusCode.Success,
                             Message = StatusCode.Success.ToString(),
@@ -260,11 +259,11 @@ namespace OE.Shared.Repositories
 
                         if (response.StatusCode == HttpStatusCode.NotFound)
                         {
-                            var result = new BaseResponseDTO<List<BGEvent>>
+                            var result = new BaseResponseDTO<BGEvents>
                             {
                                 StatusCode = StatusCode.Bet_Not_Found,
                                 Message = StatusCode.Bet_Not_Found.ToString(),
-                                Result = new List<BGEvent>()
+                                Result = new BGEvents()
                             };
 
                             return result;
@@ -272,11 +271,11 @@ namespace OE.Shared.Repositories
                         var responseMessage = await response.Content.ReadAsStringAsync();
                         _logger.LogError($"GetBetGeniusFixtures Error: {responseMessage}");
 
-                        return new BaseResponseDTO<List<BGEvent>>
+                        return new BaseResponseDTO<BGEvents>
                         {
                             StatusCode = StatusCode.Error,
                             Message = responseMessage,
-                            Result = new List<BGEvent>()
+                            Result = new BGEvents()
                         };
                     }
                 }
@@ -285,11 +284,11 @@ namespace OE.Shared.Repositories
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                     _logger.LogError($"GetBetGeniusFixtures Error: {ex.Message}-{ex.StackTrace}");
 
-                    return new BaseResponseDTO<List<BGEvent>>
+                    return new BaseResponseDTO<BGEvents>
                     {
                         StatusCode = StatusCode.Error,
                         Message = $"{StatusCode.Error.ToString().Replace('_', ' ')} ({ex.Message})",
-                        Result = new List<BGEvent>()
+                        Result = new BGEvents()
                     };
                 }
             } // activity

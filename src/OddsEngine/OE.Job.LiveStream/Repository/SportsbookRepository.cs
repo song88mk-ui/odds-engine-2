@@ -77,7 +77,6 @@ namespace OE.Job.LiveStream.Repository
 
                     var provider = providerFactory.Resolve((int)ch);
 
-                    //get livestream fixtures from provider
                     var liveStreams = await provider.GetLiveStreams().ConfigureAwait(false);
 
                     if (!liveStreams.Any())
@@ -105,7 +104,6 @@ namespace OE.Job.LiveStream.Repository
                         {
                             _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId} have {liveStream} permission.");
                         }
-                        //return result;
                     }
                 }
                 catch (Exception)
