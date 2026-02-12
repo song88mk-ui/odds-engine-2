@@ -118,15 +118,15 @@ namespace OE.Shared.Providers.BGLiveStream
                     return (false, string.Empty);
                 }
                     
-                _logger.LogInformation($"GetLiveStream Result for {fixtureId}: {JsonSerializer.Serialize(fixture)}");
-
                 var liveStreams = fixture.LiveStreams.Select(s => 
                     new { 
                         Id = s.Id, 
                         Pe = s.Permissions.Select(s => $"{s.Device}:{s.Region}").ToList(), 
                         Ot = s.Deliveries
                     });
-                
+
+                _logger.LogInformation($"GetLiveStream Result for {fixtureId}: {JsonSerializer.Serialize(liveStreams)}");
+
                 return (true, JsonSerializer.Serialize(liveStreams));
             }
             catch (Exception ex)

@@ -95,7 +95,6 @@ namespace OE.Job.LiveStream.Repository
                         continue;
                     }
 
-
                     foreach (var fixture in liveStreamFixtures)
                     {
                         _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId}");
@@ -107,15 +106,13 @@ namespace OE.Job.LiveStream.Repository
                         var result = await _fixtureCollection.BulkWriteAsync(ToFixture(fixture.Id, isLiveStream, liveStream), new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    _logger.LogError($"ProcessLiveStream: Error processing {ex.Message}-{ex.StackTrace}");
                     continue;
                 }
                 
             }
-
-
-            
 
             _logger.LogInformation($"ProcessLiveStream: Finished processing {fixtures.Count} fixtures.");
         }
