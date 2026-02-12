@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OE.Shared.Enums;
-using OE.Shared.Models;
 using OE.Shared.Utilities;
 using System;
 using System.Net.Http;
@@ -12,6 +11,7 @@ using System.Diagnostics;
 using OE.Shared.Models.Provider.BetGenius;
 using OE.Shared.Models.Responses;
 using System.Net;
+using System.Collections.Generic;
 
 namespace OE.Shared.Repositories
 {
@@ -223,5 +223,77 @@ namespace OE.Shared.Repositories
                 }
             } // activity
         }
+
+        public async Task<BaseResponseDTO<List<BGEvent>>> GetBetGeniusFixtures(string token)
+        {
+            using (var activity = _activitySource.StartActivity("betgenius.fixtures"))
+            {
+                
+                try
+                {
+                    _httpClient.DefaultRequestHeaders.Clear();
+                    _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+                    _httpClient.DefaultRequestHeaders.Add("x-api-key", $"{_configuration["Custom:BetGenius:Key"]}");
+
+                    var env = _configuration["Custom:BetGenius:Env"];
+
+                    var response = await _httpClient.GetAsync($"Video-v3/{env}/fixtures?bookingStatus=BOOKED");
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var initialResult = JsonSerializer.Deserialize<List<BGEvent>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+
+                        activity?.SetStatus(ActivityStatusCode.Ok);
+
+                        var result = new BaseResponseDTO<List<BGEvent>>
+                        {
+                            StatusCode = StatusCode.Success,
+                            Message = StatusCode.Success.ToString(),
+                            Result = initialResult
+                        };
+
+                        return result;
+                    }
+                    else
+                    {
+                        activity?.SetStatus(ActivityStatusCode.Error, response.StatusCode.ToString());
+
+                        if (response.StatusCode == HttpStatusCode.NotFound)
+                        {
+                            var result = new BaseResponseDTO<List<BGEvent>>
+                            {
+                                StatusCode = StatusCode.Bet_Not_Found,
+                                Message = StatusCode.Bet_Not_Found.ToString(),
+                                Result = new List<BGEvent>()
+                            };
+
+                            return result;
+                        }
+                        var responseMessage = await response.Content.ReadAsStringAsync();
+                        _logger.LogError($"GetBetGeniusFixtures Error: {responseMessage}");
+
+                        return new BaseResponseDTO<List<BGEvent>>
+                        {
+                            StatusCode = StatusCode.Error,
+                            Message = responseMessage,
+                            Result = new List<BGEvent>()
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+                    _logger.LogError($"GetBetGeniusFixtures Error: {ex.Message}-{ex.StackTrace}");
+
+                    return new BaseResponseDTO<List<BGEvent>>
+                    {
+                        StatusCode = StatusCode.Error,
+                        Message = $"{StatusCode.Error.ToString().Replace('_', ' ')} ({ex.Message})",
+                        Result = new List<BGEvent>()
+                    };
+                }
+            } // activity
+        }
+
     }
 }

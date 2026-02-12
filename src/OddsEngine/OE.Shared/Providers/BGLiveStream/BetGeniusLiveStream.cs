@@ -28,6 +28,55 @@ namespace OE.Shared.Providers.BGLiveStream
             _bgRepo = bgRepo;
         }
 
+        public async Task<List<string>> GetLiveStreams()
+        {
+            try
+            {
+                _logger.LogInformation($"GetLiveStreams Start");
+
+                var token = await _bgRepo.GetBetGeniusAuthorizationToken();
+
+                if (token.StatusCode != StatusCode.Success)
+                {
+                    _logger.LogError($"GetLiveStreams: GetBetGeniusAuthorizationToken Failed: {token.Message}-{JsonSerializer.Serialize(token)}");
+                    return new List<string>();
+                }
+
+                var result = await _bgRepo.GetBetGeniusFixtures(token.Result.IdToken);
+                if (result == null)
+                {
+                    _logger.LogError($"GetLiveStreams: GetBetGeniusFixtures Failed: null");
+                    return new List<string>();
+                }
+
+                if (result.StatusCode == StatusCode.Error)
+                {
+                    _logger.LogError($"GetLiveStreams: GetBetGeniusFixtures Failed: {result.Message}-{JsonSerializer.Serialize(result)}");
+                    return new List<string>();
+                }
+
+                _logger.LogInformation($"GetLiveStreams: GetBetGeniusFixtures Result : {JsonSerializer.Serialize(result)}");
+
+                var fixtures = result.Result;
+                if (fixtures == null || !fixtures.Any())
+                {
+                    _logger.LogInformation("GetLiveStreams: No LiveStreams available");
+                    return new List<string>();
+                }
+
+                _logger.LogInformation($"GetLiveStreams Result: {fixtures.Count}");
+
+                var liveStreams = fixtures.Select(s => s.Id.ToString()).ToList();
+
+                return liveStreams;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"GetLiveStream Error: {ex.Message}-{ex.StackTrace}");
+                return new List<string>();
+            }
+        }
+
         public async Task<(bool, string)> GetLiveStream(string fixtureId)
         {
             try

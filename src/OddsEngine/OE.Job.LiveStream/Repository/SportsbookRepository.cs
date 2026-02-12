@@ -9,7 +9,6 @@ using System;
 using System.Diagnostics.Metrics;
 using System.Threading.Tasks;
 using OE.Shared.Enums;
-using System.Text.Json;
 using System.Linq;
 using OE.Shared.Providers;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,27 +59,64 @@ namespace OE.Job.LiveStream.Repository
             _logger.LogDebug("ProcessLiveStream: Retrieving list of active fixtures");
 
             var fixtures = await _fixtureCollection.Find(fixtureFilter).Project<FixtureProjection>(fixtureProjection).ToListAsync();
-
             _logger.LogInformation($"ProcessLiveStream: Got {fixtures.Count} fixture record(s)");
-            foreach (var fixture in fixtures)
+
+            if (!fixtures.Any())
+                _logger.LogInformation($"ProcessLiveStream: Exiting");
+
+
+            foreach(var ch in Enum.GetValues(typeof(ChannelType)))
             {
-                if(fixture.Id == "92507724")
-                    _logger.LogInformation($"ProcessLiveStream: fixture {fixture}");
+                _logger.LogInformation($"ProcessLiveStream: {ch}");
 
-                using var scope = _scopeFactory.CreateScope();
-                var providerFactory =
-                    scope.ServiceProvider.GetRequiredService<ILiveStreamFactory>();
-
-                var provider = providerFactory.Resolve(fixture.ChTyId);
-
-                var (isLiveStream, liveStream) = await provider.GetLiveStream(fixture.PrFiId).ConfigureAwait(false);
-
-                if (isLiveStream)
+                try
                 {
-                    _logger.LogInformation($"ProcessLiveStream: fixture {fixture} have {liveStream} permission.");
+                    using var scope = _scopeFactory.CreateScope();
+                    var providerFactory =
+                        scope.ServiceProvider.GetRequiredService<ILiveStreamFactory>();
+
+                    var provider = providerFactory.Resolve((int)ch);
+
+                    //get livestream fixtures from provider
+                    var liveStreams = await provider.GetLiveStreams().ConfigureAwait(false);
+
+                    if (!liveStreams.Any())
+                    {
+                        _logger.LogInformation($"ProcessLiveStream: {ch} GetLiveStreams No livestream fixtures found");
+                        continue;
+                    }
+
+                    var liveStreamFixtures = fixtures.Where(f => f.ChTyId == (int)ch && liveStreams.Contains(f.PrFiId)).ToList();
+
+                    if (!liveStreamFixtures.Any())
+                    {
+                        _logger.LogInformation($"ProcessLiveStream: {ch} No livestream matches the active fixtures");
+                        continue;
+                    }
+
+
+                    foreach (var fixture in liveStreamFixtures)
+                    {
+                        _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId}");
+
+                        var (isLiveStream, liveStream) = await provider.GetLiveStream(fixture.PrFiId).ConfigureAwait(false);
+
+                        if (isLiveStream)
+                        {
+                            _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId} have {liveStream} permission.");
+                        }
+                        //return result;
+                    }
                 }
-                //return result;
+                catch (Exception)
+                {
+                    continue;
+                }
+                
             }
+
+
+            
 
             _logger.LogInformation($"ProcessLiveStream: Finished processing {fixtures.Count} fixtures.");
         }
