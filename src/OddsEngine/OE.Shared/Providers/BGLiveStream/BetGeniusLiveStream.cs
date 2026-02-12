@@ -118,8 +118,7 @@ namespace OE.Shared.Providers.BGLiveStream
                     return (false, string.Empty);
                 }
                     
-                _logger.LogInformation(
-                    $"GetLiveStream Result for {fixtureId}: {JsonSerializer.Serialize(fixture)}");
+                _logger.LogInformation($"GetLiveStream Result for {fixtureId}: {JsonSerializer.Serialize(fixture)}");
 
                 var liveStreams = fixture.LiveStreams.Select(s => 
                     new { 

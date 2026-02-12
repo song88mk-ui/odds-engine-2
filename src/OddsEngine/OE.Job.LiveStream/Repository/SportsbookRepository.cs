@@ -12,6 +12,8 @@ using OE.Shared.Enums;
 using System.Linq;
 using OE.Shared.Providers;
 using Microsoft.Extensions.DependencyInjection;
+using OE.Shared.Messages.OutgoingAdapterMessages;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace OE.Job.LiveStream.Repository
 {
@@ -99,11 +101,10 @@ namespace OE.Job.LiveStream.Repository
                         _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId}");
 
                         var (isLiveStream, liveStream) = await provider.GetLiveStream(fixture.PrFiId).ConfigureAwait(false);
-
                         if (isLiveStream)
-                        {
                             _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId} have {liveStream} permission.");
-                        }
+
+                        var result = await _fixtureCollection.BulkWriteAsync(ToFixture(fixture.Id, isLiveStream, liveStream), new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
                     }
                 }
                 catch (Exception)
@@ -119,6 +120,17 @@ namespace OE.Job.LiveStream.Repository
             _logger.LogInformation($"ProcessLiveStream: Finished processing {fixtures.Count} fixtures.");
         }
 
+        private WriteModel<Fixture>[] ToFixture(string id, bool isLiveStream, string liveStream)
+        {
+           return new WriteModel<Fixture>[]
+           {
+                new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq(f => f.Id, id),
+                    Builders<Fixture>.Update
+                        .Set(s => s.LiId, isLiveStream.ToString())
+                        .Set(s => s.GeAl, liveStream))
+                { IsUpsert = true }
+           };
+        }
     }
 
     public class FixtureProjection
