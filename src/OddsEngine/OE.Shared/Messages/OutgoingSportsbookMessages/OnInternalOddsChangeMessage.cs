@@ -86,6 +86,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string SeSp { get; set; }
         public string SeNa { get; set; }
         public int SoOr { get; set; }
+        public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; }
         //public List<SelectionTranslation> SelectionTranslations { get; set; }
     }

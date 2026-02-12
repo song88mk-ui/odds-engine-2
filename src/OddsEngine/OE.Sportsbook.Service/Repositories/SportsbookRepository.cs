@@ -81,6 +81,18 @@ namespace OE.Sportsbook.Service.Repositories
             }
 
             BulkWrite(_fixtureCollection, ToFixture(message));
+
+            var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
+
+            var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
+            var markets = _marketCollection.Find(marketFilter).ToList();
+
+            var selectionFilter = Builders<Selection>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
+            var selections = _selectionCollection.Find(selectionFilter).ToList();
+
+            var payload = PrepareInternalOddsChangeMessage(message, markets, selections, correlationId);
+
+            messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
         }
 
         public void ProcessOnMarketChangeMessage(IMessageBroker messageBroker, OnMarketChangeMessage message, string correlationId)
@@ -118,9 +130,7 @@ namespace OE.Sportsbook.Service.Repositories
 
             // TODO: Betstop Logic
 
-            //var fixture = _memCache.GetCache($"{FIXTURE_PREFIX}:{message.PrFiId}", () => GetFixtureProject(message.PrFiId), 24);
-
-            messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.onoddschange", Guid.NewGuid().ToString());
+            messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
         }
 
         public void ProcessOnMarketSettlementMessage(IMessageBroker messageBroker, OnMarketSettlementMessage message, string correlationId)
@@ -457,9 +467,8 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.SeNa, selection.SeNa)
                             .Set(s => s.Od, selection.Od)
                             .Set(s => s.IsAc, selection.IsAc)
-                            //.Set(s => s.SeSoOr, selection.SeSoOr) TODO
-                            //.Set(s => s.SeStId, 0)  TODO
-                            //.Set(s => s.SeStNa, "Pending")  TODO
+                            .Set(s => s.SeSoOr, selection.SoOr)
+                            .Set(s => s.SeStId, selection.SeStId)
                             .Set(s => s.SeSp, selection.SeSp)
                             .Set(s => s.FiStDa, message.FiStDa)
                             .Set(s => s.FiStId, message.FiStId)
@@ -538,7 +547,6 @@ namespace OE.Sportsbook.Service.Repositories
             }
         }
 
-
         private OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnMarketChangeMessage message, string correlationId)
         {
             //var fixtureGeneration = GetFixtureId(message.FixtureSpecifier);            
@@ -569,7 +577,7 @@ namespace OE.Sportsbook.Service.Repositories
                         IsAc = selection.IsAc,
                         SeSp = selection.SeSp,
                         SeNa = selection.SeNa,
-                        SoOr = GetSortOrder(selection.SeTeId),
+                        SoOr = selection.SoOr,
                         ClOd = selection.ClOd,
                         //SelectionTranslations = selection.SelectionTranslations //TODO
                     });
@@ -617,6 +625,119 @@ namespace OE.Sportsbook.Service.Repositories
                     MaStNa = market.MaStNa,
                     CaStId = market.CaStId,
                     MaSp = market.MaSp,
+                    MaNa = market.MaNa,
+                    SoOr = GetSortOrder(market.MaTeId),
+                    ClCo = market.ClCo,
+                    ClCoMa = market.ClCoMa,
+                    CaStNa = market.CaStNa,
+                    PrMaId = market.PrMaId,
+                    //MarketTranslations = market.MarketTranslations, //TODO
+                    Se = selections
+                });
+            }
+
+
+            return new OnInternalOddsChangeMessage
+            {
+                PrFiId = message.PrFiId,
+                FiId = message.FiId,
+                SpId = message.SpId,
+                SpNa = message.SpNa,
+                SegId = message.SegId,
+                SegNa = message.SegNa,
+                LeId = message.LeId,
+                LeNa = message.LeNa,
+                FiNa = message.FiNa,
+                FiStDa = message.FiStDa,
+                FiStId = message.FiStId,
+                FiStNa = ((FixtureStatus)message.FiStId).ToString(),
+                Sc = message.Sc,
+                FiSp = message.FiSp,
+                IsOfLi = message.IsOfLi,
+                HoReCa = message.HoReCa,
+                AwReCa = message.AwReCa,
+                CuPe = message.CuPe,
+                CuMi = message.CuMi,
+                CuSe = message.CuSe,
+                FiTyId = message.FiTyId,
+                FiTyNa = ((FixtureType)message.FiTyId).ToString(),
+                ToTi = message.ToTi,
+                Fa = FavoriteSelection.None.ToString(),
+                SoOr = 1,
+                ClCo = message.ClCo,
+                CoId = correlationId,
+                IsSu = message.IsSu,
+                //SportTranslations = message.SportTranslations, //TODO
+                //SegmentTranslations = message.SegmentTranslations,  //TODO
+                //LeagueTranslations = message.LeagueTranslations,  //TODO
+                //FixtureTranslations = message.FixtureTranslations,  //TODO
+                //IsInsert = fixtureGeneration.Item2,
+                //IsInsert = true,
+                HoId = message.HoId,
+                AwId = message.AwId,
+                //LeagueBetradarId = message.LeagueBetradarId,
+                //HomeBetradarId = message.HomeBetradarId,
+                //AwayBetradarId = message.AwayBetradarId,
+                //CuSer = message.CuSer,
+                //PeriodScores = message.PeriodScores.Select(s => new InternalPeriodScore
+                //{
+                //    Home = s.Home,
+                //    Away = s.Away,
+                //    MatchStatusCode = s.MatchStatusCode,
+                //    PeriodType = s.PeriodType
+                //}).ToList()
+                Ma = markets
+            };
+        }
+        private OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnFixtureChangeMessage message, List<Market> filteredMarkets, List<Selection> filteredSelections, string correlationId)
+        {    
+            var markets = new List<InternalMarketMessage>();
+
+            foreach (var market in filteredMarkets)
+            {
+                var marketSelections = filteredSelections.Where(s => s.MaId == market.MaId).ToList();
+                if (marketSelections.Count == 0) continue;
+
+                var selections = new List<InternalSelectionMessage>();
+
+                foreach (var selection in marketSelections)
+                {
+                    selections.Add(new InternalSelectionMessage
+                    {
+                        PrFiId = message.PrFiId,
+                        MaTeId = market.MaTeId,
+                        SeTeId = selection.SeTeId,
+                        //MaSp = market.MaSp,
+                        SeId = selection.SeId,
+                        Od = selection.Od,
+                        Pr = selection.Pr,
+                        WoPr = selection.WoPr,
+                        LoPr = selection.LoPr,
+                        VoPr = selection.VoPr,
+                        HaWoPr = selection.HaWoPr,
+                        HaLoPr = selection.HaLoPr,
+                        IsAc = selection.IsAc,
+                        SeSp = selection.SeSp,
+                        SeNa = selection.SeNa,
+                        SoOr = selection.SeSoOr,
+                        SeStId = selection.SeStId
+                        //ClOd = selection.ClOd,
+                        //SelectionTranslations = selection.SelectionTranslations //TODO
+                    });
+
+                    //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
+                }
+
+                markets.Add(new InternalMarketMessage
+                {
+                    PrFiId = message.PrFiId,
+                    MaId = market.MaId,
+                    MaTeId = market.MaTeId,
+                    Li = market.Li,
+                    MaStId = market.MaStId,
+                    MaStNa = market.MaStNa,
+                    CaStId = market.CaStId,
+                    //MaSp = market.MaSp,
                     MaNa = market.MaNa,
                     SoOr = GetSortOrder(market.MaTeId),
                     ClCo = market.ClCo,

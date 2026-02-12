@@ -50,6 +50,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string SeSp { get; set; }
         public string SeNa { get; set; }
         public int SoOr { get; set; }
+        public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; } = new List<ClientOddsMessage>();
     }
 
