@@ -127,7 +127,7 @@ namespace OE.Shared.Repositories
         {
             using (var activity = _activitySource.StartActivity("betgenius.fixture"))
             {
-                var cacheKey = $"bg:fixture";
+                var cacheKey = $"bg:fixture:{fixtureId}";
                 var cache = _memCache.GetCache<BaseResponseDTO<BGEvent>>(cacheKey);
 
                 if (cache != null)
