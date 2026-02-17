@@ -11,7 +11,6 @@ using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.WebSocket.Service.Telemetry;
 using System.Text.Json.Serialization;
-using System.Reflection.Metadata.Ecma335;
 
 namespace OE.WebSocket.Service.Repository
 {
@@ -34,7 +33,7 @@ namespace OE.WebSocket.Service.Repository
         private readonly List<int> _fixtureStatus = new List<int> { (int)FixtureStatus.Prematch, (int)FixtureStatus.Live };
         private static List<string> _asianClCo = new List<string>();
         // TODO: doc: what are these numbers?
-        private static List<string> _MaTeIds = new List<string> { "16", "18", "66", "68" };
+        private static List<string> _MaTeIds = new List<string> {  }; //"16", "18", "66", "68"
 
         private readonly List<int> _marketStatusToRemove = new List<int> { (int)MarketStatus.Inactive, (int)MarketStatus.Cancelled, (int)MarketStatus.Settled, (int)MarketStatus.HandedOver };
         private readonly List<int> _marketStatusToAdd = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
@@ -954,7 +953,7 @@ namespace OE.WebSocket.Service.Repository
 
                         if (playerPropMaTeIds.Contains(MaTeId))
                         {
-                            if (selection.SeTeId != "12" || selection.SeTeId != "13")
+                            if (selection.SeTeId != "12" && selection.SeTeId != "13")
                             {
                                 var tempOdds = Math.Round(selection.Od - (selection.Od * targetMargin), 2);
 

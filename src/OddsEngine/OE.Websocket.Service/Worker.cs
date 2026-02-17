@@ -288,12 +288,6 @@ namespace OE.Websocket.Service
                             _messagesAllMarketsOddsChange.Add(onOddsChange);
                             break;
 
-                        //TODO:
-                        //case "OnBetStopFixture":
-                        //    var onBetStop = JsonSerializer.Deserialize<OnInternalBetStopFixtureMessage>(payload);
-                        //    await _sportsbookRepository.ProcessBetStopFixture(onBetStop, _hubConnection);
-                        //    break;
-
                         case MessageType.ON_BET_STOP_GLOBAL:
                             var onBetStopGlobal = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
                             await _sportsbookRepository.ProcessBetStopGlobal(onBetStopGlobal, _hubConnection);
