@@ -23,9 +23,9 @@ public class Instrumentation : IDisposable
                 "The timestamp of the last successful or failed execution of the job");
         this.JobSuccessResult = this.meter.CreateGauge<short>("job", "success",
                 "A binary gauge metric that is if the job was successful and 0 if it failed");
-        this.JobRunTotal = this.meter.CreateCounter<long>("job.runs", "total",
+        this.JobRunTotal = this.meter.CreateCounter<long>("job.runs.total", "total",
                 "The total number of times the job has ben executed");
-        this.JobRunProcessedTotal = this.meter.CreateCounter<long>("job.run.processed", "total",
+        this.JobRunProcessedTotal = this.meter.CreateCounter<long>("job.run.processed.total", "total",
                 "The total number of records processed on the job run");
     }
 

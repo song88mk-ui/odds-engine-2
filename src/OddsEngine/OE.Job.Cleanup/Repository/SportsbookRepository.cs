@@ -29,13 +29,13 @@ namespace OE.Job.Cleanup.Repository
         //private IMongoCollection<MarketMapping> _marketMappingCollection;
         //private IMongoCollection<SelectionMapping> _selectionMappingCollection;
 
-        private readonly Counter<long> _jobRunDeletedFixtures;
+        private readonly Counter<long> _jobRunFixturesDeletedTotal;
 
         public SportsbookRepository(IConfiguration configuration, ILogger<SportsbookRepository> logger, Instrumentation instrumentation)
         {
             _configuration = configuration;
             _logger = logger;
-            _jobRunDeletedFixtures = instrumentation.JobRunDeletedFixtures;
+            _jobRunFixturesDeletedTotal = instrumentation.JobRunFixturesDeletedTotal;
 
             _sportRetention = _configuration.GetValue<int>("Custom:SportRetention", -30);
 
@@ -99,8 +99,8 @@ namespace OE.Job.Cleanup.Repository
                 var fixtureCollectionFilter = Builders<Fixture>.Filter.Where(c => c.FiId == fixture.FiId);
                 await _fixtureCollection.DeleteOneAsync(fixtureCollectionFilter);
 
-                if (_jobRunDeletedFixtures.Enabled)
-                    _jobRunDeletedFixtures.Add(1);
+                if (_jobRunFixturesDeletedTotal.Enabled)
+                    _jobRunFixturesDeletedTotal.Add(1);
 
                 _logger.LogInformation("Removed from Fixture: SportId={sportId} Remaining = {remaining}",
                         fixture.SpId, totalCount--);

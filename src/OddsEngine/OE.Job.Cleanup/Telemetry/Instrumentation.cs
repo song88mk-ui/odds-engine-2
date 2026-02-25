@@ -20,9 +20,9 @@ public class Instrumentation : IDisposable
                 "The timestamp of the last successful or failed execution of the job");
         this.JobSuccessResult = this.meter.CreateGauge<short>("job", "success",
                 "A binary gauge metric that is if the job was successful and 0 if it failed");
-        this.JobRunTotal = this.meter.CreateCounter<long>("job.runs", "total",
+        this.JobRunTotal = this.meter.CreateCounter<long>("job.runs.total", "total",
                 "The total number of times the job has ben executed");
-        this.JobRunDeletedFixtures = this.meter.CreateCounter<long>("job.run.fixtures.deleted", "total",
+        this.JobRunFixturesDeletedTotal = this.meter.CreateCounter<long>("job.run.fixtures.deleted.total", "total",
                 "The total number of records processed on the job run");
     }
 
@@ -30,7 +30,7 @@ public class Instrumentation : IDisposable
 
     public Counter<long> JobLastExecutionTimestampSeconds { get; }
     public Counter<long> JobRunTotal { get; }
-    public Counter<long> JobRunDeletedFixtures { get; }
+    public Counter<long> JobRunFixturesDeletedTotal { get; }
     public Gauge<short> JobSuccessResult { get; }
 
     public void Dispose()
