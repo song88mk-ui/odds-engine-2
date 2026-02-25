@@ -18,9 +18,9 @@ namespace OE.Job.LiveStream
         private readonly IConfiguration _configuration;
 
         private readonly ActivitySource _activitySource;
-        private readonly Counter<long> _jobLastExecutionTimestampSeconds;
+        private readonly Gauge<long> _jobLastExecutionTimestampSeconds;
         private readonly Gauge<short> _jobSuccessResult;
-        private readonly Counter<long> _jobRunTotal;
+        private readonly Counter<long> _jobRunCount;
 
         public Worker(ILogger<Worker> logger, ISportsbookRepository sportsbookRepository, IConfiguration configuration, Instrumentation instrumentation)
         {
@@ -31,7 +31,7 @@ namespace OE.Job.LiveStream
             _activitySource = instrumentation.ActivitySource;
             _jobLastExecutionTimestampSeconds = instrumentation.JobLastExecutionTimestampSeconds;
             _jobSuccessResult = instrumentation.JobSuccessResult;
-            _jobRunTotal = instrumentation.JobRunTotal;
+            _jobRunCount = instrumentation.JobRunCount;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -44,14 +44,14 @@ namespace OE.Job.LiveStream
                 {
                     // mark the counter as executed to identify the app is running
                     if (_jobLastExecutionTimestampSeconds.Enabled)
-                        _jobLastExecutionTimestampSeconds.Add(DateTimeOffset.Now.ToUnixTimeSeconds());
+                        _jobLastExecutionTimestampSeconds.Record(DateTimeOffset.Now.ToUnixTimeSeconds());
 
                     if (!_configuration.GetValue<bool>("Custom:Enabled", false))
                         throw new InvalidOperationException("Work is disabled! Check if the crew is allowed to work.");
 
                     _logger.LogInformation("Dispatching work now.");
-                    if (_jobRunTotal.Enabled)
-                        _jobRunTotal.Add(1);
+                    if (_jobRunCount.Enabled)
+                        _jobRunCount.Add(1);
 
                     await _sportsbookRepository.ProcessLiveStream();
 

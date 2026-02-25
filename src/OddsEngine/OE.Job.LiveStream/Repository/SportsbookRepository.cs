@@ -26,13 +26,13 @@ namespace OE.Job.LiveStream.Repository
 
         private IMongoCollection<Fixture> _fixtureCollection;
 
-        private readonly Counter<long> _jobRunUpdatedFixtures;
+        private readonly Counter<long> _jobRunFixturesUpdated;
 
         public SportsbookRepository(IConfiguration configuration, ILogger<SportsbookRepository> logger, Instrumentation instrumentation, IServiceScopeFactory scopeFactory, IBetGeniusRepository bgRepo)
         {
             _configuration = configuration;
             _logger = logger;
-            _jobRunUpdatedFixtures = instrumentation.JobRunUpdatedFixtures;
+            _jobRunFixturesUpdated = instrumentation.JobRunFixturesUpdated;
 
             var mongoClient = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
             var db = mongoClient.GetDatabase("Sportsbook");
@@ -104,6 +104,8 @@ namespace OE.Job.LiveStream.Repository
                             _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId} have {liveStream} permission.");
 
                         var result = await _fixtureCollection.BulkWriteAsync(ToFixture(fixture.Id, isLiveStream, liveStream), new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
+                        if (_jobRunFixturesUpdated.Enabled)
+                            _jobRunFixturesUpdated.Add(1);
                     }
                 }
                 catch (Exception ex)
@@ -111,7 +113,7 @@ namespace OE.Job.LiveStream.Repository
                     _logger.LogError($"ProcessLiveStream: Error processing {ex.Message}-{ex.StackTrace}");
                     continue;
                 }
-                
+
             }
 
             _logger.LogInformation($"ProcessLiveStream: Finished processing {fixtures.Count} fixtures.");
