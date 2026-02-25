@@ -86,9 +86,9 @@ namespace OE.WebSocket.Service.Repository
                     finalMarkets = message.Ma.Where(c => mainMarkets.Item2.Contains(c.MaTeId)).ToList();
                 else
                  finalMarkets = message.Ma;
-                
-                _logger.LogInformation($"ProcessOddsChangeForMainMarkets: {JsonSerializer.Serialize(finalMarkets)}");
-                _logger.LogInformation($"ProcessOddsChangeForMainMarkets: {JsonSerializer.Serialize(message.Ma)}");
+
+                _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@finalMarkets}", JsonSerializer.Serialize(finalMarkets));
+                _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@markets}", JsonSerializer.Serialize(message.Ma));
 
                 if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
@@ -325,7 +325,7 @@ namespace OE.WebSocket.Service.Repository
                     : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToHashSet();
 
                 var cache = _memCache.GetCache<MarketCount>(key);
-                
+
                 HashSet<long> currentMarketIds;
 
                 if (cache == null)
@@ -337,7 +337,7 @@ namespace OE.WebSocket.Service.Repository
                     var fixture = result.Result.Fixtures.FirstOrDefault();
                     if (fixture == null)
                         return;
-                    
+
                     currentMarketIds = fixture.Markets.Select(m => Convert.ToInt64(m.MarketId)).ToHashSet();
                 }
                 else
@@ -463,7 +463,7 @@ namespace OE.WebSocket.Service.Repository
                     var marketTemplates = item.SelectMany(s => s.MarketTemplates).Select(s => s.MaTeId).Distinct().ToList();
                     _mainMarketTemplates.Add(new Tuple<int, List<string>>(item.Key, marketTemplates));
                 }
-                _logger.LogInformation($"ProcessMainMarketTemplates: {JsonSerializer.Serialize(_mainMarketTemplates)}");
+                _logger.LogDebug("ProcessMainMarketTemplates: {@marketTemplates}", JsonSerializer.Serialize(_mainMarketTemplates));
             }
             catch (Exception e)
             {
@@ -1584,7 +1584,7 @@ namespace OE.WebSocket.Service.Repository
                     FiTyId = message.FiTyId,
                     FiTyNa = message.FiTyNa,
                     Sc = message.Sc,
-                    CuPe = message.CuPe.ToString(), 
+                    CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
@@ -1683,7 +1683,7 @@ namespace OE.WebSocket.Service.Repository
                     FiTyId = message.FiTyId,
                     FiTyNa = message.FiTyNa,
                     Sc = message.Sc,
-                    CuPe = message.CuPe.ToString(), 
+                    CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
@@ -1897,7 +1897,7 @@ namespace OE.WebSocket.Service.Repository
                     FiTyId = message.FiTyId,
                     FiTyNa = message.FiTyNa,
                     Sc = message.Sc,
-                    CuPe = message.CuPe.ToString(), 
+                    CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
