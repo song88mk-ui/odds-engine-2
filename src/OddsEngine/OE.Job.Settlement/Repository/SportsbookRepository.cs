@@ -77,8 +77,8 @@ namespace OE.Job.Settlement.Repository
 
                 try
                 {
-                    if ((fixture.FiStDa < DateTime.UtcNow && fixture.IsOfLi == false && fixture.FiStId == 0)
-                        || (fixture.FiTyId == (int)FixtureType.Match && fixture.FiStDa < DateTime.UtcNow.AddDays(-1)))
+                    if ((fixture.FiStDa < DateTime.UtcNow && fixture.IsOfLi == false && fixture.FiStId == 0) //Prematch fixture that is already started
+                        || (fixture.FiTyId == (int)FixtureType.Match && fixture.FiStDa < DateTime.UtcNow.AddHours(6)))
                     {
                         var payload = new OnFixtureChangeMessage
                         {
@@ -105,7 +105,15 @@ namespace OE.Job.Settlement.Repository
                             ClCo = fixture.ClCo,
                             IsOfLi = fixture.IsOfLi,
                             TiSe = timestampDelivered,
-                            TiRe = timestampDelivered
+                            TiRe = timestampDelivered,
+                            CuPe = fixture.CuPe,
+                            AwReCa = fixture.AwReCa,
+                            CuMi = fixture.CuMi,
+                            CuSe = fixture.CuSe,
+                            SoOr = fixture.FiSoOr,
+                            ToTi = fixture.ToTi,
+                            StUr = fixture.StUr,
+                            IsBo = fixture.IsBo
                         };
 
                         messageBroker.Publish(payload, MessageType.ON_FIXTURE_CHANGE, $"r.bg.receiver.{MessageType.ON_FIXTURE_CHANGE.ToLower()}", Guid.NewGuid().ToString());
