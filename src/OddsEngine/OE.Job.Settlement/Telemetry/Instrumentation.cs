@@ -25,7 +25,7 @@ public class Instrumentation : IDisposable
                 "A binary gauge metric that is if the job was successful and 0 if it failed");
         this.JobRunTotal = this.meter.CreateCounter<long>("job.runs", "total",
                 "The total number of times the job has ben executed");
-        this.JobRunProcessedTotal = this.meter.CreateCounter<long>("job.run.processed.total", "total",
+        this.JobRunProcessedTotal = this.meter.CreateCounter<long>("job.run.processed", "total",
                 "The total number of records processed on the job run");
     }
 
