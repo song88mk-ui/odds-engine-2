@@ -14,9 +14,9 @@ namespace OE.Job.Settlement
 
         private readonly ActivitySource _activitySource;
         private readonly Histogram<double> _jobDurationMs;
-        private readonly Counter<long> _jobLastExecutionTimestampSeconds;
+        private readonly Gauge<long> _jobLastExecutionTimestampSeconds;
         private readonly Gauge<short> _jobSuccessResult;
-        private readonly Counter<long> _jobRunTotal;
+        private readonly Counter<long> _jobRunCount;
 
         public Worker(ILogger<Worker> logger, ISportsbookRepository sportsbookRepository, IMessageBroker messageBroker, Instrumentation instrumentation)
         {
@@ -27,7 +27,7 @@ namespace OE.Job.Settlement
             _jobDurationMs = instrumentation.JobDurationMs;
             _jobLastExecutionTimestampSeconds = instrumentation.JobLastExecutionTimestampSeconds;
             _jobSuccessResult = instrumentation.JobSuccessResult;
-            _jobRunTotal = instrumentation.JobRunTotal;
+            _jobRunCount = instrumentation.JobRunCount;
         }
 
         public override Task StartAsync(CancellationToken cancellationToken)
@@ -54,8 +54,8 @@ namespace OE.Job.Settlement
                 try
                 {
                     _logger.LogInformation("Processing settlements");
-                    if (_jobRunTotal.Enabled)
-                        _jobRunTotal.Add(1);
+                    if (_jobRunCount.Enabled)
+                        _jobRunCount.Add(1);
 
                     await _sportsbookRepository.ProcessSettlement(_messageBroker);
 
@@ -63,7 +63,7 @@ namespace OE.Job.Settlement
                     {
                         _jobSuccessResult.Record(1);
                         _jobDurationMs.Record(sw.Elapsed.TotalMilliseconds);
-                        _jobLastExecutionTimestampSeconds.Add(DateTimeOffset.Now.ToUnixTimeSeconds());
+                        _jobLastExecutionTimestampSeconds.Record(DateTimeOffset.Now.ToUnixTimeSeconds());
                     }
 
                     _logger.LogInformation("Done at: {time}", DateTimeOffset.Now);
