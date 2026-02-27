@@ -80,12 +80,15 @@ namespace OE.Sportsbook.Service.Repositories
                 _logger.LogWarning("null at StUr");
             }
 
-            BulkWrite(_fixtureCollection, ToFixture(message));
-
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
 
             var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
             var markets = _marketCollection.Find(marketFilter).ToList();
+
+            if(!markets.Any())
+                message.FiStId = (int)FixtureStatus.Closed;
+
+            BulkWrite(_fixtureCollection, ToFixture(message));
 
             var selectionFilter = Builders<Selection>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
             var selections = _selectionCollection.Find(selectionFilter).ToList();
