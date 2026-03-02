@@ -443,6 +443,8 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.CaStNa, market.CaStNa)
                         .Set(s => s.ClCo, market.ClCo)
                         .Set(s => s.ClCoMa, market.ClCoMa)
+                        .Set(s => s.CaStId, market.CaStId)
+                        .Set(s => s.CaStNa, market.CaStNa)
                 //TODO
                 //.AddToSetEach(s => s.MaNaTr, 
                 //    market.MarketTranslations.Select(

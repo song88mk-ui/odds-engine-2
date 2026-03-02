@@ -130,6 +130,8 @@ namespace OE.UOF.Client.Repository
                     MarketStatusId = s.MaStId,
                     MarketStatusName = ((MarketStatus)s.MaStId).ToString(),
                     MarketSpecifier = s.MaSp,
+                    CashOutStatusId = s.CaStId,
+                    CashOutStatusName = s.CaStNa,
                     //TODO: check the comment below
                     //NextBetStop = s.NextBetStop,
                     //StartTime = s.StartTime,

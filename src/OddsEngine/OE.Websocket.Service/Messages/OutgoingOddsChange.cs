@@ -66,6 +66,8 @@
         public int SoOr { get; set; }
         public bool IsIn { get; set; }
         public bool IsBeBu { get; set; }
+        public int CaStId { get; set; }
+        public string CaStNa { get; set; }
         public List<OutgoingMarketTranslation> MaNaTr { get; set; }
         public List<OutgoingSelection> Se { get; set; }
     }

@@ -1484,6 +1484,8 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = market.SoOr,
                     //IsIn = market.IsInsert,
                     IsBeBu = isMarketBetBuilder,
+                    CaStId = market.CaStId,
+                    CaStNa = market.CaStNa,
                     //MaNaTr = market.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                     //{
                     //    LaCo = mt.LanguageCode,
@@ -1623,6 +1625,8 @@ namespace OE.WebSocket.Service.Repository
                         MaStNa = m.MaStNa,
                         SoOr = m.SoOr,
                         IsBeBu = false,
+                        CaStId = m.CaStId,
+                        CaStNa = m.CaStNa,
                         //TODO
                         //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                         //{
@@ -1721,7 +1725,9 @@ namespace OE.WebSocket.Service.Repository
                         Li = m.Li,
                         MaStId = m.MaStId,
                         MaStNa = m.MaStNa,
-                        SoOr = m.SoOr,
+                        SoOr = m.SoOr,                        
+                        CaStId = m.CaStId,
+                        CaStNa = m.CaStNa,
                         //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                         //{
                         //    LaCo = mt.LanguageCode,
@@ -1862,6 +1868,8 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = marketSortOrder.Where(c => c.Item1 == market.MaTeId).Select(s => s.Item2).FirstOrDefault(),
                     //IsIn = market.IsInsert,
                     IsBeBu = isMarketBetBuilder,
+                    CaStId = market.CaStId,
+                    CaStNa = market.CaStNa,
                     //TODO
                     //MaNaTr = market.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                     //{

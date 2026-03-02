@@ -18,6 +18,8 @@ namespace OE.UOF.Client.Models
         public long? NextBetStop { get; set; }
         public long? StartTime { get; set; }
         public long? EndTime { get; set; }
+        public string CashOutStatusName { get; set; }
+        public int CashOutStatusId { get; set; }
         public List<OFMarketTranslation> MarketNameTranslations { get; set; }
         public List<OFSelectionMessage> Selections { get; set; }
     }
