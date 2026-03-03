@@ -3,6 +3,8 @@
     public static class MessageType
     {
         public const string ON_BG_PROCESS_MESSAGE = "OnProcessMessage";
+        public const string ON_BG_FIXTURE_CLOSE = "OnFixtureClose";
+        public const string ON_BG_MARKET_CLOSE = "OnMarketClose";
         public const string ON_BG_ON_MATCH_SUMMARY = "OnMatchSummary";
         public const string ON_BG_OTHER_MESSAGE = "OnOtherMessage";
 
