@@ -15,6 +15,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using OE.Shared.Constants;
+using OE.Shared.Enums;
 
 namespace OE.Websocket.Service
 {
@@ -280,6 +281,9 @@ namespace OE.Websocket.Service
                     {
                         case MessageType.ON_ODDS_CHANGE:
                             var onOddsChange = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
+
+                            if(onOddsChange.FiStId == (int)FixtureStatus.Closed)
+                                _logger.LogInformation($"FixtureId:{onOddsChange} {msgType} Fixture closed");
 
                             _messagesMarketCount.Add(onOddsChange);
                             _messagesTopFixtures.Add(onOddsChange);
