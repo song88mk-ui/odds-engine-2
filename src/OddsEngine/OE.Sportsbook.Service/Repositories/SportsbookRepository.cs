@@ -85,9 +85,6 @@ namespace OE.Sportsbook.Service.Repositories
             var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
             var markets = _marketCollection.Find(marketFilter).ToList();
 
-            if(!markets.Any())
-                message.FiStId = (int)FixtureStatus.Closed;
-
             BulkWrite(_fixtureCollection, ToFixture(message));
 
             var selectionFilter = Builders<Selection>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
