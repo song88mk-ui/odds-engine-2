@@ -78,7 +78,7 @@ namespace OE.Job.Settlement.Repository
                 try
                 {
                     if ((fixture.FiStDa < DateTime.UtcNow && fixture.IsOfLi == false && fixture.FiStId == 0) //Prematch fixture that is already started
-                        || (fixture.FiTyId == (int)FixtureType.Match && fixture.FiStDa < DateTime.UtcNow.AddHours(6)))
+                        || (fixture.FiTyId == (int)FixtureType.Match && fixture.FiStDa.AddHours(6) < DateTime.UtcNow))
                     {
                         var payload = new OnFixtureChangeMessage
                         {
