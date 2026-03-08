@@ -1659,6 +1659,11 @@ namespace OE.WebSocket.Service.Repository
                 _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
             }
 
+            if(message.FiStId == (int)FixtureStatus.Closed)
+                _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnOddsChange Closed");
+            if (message.FiStId == (int)FixtureStatus.Ended)
+                _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnOddsChange Ended");
+
             await PublishToWebSocket("PublishOddsChangeForMainMarkets", hubConnection, payload);
         }
 

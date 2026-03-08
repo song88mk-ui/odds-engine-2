@@ -70,16 +70,6 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
-            if (string.IsNullOrEmpty(message.SpNa))
-            {
-                _logger.LogInformationEx($"null SpNa --> {JsonSerializer.Serialize(message)}");
-            }
-
-            if (string.IsNullOrEmpty(message.StUr))
-            {
-                _logger.LogWarning("null at StUr");
-            }
-
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
 
             var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
@@ -92,6 +82,8 @@ namespace OE.Sportsbook.Service.Repositories
 
             var payload = PrepareInternalOddsChangeMessage(message, markets, selections, correlationId);
 
+            _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnFixtureChange {message.FiStId} sending odds change");
+
             messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
         }
 
@@ -99,11 +91,6 @@ namespace OE.Sportsbook.Service.Repositories
         {
             if (!message.Ma.Any())
                 return;
-
-            if (string.IsNullOrEmpty(message.SpNa))
-            {
-                _logger.LogInformationEx($"null SpNa --> {JsonSerializer.Serialize(message)}");
-            }
 
             var payload = PrepareInternalOddsChangeMessage(message, correlationId);
 
