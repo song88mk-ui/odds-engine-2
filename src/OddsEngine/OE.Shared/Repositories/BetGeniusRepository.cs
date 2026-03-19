@@ -11,6 +11,7 @@ using System.Diagnostics;
 using OE.Shared.Models.Provider.BetGenius;
 using OE.Shared.Models.Responses;
 using System.Net;
+using System.Collections.Generic;
 
 namespace OE.Shared.Repositories
 {
@@ -227,7 +228,7 @@ namespace OE.Shared.Repositories
         {
             using (var activity = _activitySource.StartActivity("betgenius.fixtures"))
             {
-                
+
                 try
                 {
                     _httpClient.DefaultRequestHeaders.Clear();
@@ -236,48 +237,63 @@ namespace OE.Shared.Repositories
 
                     var env = _configuration["Custom:BetGenius:Env"];
 
-                    var response = await _httpClient.GetAsync($"Video-v3/{env}/fixtures?bookingStatus=BOOKED");
+                    var allEvents = new List<BGEvent>();
 
-                    if (response.IsSuccessStatusCode)
+                    string url = $"Video-v3/{env}/fixtures?bookingStatus=BOOKED";
+
+                    while (!string.IsNullOrEmpty(url))
                     {
-                        var initialResult = JsonSerializer.Deserialize<BGEvents>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        var response = await _httpClient.GetAsync(url);
 
-                        activity?.SetStatus(ActivityStatusCode.Ok);
-
-                        var result = new BaseResponseDTO<BGEvents>
+                        if (!response.IsSuccessStatusCode)
                         {
-                            StatusCode = StatusCode.Success,
-                            Message = StatusCode.Success.ToString(),
-                            Result = initialResult
-                        };
+                            activity?.SetStatus(ActivityStatusCode.Error, response.StatusCode.ToString());
 
-                        return result;
-                    }
-                    else
-                    {
-                        activity?.SetStatus(ActivityStatusCode.Error, response.StatusCode.ToString());
-
-                        if (response.StatusCode == HttpStatusCode.NotFound)
-                        {
-                            var result = new BaseResponseDTO<BGEvents>
+                            if (response.StatusCode == HttpStatusCode.NotFound)
                             {
-                                StatusCode = StatusCode.Bet_Not_Found,
-                                Message = StatusCode.Bet_Not_Found.ToString(),
+                                return new BaseResponseDTO<BGEvents>
+                                {
+                                    StatusCode = StatusCode.Bet_Not_Found,
+                                    Message = StatusCode.Bet_Not_Found.ToString(),
+                                    Result = new BGEvents()
+                                };
+                            }
+
+                            var responseMessage = await response.Content.ReadAsStringAsync();
+                            _logger.LogError($"GetBetGeniusFixtures Error: {responseMessage}");
+
+                            return new BaseResponseDTO<BGEvents>
+                            {
+                                StatusCode = StatusCode.Error,
+                                Message = responseMessage,
                                 Result = new BGEvents()
                             };
-
-                            return result;
                         }
-                        var responseMessage = await response.Content.ReadAsStringAsync();
-                        _logger.LogError($"GetBetGeniusFixtures Error: {responseMessage}");
 
-                        return new BaseResponseDTO<BGEvents>
+                        var pageResult = JsonSerializer.Deserialize<BGEvents>(
+                            await response.Content.ReadAsStringAsync(),
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                        if (pageResult?.Data != null)
                         {
-                            StatusCode = StatusCode.Error,
-                            Message = responseMessage,
-                            Result = new BGEvents()
-                        };
+                            allEvents.AddRange(pageResult.Data);
+                        }
+
+                        // Move to next page
+                        url = pageResult?.Paging?.Next;
                     }
+
+                    activity?.SetStatus(ActivityStatusCode.Ok);
+
+                    return new BaseResponseDTO<BGEvents>
+                    {
+                        StatusCode = StatusCode.Success,
+                        Message = StatusCode.Success.ToString(),
+                        Result = new BGEvents
+                        {
+                            Data = allEvents
+                        }
+                    };
                 }
                 catch (Exception ex)
                 {
