@@ -69,6 +69,8 @@ namespace OE.Job.LiveStream.Repository
 
             foreach(var ch in Enum.GetValues(typeof(ChannelType)))
             {
+                if((int)ch != (int)ChannelType.BG) continue;
+
                 _logger.LogInformation($"ProcessLiveStream: {ch}");
 
                 try
