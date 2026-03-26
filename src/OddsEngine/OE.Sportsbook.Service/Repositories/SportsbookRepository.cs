@@ -510,7 +510,7 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.MaLoId, marketLookupId)
                             .Set(s => s.SpId, message.SpId)
                             .Set(s => s.MaTeId, market.MaTeId)
-                            .Set(s => s.MaTeNa, market.MaNa)
+                            .Set(s => s.MaTeNa, market.MaTeNa)
                             .Set(s => s.FiTyId, message.FiTyId)
                             .SetOnInsert(s => s.IsMap, false))
                     { IsUpsert = true });

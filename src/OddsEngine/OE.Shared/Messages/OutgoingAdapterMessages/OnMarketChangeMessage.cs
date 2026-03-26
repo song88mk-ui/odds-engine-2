@@ -22,6 +22,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string CaStNa { get; set; }
         public string MaSp { get; set; }
         public string MaNa { get; set; }
+        public string MaTeNa { get; set; }
         public int SoOr { get; set; }
         public string ClCo { get; set; } = string.Empty;
         public string ClCoMa { get; set; } = string.Empty;
