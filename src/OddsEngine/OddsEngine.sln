@@ -24,6 +24,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OE.Job.Cleanup", "OE.Job.Cl
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OE.Job.LiveStream", "OE.Job.LiveStream\OE.Job.LiveStream.csproj", "{399F1206-6826-4AC9-A596-D3866019F74B}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OE.Job.Lookup", "OE.Job.Lookup\OE.Job.Lookup.csproj", "{4232E113-4BC7-418F-9E37-294F008FD62D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -62,6 +64,10 @@ Global
 		{399F1206-6826-4AC9-A596-D3866019F74B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{399F1206-6826-4AC9-A596-D3866019F74B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{399F1206-6826-4AC9-A596-D3866019F74B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4232E113-4BC7-418F-9E37-294F008FD62D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4232E113-4BC7-418F-9E37-294F008FD62D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4232E113-4BC7-418F-9E37-294F008FD62D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4232E113-4BC7-418F-9E37-294F008FD62D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,0 +1,10 @@
+﻿{
+  "profiles": {
+    "OE.Job.Lookup": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
