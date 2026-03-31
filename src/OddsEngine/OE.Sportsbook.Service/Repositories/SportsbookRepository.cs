@@ -32,7 +32,6 @@ namespace OE.Sportsbook.Service.Repositories
         private IMongoCollection<Fixture> _fixtureCollection;
         private IMongoCollection<Market> _marketCollection;
         private IMongoCollection<Selection> _selectionCollection;
-        private IMongoCollection<MarketLookup> _marketLookupCollection;
 
         private readonly ILogger<SportsbookRepository> _logger;
 
@@ -114,10 +113,6 @@ namespace OE.Sportsbook.Service.Repositories
 
             if (data.Item2.Length > 0)
                 BulkWrite(_selectionCollection, data.Item2);
-
-            var marketArray = ToMarketLookup(message);
-            if (marketArray.Length > 0)
-                BulkWrite(_marketLookupCollection, marketArray);
 
             // TODO: Betstop Logic
 
@@ -292,7 +287,6 @@ namespace OE.Sportsbook.Service.Repositories
             _marketCollection = _db.GetCollection<Market>("Market");
             _selectionCollection = _db.GetCollection<Selection>("Selection");
             _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
-            _marketLookupCollection = _db.GetCollection<MarketLookup>("MarketLookup");
         }
 
         private WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)
@@ -483,43 +477,6 @@ namespace OE.Sportsbook.Service.Repositories
 
             return new Tuple<WriteModel<Market>[], WriteModel<Selection>[]>(markets.ToArray(), selections.ToArray());
         }
-
-        private WriteModel<MarketLookup>[] ToMarketLookup(OnMarketChangeMessage message)
-        {
-            var markets = new List<WriteModel<MarketLookup>>();
-
-            foreach (var market in message.Ma)
-            {
-                var marketLookupId = $"{message.SpId}:{market.MaTeId}";
-
-                if (message.FiTyId == (int)FixtureType.Outright)
-                {
-                    markets.Add(new UpdateOneModel<MarketLookup>(Builders<MarketLookup>.Filter.Eq("MaLoId", marketLookupId),
-                        Builders<MarketLookup>.Update
-                            .Set(s => s.MaLoId, marketLookupId)
-                            .Set(s => s.SpId, message.SpId)
-                            .Set(s => s.MaTeId, market.MaTeId)
-                            .Set(s => s.FiTyId, message.FiTyId)
-                            .SetOnInsert(s => s.IsMap, false))
-                    { IsUpsert = true });
-                }
-                else
-                {
-                    markets.Add(new UpdateOneModel<MarketLookup>(Builders<MarketLookup>.Filter.Eq("MaLoId", marketLookupId),
-                        Builders<MarketLookup>.Update
-                            .Set(s => s.MaLoId, marketLookupId)
-                            .Set(s => s.SpId, message.SpId)
-                            .Set(s => s.MaTeId, market.MaTeId)
-                            .Set(s => s.MaTeNa, market.MaTeNa)
-                            .Set(s => s.FiTyId, message.FiTyId)
-                            .SetOnInsert(s => s.IsMap, false))
-                    { IsUpsert = true });
-                }
-            }
-
-            return markets.ToArray();
-        }
-
 
         private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelection(OnMarketSettlementMessage message, string correlationId)
         {
