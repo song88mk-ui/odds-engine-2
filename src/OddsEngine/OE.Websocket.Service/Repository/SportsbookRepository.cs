@@ -1,15 +1,15 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
-using OE.WebSocket.Service.Messages;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
+using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Models;
 using OE.Shared.Utilities;
+using OE.WebSocket.Service.Messages;
+using OE.WebSocket.Service.Telemetry;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text.Json;
-using OE.Shared.Messages.OutgoingAdapterMessages;
-using OE.Shared.Models;
-using OE.WebSocket.Service.Telemetry;
 using System.Text.Json.Serialization;
 
 namespace OE.WebSocket.Service.Repository
@@ -309,8 +309,12 @@ namespace OE.WebSocket.Service.Repository
 
         public async Task ProcessMarketCount(OnMarketChangeMessage message)
         {
+            using var activity = _activitySource.StartActivity("ProcessMarketCount");
             try
             {
+                activity?.SetTag("fixture.id", message.FiId);
+                activity?.SetTag("fixture.name", message.FiNa);
+                activity?.SetTag("fixture.status", message.FiStNa);
                 var key = $"mc:{message.FiId}";
 
                 if (!_fixtureStatus.Contains(message.FiStId))
@@ -332,7 +336,11 @@ namespace OE.WebSocket.Service.Repository
                 {
                     var result = await GetFixtureDetails(message.FiId);
                     if (result.StatusCode != StatusCode.Success)
+                    {
+                        _logger.LogError("{fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus}", message.FiId, message.FiNa, message.FiStNa, result.StatusCode);
+                        activity?.SetStatus(ActivityStatusCode.Error, result.Message);
                         return;
+                    }
 
                     var fixture = result.Result.Fixtures.FirstOrDefault();
                     if (fixture == null)
@@ -352,8 +360,10 @@ namespace OE.WebSocket.Service.Repository
                 var changed = cache == null || !currentMarketIds.SetEquals(cache?.MarketIds ?? Enumerable.Empty<long>());
                 if (changed)
                 {
+                    _logger.LogInformation("{fixtureId} {fixtureName} {fixtureStatus} {marketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
                     _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds.ToList() }, DateTimeOffset.UtcNow.AddDays(7));
                 }
+
             }
             catch (Exception ex)
             {
