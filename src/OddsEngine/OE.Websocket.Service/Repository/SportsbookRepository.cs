@@ -312,8 +312,10 @@ namespace OE.WebSocket.Service.Repository
             using var activity = _activitySource.StartActivity("ProcessMarketCount");
             try
             {
+                var clientId = _configuration["Custom:ClientId"];
+
                 activity?.SetTag("client.id", _configuration["Custom:ClientId"]);
-                activity?.SetTag("fixture.id", message.FiId);
+                activity?.SetTag("fixture.id", message.FiId.ToString());
                 activity?.SetTag("fixture.name", message.FiNa);
                 activity?.SetTag("fixture.status", message.FiStNa);
                 var key = $"mc:{message.FiId}";
@@ -332,13 +334,14 @@ namespace OE.WebSocket.Service.Repository
                 var cache = _memCache.GetCache<MarketCount>(key);
 
                 HashSet<long> currentMarketIds;
+                _logger.LogInformation("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {cache}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, cache == null ? "Null" : JsonSerializer.Serialize(cache));
 
                 if (cache == null)
                 {
                     var result = await GetFixtureDetails(message.FiId);
                     if (result.StatusCode != StatusCode.Success)
                     {
-                        _logger.LogError("{clientId} {fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus} {resultMessage}", _configuration["Custom:ClientId"], message.FiId, message.FiNa, message.FiStNa, result.StatusCode, result.Message);
+                        _logger.LogError("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus} {resultMessage}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, result.StatusCode, result.Message);
                         activity?.SetStatus(ActivityStatusCode.Error, result.Message);
                         return;
                     }
@@ -361,7 +364,7 @@ namespace OE.WebSocket.Service.Repository
                 var changed = cache == null || !currentMarketIds.SetEquals(cache?.MarketIds ?? Enumerable.Empty<long>());
                 if (changed)
                 {
-                    _logger.LogInformation("{fixtureId} {fixtureName} {fixtureStatus} {marketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
+                    _logger.LogInformation("ProcessMarketCount {fixtureId} {fixtureName} {fixtureStatus} {marketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
                     _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds.ToList() }, DateTimeOffset.UtcNow.AddDays(7));
                 }
 
@@ -667,6 +670,13 @@ namespace OE.WebSocket.Service.Repository
                         return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
                     else
                     {
+                        var headers = string.Join("; ", _httpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {string.Join(",", h.Value)}"));
+                        Uri requestUri = _httpClient.BaseAddress != null
+                            ? new Uri(_httpClient.BaseAddress, $"v1/sportsbook/fixturedetails?fixtureId={FiId}")
+                            : new Uri($"v1/sportsbook/fixturedetails?fixtureId={FiId}", UriKind.Relative);
+
+                        _logger.LogError("GetFixtureDetails {fixtureId} {reqUrl} {reqHeader} {reasonPhrase}", FiId.ToString(), requestUri.ToString(), headers, response.ReasonPhrase);
+
                         return new BaseResponseDTO<TWResponseDTO>
                         {
                             StatusCode = StatusCode.Error,
@@ -677,12 +687,6 @@ namespace OE.WebSocket.Service.Repository
             }
             catch (Exception ex)
             {
-                var headers = string.Join("; ", _httpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {string.Join(",", h.Value)}"));
-                Uri requestUri = _httpClient.BaseAddress != null
-                    ? new Uri(_httpClient.BaseAddress, $"v1/sportsbook/fixturedetails?fixtureId={FiId}")
-                    : new Uri($"v1/sportsbook/fixturedetails?fixtureId={FiId}", UriKind.Relative);
-
-                _logger.LogError("{fixtureId} {errorMessage} {stackTrace} {reqUrl} {reqHeader}", FiId, ex.Message, ex.StackTrace, requestUri.ToString(), headers);
                 return new BaseResponseDTO<TWResponseDTO>
                 {
                     StatusCode = StatusCode.Error,
