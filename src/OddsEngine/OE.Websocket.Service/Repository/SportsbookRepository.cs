@@ -337,7 +337,7 @@ namespace OE.WebSocket.Service.Repository
                     var result = await GetFixtureDetails(message.FiId);
                     if (result.StatusCode != StatusCode.Success)
                     {
-                        _logger.LogError("{fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus}", message.FiId, message.FiNa, message.FiStNa, result.StatusCode);
+                        _logger.LogError("{clientId} {fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus} {resultMessage}", _configuration["Custom:ClientId"], message.FiId, message.FiNa, message.FiStNa, result.StatusCode, result.Message);
                         activity?.SetStatus(ActivityStatusCode.Error, result.Message);
                         return;
                     }
