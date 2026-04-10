@@ -33,7 +33,7 @@ namespace OE.WebSocket.Service.Repository
         private readonly List<int> _fixtureStatus = new List<int> { (int)FixtureStatus.Prematch, (int)FixtureStatus.Live };
         private static List<string> _asianClCo = new List<string>();
         // TODO: doc: what are these numbers?
-        private static List<string> _MaTeIds = new List<string> {  }; //"16", "18", "66", "68"
+        private static List<string> _MaTeIds = new List<string> { }; //"16", "18", "66", "68"
 
         private readonly List<int> _marketStatusToRemove = new List<int> { (int)MarketStatus.Inactive, (int)MarketStatus.Cancelled, (int)MarketStatus.Settled, (int)MarketStatus.HandedOver };
         private readonly List<int> _marketStatusToAdd = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
@@ -85,7 +85,7 @@ namespace OE.WebSocket.Service.Repository
                 if (message.FiTyId == (int)FixtureType.Match || (message.SpId.IsVirtualSportId() && message.FiTyId == (int)FixtureType.Outright))
                     finalMarkets = message.Ma.Where(c => mainMarkets.Item2.Contains(c.MaTeId)).ToList();
                 else
-                 finalMarkets = message.Ma;
+                    finalMarkets = message.Ma;
 
                 _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@finalMarkets}", JsonSerializer.Serialize(finalMarkets));
                 _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@markets}", JsonSerializer.Serialize(message.Ma));
@@ -312,6 +312,7 @@ namespace OE.WebSocket.Service.Repository
             using var activity = _activitySource.StartActivity("ProcessMarketCount");
             try
             {
+                activity?.SetTag("client.id", _configuration["Custom:ClientId"]);
                 activity?.SetTag("fixture.id", message.FiId);
                 activity?.SetTag("fixture.name", message.FiNa);
                 activity?.SetTag("fixture.status", message.FiStNa);
@@ -676,6 +677,12 @@ namespace OE.WebSocket.Service.Repository
             }
             catch (Exception ex)
             {
+                var headers = string.Join("; ", _httpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {string.Join(",", h.Value)}"));
+                Uri requestUri = _httpClient.BaseAddress != null
+                    ? new Uri(_httpClient.BaseAddress, $"v1/sportsbook/fixturedetails?fixtureId={FiId}")
+                    : new Uri($"v1/sportsbook/fixturedetails?fixtureId={FiId}", UriKind.Relative);
+
+                _logger.LogError("{fixtureId} {errorMessage} {stackTrace} {reqUrl} {reqHeader}", FiId, ex.Message, ex.StackTrace, requestUri.ToString(), headers);
                 return new BaseResponseDTO<TWResponseDTO>
                 {
                     StatusCode = StatusCode.Error,
@@ -1669,7 +1676,7 @@ namespace OE.WebSocket.Service.Repository
                 _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
             }
 
-            if(message.FiStId == (int)FixtureStatus.Closed)
+            if (message.FiStId == (int)FixtureStatus.Closed)
                 _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnOddsChange Closed");
             if (message.FiStId == (int)FixtureStatus.Ended)
                 _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnOddsChange Ended");
@@ -1740,7 +1747,7 @@ namespace OE.WebSocket.Service.Repository
                         Li = m.Li,
                         MaStId = m.MaStId,
                         MaStNa = m.MaStNa,
-                        SoOr = m.SoOr,                        
+                        SoOr = m.SoOr,
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
