@@ -9,6 +9,7 @@ using OE.WebSocket.Service.Telemetry;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -674,8 +675,9 @@ namespace OE.WebSocket.Service.Repository
                         Uri requestUri = _httpClient.BaseAddress != null
                             ? new Uri(_httpClient.BaseAddress, $"v1/sportsbook/fixturedetails?fixtureId={FiId}")
                             : new Uri($"v1/sportsbook/fixturedetails?fixtureId={FiId}", UriKind.Relative);
+                        _httpClient.DefaultRequestHeaders.TryGetValues("x-api-key", out var apiKey);
 
-                        _logger.LogError("GetFixtureDetails {fixtureId} {reqUrl} {reqHeader} {reasonPhrase}", FiId.ToString(), requestUri.ToString(), headers, response.ReasonPhrase);
+                        _logger.LogError("GetFixtureDetails {key} {fixtureId} {FiIdreqUrl} {reqHeader} {reasonPhrase}", apiKey?.FirstOrDefault(), FiId.ToString(), requestUri.ToString(), headers, response.ReasonPhrase);
 
                         return new BaseResponseDTO<TWResponseDTO>
                         {
