@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
+using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
@@ -1509,6 +1510,7 @@ namespace OE.WebSocket.Service.Repository
                     IsBeBu = isMarketBetBuilder,
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
+                    InPl = market.InPl,
                     //MaNaTr = market.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                     //{
                     //    LaCo = mt.LanguageCode,
@@ -1650,6 +1652,7 @@ namespace OE.WebSocket.Service.Repository
                         IsBeBu = false,
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
+                        InPl = m.InPl,
                         //TODO
                         //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                         //{
@@ -1756,6 +1759,7 @@ namespace OE.WebSocket.Service.Repository
                         SoOr = m.SoOr,
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
+                        InPl = m.InPl,
                         //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                         //{
                         //    LaCo = mt.LanguageCode,
@@ -1898,6 +1902,7 @@ namespace OE.WebSocket.Service.Repository
                     IsBeBu = isMarketBetBuilder,
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
+                    InPl = market.InPl,
                     //TODO
                     //MaNaTr = market.MarketTranslations.Select(mt => new OutgoingMarketTranslation
                     //{

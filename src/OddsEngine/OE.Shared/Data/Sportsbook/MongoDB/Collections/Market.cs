@@ -31,6 +31,7 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public string ClCoMa { get; set; }
         public bool IsBo { get; set; }
         public string ClBo { get; set; }
+        public bool InPl { get; set; }
         public List<MarketTranslationMDB> MaNaTr { get; set; }
     }
 

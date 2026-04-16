@@ -26,6 +26,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public int SoOr { get; set; }
         public string ClCo { get; set; } = string.Empty;
         public string ClCoMa { get; set; } = string.Empty;
+        public bool InPl { get; set; } = false;
         public List<SelectionMessage> Se { get; set; } = new List<SelectionMessage>();
     }
 

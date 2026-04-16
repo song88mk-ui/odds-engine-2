@@ -57,7 +57,7 @@ namespace OE.Job.Settlement.Repository
 
             if (_editSportsbook)
             {
-                var fixtureFilter = Builders<Fixture>.Filter.Where(c => fixtureStatus.Contains(c.FiStId) && c.FiTyId == (int)FixtureType.Match && c.FiStDa < DateTime.UtcNow);
+                var fixtureFilter = Builders<Fixture>.Filter.Where(c => fixtureStatus.Contains(c.FiStId) && c.FiTyId == (int)FixtureType.Match && c.FiStDa <= DateTime.UtcNow);
                 var fixtures = await fixtureCollection.Find(fixtureFilter).ToListAsync();
                 await ProcessSportsbookOnFixtureChange(messageBroker, fixtures, fixtureStatus);
 
@@ -126,81 +126,6 @@ namespace OE.Job.Settlement.Repository
                         continue;
                     }
 
-                    //TODO: recovery from provider to check the actual status
-
-                    //var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.betradar.com/v1/sports/en/sport_events/{fixture.FiSp}/fixture.xml");
-                    //request.Headers.Add("x-access-token", _apiKey);
-
-                    //var response = await _httpClient.SendAsync(request);
-
-                    //if (response.IsSuccessStatusCode)
-                    //{
-                    //    var result = await response.Content.ReadAsStringAsync();
-
-                    //    XmlDocument doc = new XmlDocument();
-
-                    //    doc.LoadXml(result);
-
-                    //    var node = doc.ChildNodes[1].ChildNodes[0];
-
-                    //    var startDate = Convert.ToDateTime(node.Attributes["start_time"].Value).ToUniversalTime();
-                    //    var status = node.Attributes["status"].Value;
-                    //    var isOfferedLive = node.Attributes["liveodds"].Value == "not_available" ? false : true;
-                    //    var isBuyable = node.Attributes["liveodds"].Value == "buyable" ? true : false;
-
-                    //    if (fixture.SpId != 21 && (status == "suspended" || status == "ended" || status == "closed" || status == "cancelled" || status == "abandoned" || status == "delayed" || status == "unknown" || status == "postponed" || status == "interrupted" || status == "not_started"))
-                    //    {
-
-                    //        var payload = new OnFixtureChangeMessage
-                    //        {
-                    //            ChangeType = FixtureChangeType.Other,
-                    //            ProviderFixtureId = fixture.PrFiId,
-                    //            FixtureSpecifier = fixture.FiSp,
-                    //            SportId = fixture.SpId,
-                    //            TimestampReceived = timestampDelivered,
-                    //            TimestampSent = timestampDelivered
-                    //        };
-
-                    //        messageBroker.Publish(payload, "OnFixtureChange", $"r.uof.onfixturechange.{fixture.SpId}", Guid.NewGuid().ToString());
-                    //        Console.WriteLine($"{DateTime.UtcNow} : {fixture.SpNa} - {fixture.FiNa} - {fixture.FiStDa}");
-
-                    //        continue;
-                    //    }
-
-                    //    if ((isOfferedLive == false || isBuyable == true) && fixture.FiStId == (int)FixtureStatus.Prematch && startDate < DateTime.UtcNow && fixture.SpId != 21)
-                    //    {
-                    //        var payload = new OnFixtureChangeMessage
-                    //        {
-                    //            ChangeType = FixtureChangeType.Other,
-                    //            ProviderFixtureId = fixture.PrFiId,
-                    //            FixtureSpecifier = fixture.FiSp,
-                    //            SportId = fixture.SpId,
-                    //            TimestampReceived = timestampDelivered,
-                    //            TimestampSent = timestampDelivered
-                    //        };
-
-                    //        messageBroker.Publish(payload, "OnFixtureChange", $"r.uof.onfixturechange.{fixture.SpId}", Guid.NewGuid().ToString());
-                    //        Console.WriteLine($"{DateTime.UtcNow} : {fixture.SpNa} - {fixture.FiNa} - {fixture.FiStDa}");
-                    //    }
-                    //}
-                    //else
-                    //{
-                    //    if (vs.Contains(fixture.SpId) && fixture.FiStDa < DateTime.UtcNow)
-                    //    {
-                    //        var payload = new OnFixtureChangeMessage
-                    //        {
-                    //            ChangeType = FixtureChangeType.Other,
-                    //            ProviderFixtureId = fixture.PrFiId,
-                    //            FixtureSpecifier = fixture.FiSp,
-                    //            SportId = fixture.SpId,
-                    //            TimestampReceived = timestampDelivered,
-                    //            TimestampSent = timestampDelivered
-                    //        };
-
-                    //        messageBroker.Publish(payload, "OnFixtureChange", $"r.uof.onfixturechange.{fixture.SpId}", Guid.NewGuid().ToString());
-                    //        Console.WriteLine($"{DateTime.UtcNow} : {fixture.SpNa} - {fixture.FiNa} - {fixture.FiStDa}");
-                    //    }
-                    //}
                 }
                 catch (Exception ex)
                 {

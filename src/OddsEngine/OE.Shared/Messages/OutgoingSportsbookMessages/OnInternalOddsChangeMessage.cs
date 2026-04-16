@@ -64,6 +64,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public int SoOr { get; set; }
         public string ClCo { get; set; }
         public string ClCoMa { get; set; }
+        public bool InPl { get; set; }
         //public List<MarketTranslation> MarketTranslations { get; set; }
         public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();
     }

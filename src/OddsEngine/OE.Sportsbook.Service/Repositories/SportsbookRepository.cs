@@ -428,6 +428,7 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.ClCoMa, market.ClCoMa)
                         .Set(s => s.CaStId, market.CaStId)
                         .Set(s => s.CaStNa, market.CaStNa)
+                        .Set(s => s.InPl, market.InPl)
                 //TODO
                 //.AddToSetEach(s => s.MaNaTr, 
                 //    market.MarketTranslations.Select(
@@ -618,6 +619,7 @@ namespace OE.Sportsbook.Service.Repositories
                     ClCoMa = market.ClCoMa,
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
+                    InPl = market.InPl,
                     //MarketTranslations = market.MarketTranslations, //TODO
                     Se = selections
                 });
@@ -731,6 +733,7 @@ namespace OE.Sportsbook.Service.Repositories
                     ClCoMa = market.ClCoMa,
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
+                    InPl = market.InPl,
                     //MarketTranslations = market.MarketTranslations, //TODO
                     Se = selections
                 });

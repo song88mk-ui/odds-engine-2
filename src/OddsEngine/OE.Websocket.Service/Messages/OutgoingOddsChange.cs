@@ -68,6 +68,7 @@
         public bool IsBeBu { get; set; }
         public int CaStId { get; set; }
         public string CaStNa { get; set; }
+        public bool InPl { get; set; }
         public List<OutgoingMarketTranslation> MaNaTr { get; set; }
         public List<OutgoingSelection> Se { get; set; }
     }
