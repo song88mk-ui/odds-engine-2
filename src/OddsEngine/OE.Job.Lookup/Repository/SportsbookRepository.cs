@@ -3,13 +3,8 @@ using MongoDB.Driver;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
 using OE.Shared.Messages.OutgoingAdapterMessages;
-using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
-using System.Xml;
 
 namespace OE.Job.Lookup.Repository
 {

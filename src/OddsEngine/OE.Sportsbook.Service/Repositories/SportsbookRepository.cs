@@ -193,9 +193,9 @@ namespace OE.Sportsbook.Service.Repositories
             if (message == null || String.IsNullOrEmpty(message.PrFiId))
                 return;
 
-            _logger.LogWarningEx($"Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
+            _logger.LogWarningEx($"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
 
-            var fixture = _fixtureCollection.Find(f => f.PrFiId == message.PrFiId).FirstOrDefault();
+            var fixture = _fixtureCollection.Find(f => f.Id == message.Id).FirstOrDefault();
             if (fixture != null)
             {
 
@@ -203,7 +203,7 @@ namespace OE.Sportsbook.Service.Repositories
 
                 if (message.SetActiveMarketsToInactive)
                 {
-                    List<long> activeMarketList = GetActiveMarketIds(message.PrFiId);
+                    List<long> activeMarketList = GetActiveMarketIds(message.FiId);
                     if (activeMarketList.Count > 0)
                     {
                         BulkWrite(_marketCollection, ToMarketInactiveStatus(activeMarketList));
@@ -361,7 +361,7 @@ namespace OE.Sportsbook.Service.Repositories
         {
             return new WriteModel<Fixture>[]
             {
-                new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq("PrFiId", message.PrFiId),
+                new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq("FiId", message.FiId),
                     Builders<Fixture>.Update
                         .Set(s => s.IsSu, message.IsBetStop))
                 { IsUpsert = false }
@@ -809,11 +809,11 @@ namespace OE.Sportsbook.Service.Repositories
             _logger.LogWarningEx($"BetStopGlobally exhibited in: {_IsBetStopGlobally}");
         }
 
-        private List<long> GetActiveMarketIds(String fixtureId)
+        private List<long> GetActiveMarketIds(long fixtureId)
         {
             var marketStatusIds = new int[] { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
 
-            var filter = Builders<Market>.Filter.Where(c => c.PrFiId == fixtureId && marketStatusIds.Contains(c.MaStId));
+            var filter = Builders<Market>.Filter.Where(c => c.FiId == fixtureId && marketStatusIds.Contains(c.MaStId));
             var projection = Builders<Market>.Projection.Include(c => c.MaId).Include(c => c.PrFiId);
 
             var result = _marketCollection.Find(filter).Project<MarketStatusProjection>(projection).ToList();
