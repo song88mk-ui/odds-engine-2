@@ -157,6 +157,8 @@ namespace OE.WebSocket.Service.Repository
         {
             try
             {
+                _logger.LogInformationEx($"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
+
                 var payload = new OutgoingBetStopFixture
                 {
                     Gr = GetGroups(_clientCode, message),
@@ -177,7 +179,7 @@ namespace OE.WebSocket.Service.Repository
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "error processing bet stop fixture");
+                _logger.LogError(e, $"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage: error processing bet stop fixture");
             }
         }
 

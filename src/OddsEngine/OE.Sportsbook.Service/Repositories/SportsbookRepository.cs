@@ -193,7 +193,7 @@ namespace OE.Sportsbook.Service.Repositories
             if (message == null || String.IsNullOrEmpty(message.PrFiId))
                 return;
 
-            _logger.LogWarningEx($"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
+            _logger.LogInformationEx($"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
 
             var fixture = _fixtureCollection.Find(f => f.Id == message.Id).FirstOrDefault();
             if (fixture != null)
