@@ -116,6 +116,7 @@ namespace OE.Adapter.Service
                             );
                             break;
                         case MessageType.ON_BET_STOP_GLOBAL:
+                            _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
                             ProcessMessage<OnBetStopGlobalMessage>(
                                 payload,
                                 (msg) => _tradingRepository.ProcessOnBetStopGlobalMessage(_messageBroker, msg, correlationId)
@@ -128,6 +129,7 @@ namespace OE.Adapter.Service
                             );
                             break;
                         case MessageType.ON_BET_STOP_FIXTURE:
+                            _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
                             ProcessMessage<OnBetStopFixtureMessage>(
                                 payload,
                                 (msg) => _tradingRepository.ProcessOnBetStopFixture(_messageBroker, msg, correlationId)
