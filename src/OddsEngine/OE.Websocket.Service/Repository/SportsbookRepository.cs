@@ -1322,10 +1322,10 @@ namespace OE.WebSocket.Service.Repository
                 result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:livefixtures");
             }
 
+            //message.FiStDa.Month == DateTime.UtcNow.Month &&
+            //message.FiStDa.Day == DateTime.UtcNow.Day &&
+            //message.FiStDa.Year == DateTime.UtcNow.Year &&
             if (message.FiStId == (int)FixtureStatus.Prematch &&
-                message.FiStDa.Month == DateTime.UtcNow.Month &&
-                message.FiStDa.Day == DateTime.UtcNow.Day &&
-                message.FiStDa.Year == DateTime.UtcNow.Year &&
                 message.FiTyId == (int)FixtureType.Match)
             {
                 result.Add($"endpoint:{clientCode}:sports:{message.SpId}:todayfixtures");
