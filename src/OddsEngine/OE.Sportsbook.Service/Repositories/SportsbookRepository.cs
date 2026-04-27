@@ -190,7 +190,7 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessOnBetStopFixtureMessage(IMessageBroker messageBroker, OnBetStopFixtureMessage message, string correlationId)
         {
-            if (message == null || String.IsNullOrEmpty(message.PrFiId))
+            if (message == null || string.IsNullOrEmpty(message.PrFiId))
                 return;
 
             _logger.LogInformationEx($"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
@@ -213,13 +213,13 @@ namespace OE.Sportsbook.Service.Repositories
                 var payload = new
                 {
                     id = fixture.Id,
-                    PrFiId = message.PrFiId,
+                    PrFiId = fixture.PrFiId,
                     TiSe = message.TiSe,
                     TiRe = message.TiRe,
-                    FiId = message.FiId,
-                    ChTyId = message.ChTyId,
-                    FiSp = message.FiSp,
-                    SpId = message.SpId,
+                    FiId = fixture.FiId,
+                    ChTyId = fixture.ChTyId,
+                    FiSp = fixture.FiSp,
+                    SpId = fixture.SpId,
                     FiStId = fixture.FiStId,
                     SegId = fixture.SegId,
                     LeId = fixture.LeId,
