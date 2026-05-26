@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System;
 using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Models;
 
 namespace OE.Shared.Messages.OutgoingSportsbookMessages
 {
@@ -34,10 +35,12 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string CoId { get; set; }
         public bool IsSu { get; set; }
         public bool? IsBo { get; set; }
-        //public List<SportTranslation> SportTranslations { get; set; }
-        //public List<SegmentTranslation> SegmentTranslations { get; set; }
-        //public List<LeagueTranslation> LeagueTranslations { get; set; }
-        //public List<FixtureTranslation> FixtureTranslations { get; set; }
+        public List<TranslationBase> SpTr { get; set; } = new List<TranslationBase>();
+        public List<TranslationBase> SegTr { get; set; } = new List<TranslationBase>();
+        public List<TranslationBase> LeTr { get; set; } = new List<TranslationBase>();
+        public List<TranslationBase> FiTr { get; set; } = new List<TranslationBase>();
+
+
         public List<InternalMarketMessage> Ma { get; set; } = new List<InternalMarketMessage>();
         public string HoId { get; set; }
         public string AwId { get; set; }
@@ -65,7 +68,8 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string ClCo { get; set; }
         public string ClCoMa { get; set; }
         public bool InPl { get; set; }
-        //public List<MarketTranslation> MarketTranslations { get; set; }
+        public List<TranslationBase> MaTr { get; set; } = new List<TranslationBase>();
+
         public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();
     }
 
@@ -89,7 +93,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public int SoOr { get; set; }
         public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; }
-        //public List<SelectionTranslation> SelectionTranslations { get; set; }
+        public List<TranslationBase> SeTr { get; set; } = new List<TranslationBase>();
     }
 
 }
