@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
-using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
 using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
@@ -10,7 +9,6 @@ using OE.WebSocket.Service.Telemetry;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -1486,12 +1484,11 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
-                        //TODO:
-                        //SeNaTr = selection.SelectionTranslations.Select(ss => new OutgoingSelectionTranslation
-                        //{
-                        //    LaCo = ss.LanguageCode,
-                        //    SeNa = message.SpId != 1 ? ss.SelectionName : PrepareSelectionName(market.MaTeId, selection.SeTeId, ss.SelectionName, market.Line)
-                        //}).ToList()
+                        SeNaTr = selection.SeTr.Select(ss => new OutgoingSelectionTranslation
+                        {
+                            LaCo = ss.LaCo,
+                            SeNa = message.SpId != 1 ? ss.Va : PrepareSelectionName(market.MaTeId, selection.SeTeId, ss.Va, market.Li)
+                        }).ToList()
                     });
                 }
 
@@ -1513,11 +1510,11 @@ namespace OE.WebSocket.Service.Repository
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
                     InPl = market.InPl,
-                    //MaNaTr = market.MarketTranslations.Select(mt => new OutgoingMarketTranslation
-                    //{
-                    //    LaCo = mt.LanguageCode,
-                    //    MaNa = mt.MarketName
-                    //}).ToList(),
+                    MaNaTr = market.MaTr.Select(mt => new OutgoingMarketTranslation
+                    {
+                        LaCo = mt.LaCo,
+                        MaNa = mt.Va
+                    }).ToList(),
                     Se = selections
                 });
             }
@@ -1553,29 +1550,28 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = isBetBuilder,
-                    //TODO:
-                    //SpNaTr = message.SportTranslations.Select(f => new OutgoingSportTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SpNa = f.SportName
-                    //}).ToList(),
-                    //SegNaTr = message.SegmentTranslations.Select(f => new OutgoingSegmentTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SegNa = f.SegmentName
-                    //}).ToList(),
-                    //LeNaTr = message.LeagueTranslations.Select(f => new OutgoingLeagueTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    LeNa = f.LeagueName
-                    //}).ToList(),
-                    //FiNaTr = message.FixtureTranslations.Select(f => new OutgoingFixtureTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    FiNa = f.FixtureName,
-                    //    HoNa = GetHomeName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //    AwNa = GetAwayName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //}).ToList(),
+                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SpNa = f.Va
+                    }).ToList(),
+                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SegNa = f.Va
+                    }).ToList(),
+                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
+                    {
+                        LaCo = f.LaCo,
+                        LeNa = f.Va
+                    }).ToList(),
+                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
+                    {
+                        LaCo = f.LaCo,
+                        FiNa = f.Va,
+                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
+                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
+                    }).ToList(),
                     Ma = markets
                 }
             };
@@ -1619,29 +1615,28 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
-                    //TODO:
-                    //SpNaTr = message.SportTranslations.Select(f => new OutgoingSportTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SpNa = f.SportName
-                    //}).ToList(),
-                    //SegNaTr = message.SegmentTranslations.Select(f => new OutgoingSegmentTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SegNa = f.SegmentName
-                    //}).ToList(),
-                    //LeNaTr = message.LeagueTranslations.Select(f => new OutgoingLeagueTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    LeNa = f.LeagueName
-                    //}).ToList(),
-                    //FiNaTr = message.FixtureTranslations.Select(f => new OutgoingFixtureTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    FiNa = f.FixtureName,
-                    //    HoNa = GetHomeName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //    AwNa = GetAwayName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //}).ToList(),
+                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SpNa = f.Va
+                    }).ToList(),
+                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SegNa = f.Va
+                    }).ToList(),
+                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
+                    {
+                        LaCo = f.LaCo,
+                        LeNa = f.Va
+                    }).ToList(),
+                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
+                    {
+                        LaCo = f.LaCo,
+                        FiNa = f.Va,
+                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
+                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
+                    }).ToList(),
                     Ma = finalMarkets.Select(m => new OutgoingMarket
                     {
                         MaTeId = m.MaTeId,
@@ -1655,12 +1650,11 @@ namespace OE.WebSocket.Service.Repository
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         InPl = m.InPl,
-                        //TODO
-                        //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
-                        //{
-                        //    LaCo = mt.LanguageCode,
-                        //    MaNa = mt.MarketName
-                        //}).ToList(),
+                        MaNaTr = m.MaTr.Select(mt => new OutgoingMarketTranslation
+                        {
+                            LaCo = mt.LaCo,
+                            MaNa = mt.Va
+                        }).ToList(),
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
@@ -1672,11 +1666,11 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
-                            //SeNaTr = s.SelectionTranslations.Select(ss => new OutgoingSelectionTranslation
-                            //{
-                            //    LaCo = ss.LanguageCode,
-                            //    SeNa = ss.SelectionName
-                            //}).ToList()
+                            SeNaTr = s.SeTr.Select(ss => new OutgoingSelectionTranslation
+                            {
+                                LaCo = ss.LaCo,
+                                SeNa = ss.Va
+                            }).ToList()
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1727,29 +1721,28 @@ namespace OE.WebSocket.Service.Repository
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
                     StUr = message.StUr,
-                    //TODO:
-                    //SpNaTr = message.SportTranslations.Select(f => new OutgoingSportTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SpNa = f.SportName
-                    //}).ToList(),
-                    //SegNaTr = message.SegmentTranslations.Select(f => new OutgoingSegmentTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SegNa = f.SegmentName
-                    //}).ToList(),
-                    //LeNaTr = message.LeagueTranslations.Select(f => new OutgoingLeagueTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    LeNa = f.LeagueName
-                    //}).ToList(),
-                    //FiNaTr = message.FixtureTranslations.Select(f => new OutgoingFixtureTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    FiNa = f.FixtureName,
-                    //    HoNa = GetHomeName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //    AwNa = GetAwayName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //}).ToList(),
+                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SpNa = f.Va
+                    }).ToList(),
+                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SegNa = f.Va
+                    }).ToList(),
+                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
+                    {
+                        LaCo = f.LaCo,
+                        LeNa = f.Va
+                    }).ToList(),
+                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
+                    {
+                        LaCo = f.LaCo,
+                        FiNa = f.Va,
+                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
+                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
+                    }).ToList(),
                     Ma = message.Ma.Select(m => new OutgoingMarket
                     {
                         MaTeId = m.MaTeId,
@@ -1762,11 +1755,11 @@ namespace OE.WebSocket.Service.Repository
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         InPl = m.InPl,
-                        //MaNaTr = m.MarketTranslations.Select(mt => new OutgoingMarketTranslation
-                        //{
-                        //    LaCo = mt.LanguageCode,
-                        //    MaNa = mt.MarketName
-                        //}).ToList(),
+                        MaNaTr = m.MaTr.Select(mt => new OutgoingMarketTranslation
+                        {
+                            LaCo = mt.LaCo,
+                            MaNa = mt.Va
+                        }).ToList(),
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
@@ -1778,11 +1771,11 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
-                            //SeNaTr = s.SelectionTranslations.Select(ss => new OutgoingSelectionTranslation
-                            //{
-                            //    LaCo = ss.LanguageCode,
-                            //    SeNa = ss.SelectionName
-                            //}).ToList()
+                            SeNaTr = s.SeTr.Select(ss => new OutgoingSelectionTranslation
+                            {
+                                LaCo = ss.LaCo,
+                                SeNa = ss.Va
+                            }).ToList()
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1855,11 +1848,11 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
-                        //SeNaTr = selection.SelectionTranslations.Select(ss => new OutgoingSelectionTranslation
-                        //{
-                        //    LaCo = ss.LanguageCode,
-                        //    SeNa = message.SpId != 1 ? ss.SelectionName : PrepareSelectionName(market.MaTeId, selection.SeTeId, ss.SelectionName, market.Li)
-                        //}).ToList()
+                        SeNaTr = selection.SeTr.Select(ss => new OutgoingSelectionTranslation
+                        {
+                            LaCo = ss.LaCo,
+                            SeNa = message.SpId != 1 ? ss.Va: PrepareSelectionName(market.MaTeId, selection.SeTeId, ss.Va, market.Li)
+                        }).ToList()
                     });
                 }
 
@@ -1905,12 +1898,11 @@ namespace OE.WebSocket.Service.Repository
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
                     InPl = market.InPl,
-                    //TODO
-                    //MaNaTr = market.MarketTranslations.Select(mt => new OutgoingMarketTranslation
-                    //{
-                    //    LaCo = mt.LanguageCode,
-                    //    MaNa = mt.MarketName
-                    //}).ToList(),
+                    MaNaTr = market.MaTr.Select(mt => new OutgoingMarketTranslation
+                    {
+                        LaCo = mt.LaCo,
+                        MaNa = mt.Va
+                    }).ToList(),
                     Se = selections
                 });
             }
@@ -1946,28 +1938,28 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = isBetBuilder,
-                    //SpNaTr = message.SportTranslations.Select(f => new OutgoingSportTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SpNa = f.SportName
-                    //}).ToList(),
-                    //SegNaTr = message.SegmentTranslations.Select(f => new OutgoingSegmentTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    SegNa = f.SegmentName
-                    //}).ToList(),
-                    //LeNaTr = message.LeagueTranslations.Select(f => new OutgoingLeagueTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    LeNa = f.LeagueName
-                    //}).ToList(),
-                    //FiNaTr = message.FixtureTranslations.Select(f => new OutgoingFixtureTranslation
-                    //{
-                    //    LaCo = f.LanguageCode,
-                    //    FiNa = f.FixtureName,
-                    //    HoNa = GetHomeName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //    AwNa = GetAwayName(f.FixtureName, (FixtureType)message.FiTyId),
-                    //}).ToList(),
+                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SpNa = f.Va
+                    }).ToList(),
+                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
+                    {
+                        LaCo = f.LaCo,
+                        SegNa = f.Va
+                    }).ToList(),
+                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
+                    {
+                        LaCo = f.LaCo,
+                        LeNa = f.Va
+                    }).ToList(),
+                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
+                    {
+                        LaCo = f.LaCo,
+                        FiNa = f.Va,
+                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
+                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
+                    }).ToList(),
                     Ma = markets
                 }
             };

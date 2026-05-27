@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using OE.Shared.Models;
+using System.Collections.Generic;
 
 namespace OE.Shared.Messages.OutgoingAdapterMessages
 {
@@ -27,6 +28,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string ClCo { get; set; } = string.Empty;
         public string ClCoMa { get; set; } = string.Empty;
         public bool InPl { get; set; } = false;
+        public List<TranslationBase> MaTr { get; set; } = new List<TranslationBase>();
         public List<SelectionMessage> Se { get; set; } = new List<SelectionMessage>();
     }
 
@@ -54,6 +56,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public int SoOr { get; set; }
         public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; } = new List<ClientOddsMessage>();
+        public List<TranslationBase> SeTr { get; set; } = new List<TranslationBase>();
     }
 
     public class ClientOddsMessage

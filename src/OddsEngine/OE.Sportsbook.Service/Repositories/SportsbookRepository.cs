@@ -573,7 +573,7 @@ namespace OE.Sportsbook.Service.Repositories
                         SeNa = selection.SeNa,
                         SoOr = selection.SoOr,
                         ClOd = selection.ClOd,
-                        //SelectionTranslations = selection.SelectionTranslations //TODO
+                        SeTr = MapTranslations(translations, selection.SeId, "SeId"),
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -626,7 +626,7 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
-                    //MarketTranslations = market.MarketTranslations, //TODO
+                    MaTr = MapTranslations(translations, market.MaId, "MaId"),
                     Se = selections
                 });
             }
@@ -662,10 +662,10 @@ namespace OE.Sportsbook.Service.Repositories
                 ClCo = message.ClCo,
                 CoId = correlationId,
                 IsSu = message.IsSu,
-                //SportTranslations = message.SportTranslations, //TODO
-                //SegmentTranslations = message.SegmentTranslations,  //TODO
-                //LeagueTranslations = message.LeagueTranslations,  //TODO
-                //FixtureTranslations = message.FixtureTranslations,  //TODO
+                SpTr = MapTranslations(translations, message.SpId, "SpId"),
+                SegTr = MapTranslations(translations, message.SegId, "SegId"),
+                LeTr = MapTranslations(translations, message.LeId, "LeId"),
+                FiTr = MapTranslations(translations, message.FiId, "FiId"),
                 //IsInsert = fixtureGeneration.Item2,
                 //IsInsert = true,
                 HoId = message.HoId,
@@ -681,6 +681,7 @@ namespace OE.Sportsbook.Service.Repositories
                 //    MatchStatusCode = s.MatchStatusCode,
                 //    PeriodType = s.PeriodType
                 //}).ToList()
+                StUr = message.StUr,
                 Ma = markets
             };
         }
@@ -796,6 +797,7 @@ namespace OE.Sportsbook.Service.Repositories
                 //    MatchStatusCode = s.MatchStatusCode,
                 //    PeriodType = s.PeriodType
                 //}).ToList()
+                StUr = message.StUr,
                 Ma = markets
             };
         }

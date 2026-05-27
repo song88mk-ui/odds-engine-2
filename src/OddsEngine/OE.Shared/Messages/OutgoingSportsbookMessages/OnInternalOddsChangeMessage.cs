@@ -35,6 +35,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string CoId { get; set; }
         public bool IsSu { get; set; }
         public bool? IsBo { get; set; }
+        public string StUr { get; set; }
         public List<TranslationBase> SpTr { get; set; } = new List<TranslationBase>();
         public List<TranslationBase> SegTr { get; set; } = new List<TranslationBase>();
         public List<TranslationBase> LeTr { get; set; } = new List<TranslationBase>();
