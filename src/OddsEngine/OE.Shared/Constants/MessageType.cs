@@ -15,6 +15,7 @@
         public const string ON_BET_STOP_FIXTURE = "OnBetStopFixture";
         public const string ON_BET_STOP_GLOBAL = "OnBetStopGlobal";
         public const string ON_HEART_BEAT = "OnHeartBeat";
+        public const string ON_DYNAMIC_TRANSLATION_CHANGE = "OnDynamicTranslationChange";
 
         // Internal
         public const string ON_ODDS_CHANGE = "OnOddsChange";

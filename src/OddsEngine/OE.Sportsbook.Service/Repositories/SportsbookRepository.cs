@@ -41,6 +41,7 @@ namespace OE.Sportsbook.Service.Repositories
         private const string MARKET_MAPPING_PREFIX = "mama";
         private const string SELECTION_MAPPING_PREFIX = "sema";
         private const string BETTING_STATUS_MODEL_ID = "betstop";
+        private const string CACHE_PREFIX = "sb:translation:";
 
         private static IdGenerator _defaultIdGenerator;
 
@@ -276,6 +277,14 @@ namespace OE.Sportsbook.Service.Repositories
                 }
 
                 messageBroker.Publish(onBetCancellationPayload, MessageType.ON_BET_CANCELLATION, "r.oe.bet.settlement", Guid.NewGuid().ToString().ToUpper());
+            }
+        }
+
+        public void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message)
+        {
+            foreach(var cache in message.CacheKeys)
+            {
+                _memCache.DeleteCache($"{CACHE_PREFIX}{cache}");
             }
         }
         #endregion
@@ -843,14 +852,14 @@ namespace OE.Sportsbook.Service.Repositories
             AddTranslationKey(stringIds, message.SpId, "SpId");
             AddTranslationKey(stringIds, message.SegId, "SegId");
             AddTranslationKey(stringIds, message.LeId, "LeId");
-            AddTranslationKey(stringIds, message.FiId, "FiId");
+            AddTranslationKey(stringIds, message.Id, "FiId");
 
             // =========================
             // MARKET LEVEL
             // =========================
             foreach (var market in filteredMarkets)
             {
-                AddTranslationKey(stringIds, market.MaId, "MaId");
+                AddTranslationKey(stringIds, market.Id, "MaId");
             }
 
             // =========================
@@ -875,14 +884,14 @@ namespace OE.Sportsbook.Service.Repositories
             AddTranslationKey(stringIds, message.SpId, "SpId");
             AddTranslationKey(stringIds, message.SegId, "SegId");
             AddTranslationKey(stringIds, message.LeId, "LeId");
-            AddTranslationKey(stringIds, message.FiId, "FiId");
+            AddTranslationKey(stringIds, message.Id, "FiId");
 
             // =========================
             // MARKET LEVEL
             // =========================
             foreach (var market in message.Ma)
             {
-                AddTranslationKey(stringIds, market.MaId, "MaId");
+                AddTranslationKey(stringIds, market.Id, "MaId");
 
 
                 // =========================
@@ -890,7 +899,7 @@ namespace OE.Sportsbook.Service.Repositories
                 // =========================
                 foreach (var selection in market.Se)
                 {
-                    AddTranslationKey(stringIds, selection.SeId, "SeId");
+                    AddTranslationKey(stringIds, selection.Id, "SeId");
                 }
             }
 

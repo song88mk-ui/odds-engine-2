@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Repositories;
 using OE.Sportsbook.Service.Telemetry;
@@ -128,10 +129,10 @@ namespace OE.Sportsbook.Service
                                 (msg) => _sportsbookRepository.ProcessOnBetStopFixtureMessage(_messageBroker, msg, correlationId)
                             );
                             break;
-                        case MessageType.ON_MARKET_CANCEL:
-                            ProcessMessage<OnMarketCancellationMessage>(
+                        case MessageType.ON_DYNAMIC_TRANSLATION_CHANGE:
+                            ProcessMessage<OnDeleteCacheMessage>(
                                 payload,
-                                (msg) => _sportsbookRepository.ProcessOnMarketCancellationMessage(_messageBroker, msg, correlationId)
+                                (msg) => _sportsbookRepository.ProcessCacheInvalidationMessage(msg)
                             );
                             break;
                     }
