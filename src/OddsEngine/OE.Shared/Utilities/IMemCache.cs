@@ -22,5 +22,7 @@ namespace OE.Shared.Utilities
         bool Contains(string key);
 
         List<string> GetExistingKeys(string name);
+
+        void DeleteCacheByPrefix(string prefix);
     }
 }

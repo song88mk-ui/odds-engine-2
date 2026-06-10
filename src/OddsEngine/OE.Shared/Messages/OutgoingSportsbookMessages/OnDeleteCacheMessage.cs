@@ -11,5 +11,6 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public CacheType CacheType { get; set; }
         public string CacheKey { get; set; } = null;
         public List<string> CacheKeys { get; set; } = null;
+        public bool PurgeAll { get; set; } = false;
     }
 }

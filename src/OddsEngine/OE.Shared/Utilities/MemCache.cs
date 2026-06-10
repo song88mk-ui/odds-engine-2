@@ -75,5 +75,18 @@ namespace OE.Shared.Utilities
 
             return keys;
         }
+
+        public void DeleteCacheByPrefix(string prefix)
+        {
+            var keys = MemoryCache.Default
+                .Where(kvp => kvp.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            foreach (var key in keys)
+            {
+                MemoryCache.Default.Remove(key);
+            }
+        }
     }
 }

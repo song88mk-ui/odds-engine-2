@@ -282,7 +282,13 @@ namespace OE.Sportsbook.Service.Repositories
 
         public void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message)
         {
-            foreach(var cache in message.CacheKeys)
+            if (message.PurgeAll)
+            {
+                _memCache.DeleteCacheByPrefix(CACHE_PREFIX);
+                return;
+            }
+
+            foreach (var cache in message.CacheKeys)
             {
                 _memCache.DeleteCache($"{CACHE_PREFIX}{cache}");
             }
