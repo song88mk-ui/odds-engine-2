@@ -175,6 +175,46 @@ namespace OE.Sportsbook.Service.Repositories
             
         }
 
+        public void ProcessOnBetSettlementMessage(IMessageBroker messageBroker, OnBetSettlementMessage message, string correlationId)
+        {
+            if (message?.Selections == null || !message.Selections.Any())
+                return;
+
+            try
+            {
+                foreach (var selection in message.Selections)
+                {
+                    var betStatus = ToBetStatus(selection.Result, selection.VoidFactor);
+
+                    var filter = Builders<Selection>.Filter.Where(s =>
+                        s.PrFiId == message.ProviderFixtureId &&
+                        s.MaTeId == selection.MarketTemplateId &&
+                        s.SeTeId == selection.SelectionTemplateId &&
+                        s.SeSp == selection.SelectionSpecifier);
+
+                    var mongoSelections = _selectionCollection.Find(filter).ToList();
+
+                    foreach (var mongoSel in mongoSelections)
+                    {
+                        var payload = new
+                        {
+                            MarketId = mongoSel.MaId,
+                            SelectionId = mongoSel.SeId,
+                            SelectionStatus = betStatus,
+                            DeadHeatFactor = selection.DeadHeatFactor
+                        };
+
+                        messageBroker.Publish(payload, MessageType.ON_BET_SETTLEMENT, $"r.oe.bet.settlement", Guid.NewGuid().ToString());
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogErrorEx($"ProcessOnBetSettlementMessage Error: {ex.Message} --> {JsonSerializer.Serialize(message)}");
+                throw;
+            }
+        }
+
         public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
         {
             if (message == null || (_IsBetStopGlobally == message.IsBetStop))
@@ -951,6 +991,19 @@ namespace OE.Sportsbook.Service.Repositories
                 LaCo = x.TargetLanguageId,
                 Va = x.TargetText
             }).ToList();
+        }
+
+        private static BetStatus ToBetStatus(bool result, VoidFactor? voidFactor)
+        {
+            if (result)
+                return voidFactor == VoidFactor.Half ? BetStatus.HalfWon : BetStatus.Won;
+
+            return voidFactor switch
+            {
+                VoidFactor.One => BetStatus.Void,
+                VoidFactor.Half => BetStatus.HalfLost,
+                _ => BetStatus.Lost
+            };
         }
 
         #endregion

@@ -117,6 +117,12 @@ namespace OE.Sportsbook.Service
                                 (msg) => _sportsbookRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_BET_SETTLEMENT:
+                            ProcessMessage<OnBetSettlementMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnBetSettlementMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                         case MessageType.ON_BET_STOP_GLOBAL:
                             ProcessMessage<OnBetStopGlobalMessage>(
                                 payload,

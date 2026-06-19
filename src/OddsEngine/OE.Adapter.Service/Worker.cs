@@ -115,6 +115,12 @@ namespace OE.Adapter.Service
                                 (msg) => _tradingRepository.ProcessOnMarketSettlementMessage(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_BET_SETTLEMENT:
+                            ProcessMessage<OnBetSettlementMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnBetSettlementMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                         case MessageType.ON_BET_STOP_GLOBAL:
                             _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
                             ProcessMessage<OnBetStopGlobalMessage>(

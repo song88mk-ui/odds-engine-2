@@ -49,6 +49,25 @@ namespace OE.Adapter.Service.Repositories
             PublishMessage(messageBroker, message, MessageType.ON_MARKET_SETTLEMENT, correlationId);
         }
 
+        public void ProcessOnBetSettlementMessage(IMessageBroker messageBroker, OnBetSettlementMessage message, string correlationId)
+        {
+            try
+            {
+                using (var activity = _activitySource.StartActivity("publish.message"))
+                {
+                    var instanceName = _helper.GetInstanceName(message.ProviderFixtureId);
+                    activity?.SetTag("sb.engine.service.id", instanceName);
+                    messageBroker.Publish(message, MessageType.ON_BET_SETTLEMENT, $"r.oe.adapter.{MessageType.ON_BET_SETTLEMENT.ToLower()}.{instanceName}", correlationId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"{MessageType.ON_BET_SETTLEMENT} {JsonSerializer.Serialize(message)} {ex.Message}");
+                _logger.LogError($"{MessageType.ON_BET_SETTLEMENT} {ex.StackTrace}");
+                throw;
+            }
+        }
+
         public void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId)
         {
             using (var activity = _activitySource.StartActivity("publish.message"))
