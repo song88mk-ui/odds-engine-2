@@ -130,6 +130,93 @@ namespace OE.Sportsbook.Service.Repositories
             return result;
         }
 
+        // Content-keyed lookup (proposal: docs/proposals/TranslationContentKeying.md in platform-final).
+        // Input maps each entity key ("MaId:123") -> its source text; translations are matched by
+        // SOURCE_HASH so identical texts share one translation. Result stays keyed by the entity key,
+        // so MapTranslations is unchanged. Returns one TranslationItem per language per key.
+        public Dictionary<string, List<TranslationItem>> GetTranslationsByContent(Dictionary<string, string> keyToSourceText)
+        {
+            var result = new Dictionary<string, List<TranslationItem>>();
+
+            if (keyToSourceText == null || keyToSourceText.Count == 0)
+                return result;
+
+            var keyToHash = new Dictionary<string, string>();
+            foreach (var kvp in keyToSourceText)
+            {
+                if (string.IsNullOrWhiteSpace(kvp.Value))
+                    continue;
+
+                keyToHash[kvp.Key] = TranslationHashing.SourceHash(kvp.Value);
+            }
+
+            if (keyToHash.Count == 0)
+                return result;
+
+            var hashToItems = new Dictionary<string, List<TranslationItem>>();
+            var missingHashes = new List<string>();
+
+            foreach (var hash in keyToHash.Values.Distinct())
+            {
+                var cacheKey = $"{CACHE_PREFIX}h:{hash}";
+                var cached = _memCache.GetCache<List<TranslationItem>>(cacheKey);
+
+                if (cached != null)
+                    hashToItems[hash] = cached;
+                else
+                    missingHashes.Add(hash);
+            }
+
+            if (missingHashes.Count > 0)
+            {
+                var sqlData = _context.SportsbookDynamic
+                    .AsNoTracking()
+                    .Where(x =>
+                        missingHashes.Contains(x.SourceHash)
+                        && x.Processed
+                        && !string.IsNullOrEmpty(x.TargetText))
+                    .Select(x => new { x.SourceHash, x.TargetLanguageId, x.TargetText, x.GlossaryVersion })
+                    .ToList();
+
+                // Multiple rows can share a hash (pre-dedup / multiple glossary versions);
+                // keep one item per language (highest glossary version).
+                var grouped = sqlData
+                    .GroupBy(x => x.SourceHash)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.GroupBy(i => i.TargetLanguageId)
+                              .Select(lg => lg.OrderByDescending(i => i.GlossaryVersion).First())
+                              .Select(i => new TranslationItem
+                              {
+                                  TargetLanguageId = i.TargetLanguageId,
+                                  TargetText = i.TargetText
+                              })
+                              .ToList());
+
+                foreach (var hash in missingHashes)
+                {
+                    var items = grouped.TryGetValue(hash, out var v) ? v : new List<TranslationItem>();
+
+                    var cacheKey = $"{CACHE_PREFIX}h:{hash}";
+                    _memCache.AddOrUpdateCache(
+                        cacheKey,
+                        items,
+                        (int)TimeSpan.FromMinutes(CACHE_DURATION_MINUTES).TotalHours);
+
+                    hashToItems[hash] = items;
+                }
+            }
+
+            foreach (var kvp in keyToHash)
+            {
+                result[kvp.Key] = hashToItems.TryGetValue(kvp.Value, out var items)
+                    ? items
+                    : new List<TranslationItem>();
+            }
+
+            return result;
+        }
+
         #endregion
     }
 }

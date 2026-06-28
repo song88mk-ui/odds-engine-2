@@ -26,6 +26,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OE.Job.LiveStream", "OE.Job
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OE.Job.Lookup", "OE.Job.Lookup\OE.Job.Lookup.csproj", "{4232E113-4BC7-418F-9E37-294F008FD62D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OE.Shared.Test", "OE.Shared.Test\OE.Shared.Test.csproj", "{409FE7C9-6905-4F91-B61E-9789688366D7}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -68,6 +70,10 @@ Global
 		{4232E113-4BC7-418F-9E37-294F008FD62D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4232E113-4BC7-418F-9E37-294F008FD62D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4232E113-4BC7-418F-9E37-294F008FD62D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{409FE7C9-6905-4F91-B61E-9789688366D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{409FE7C9-6905-4F91-B61E-9789688366D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{409FE7C9-6905-4F91-B61E-9789688366D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{409FE7C9-6905-4F91-B61E-9789688366D7}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
