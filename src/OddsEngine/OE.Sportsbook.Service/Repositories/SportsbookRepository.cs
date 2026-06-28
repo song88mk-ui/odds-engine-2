@@ -22,6 +22,7 @@ namespace OE.Sportsbook.Service.Repositories
         #region Fields
 
         private readonly IConfiguration _configuration;
+        private readonly bool _useTranslationContentKey;
         private readonly IMemCache _memCache;
         private readonly IHelper _helper;
 
@@ -55,6 +56,7 @@ namespace OE.Sportsbook.Service.Repositories
             ITranslationRepository translationRepository)
         {
             _configuration = configuration;
+            _useTranslationContentKey = bool.TryParse(_configuration["Custom:Translation:UseContentKey"], out var useContentKey) && useContentKey;
             _memCache = memCache;
             _helper = helper;
             _bulkWriteDurationHistogram = instrumentation.BulkWriteDurationHistogram;
@@ -901,16 +903,30 @@ namespace OE.Sportsbook.Service.Repositories
             AddTranslationKey(stringIds, message.Id, "FiId");
 
             // =========================
-            // MARKET LEVEL
+            // MARKET / SELECTION LEVEL
             // =========================
+            if (_useTranslationContentKey)
+            {
+                var map = new Dictionary<string, string>();
+
+                foreach (var market in filteredMarkets)
+                    AddContentKey(map, market.Id, "MaId", market.MaNa);
+
+                foreach (var selection in filteredSelections)
+                    AddContentKey(map, selection.SeId, "SeId", selection.SeNa);
+
+                var merged = _translationRepository.GetTranslationsAsync(stringIds.ToList());
+                foreach (var kvp in _translationRepository.GetTranslationsByContent(map))
+                    merged[kvp.Key] = kvp.Value;
+
+                return merged;
+            }
+
             foreach (var market in filteredMarkets)
             {
                 AddTranslationKey(stringIds, market.Id, "MaId");
             }
 
-            // =========================
-            // SELECTION LEVEL
-            // =========================
             foreach (var selection in filteredSelections)
             {
                 AddTranslationKey(stringIds, selection.SeId, "SeId");
@@ -933,8 +949,27 @@ namespace OE.Sportsbook.Service.Repositories
             AddTranslationKey(stringIds, message.Id, "FiId");
 
             // =========================
-            // MARKET LEVEL
+            // MARKET / SELECTION LEVEL
             // =========================
+            if (_useTranslationContentKey)
+            {
+                var map = new Dictionary<string, string>();
+
+                foreach (var market in message.Ma)
+                {
+                    AddContentKey(map, market.Id, "MaId", market.MaNa);
+
+                    foreach (var selection in market.Se)
+                        AddContentKey(map, selection.Id, "SeId", selection.SeNa);
+                }
+
+                var merged = _translationRepository.GetTranslationsAsync(stringIds.ToList());
+                foreach (var kvp in _translationRepository.GetTranslationsByContent(map))
+                    merged[kvp.Key] = kvp.Value;
+
+                return merged;
+            }
+
             foreach (var market in message.Ma)
             {
                 AddTranslationKey(stringIds, market.Id, "MaId");
@@ -966,6 +1001,24 @@ namespace OE.Sportsbook.Service.Repositories
             var key = $"{prefix}:{id}";
 
             stringIds.Add(key);
+        }
+
+        // Content-keyed variant: maps the entity key ("MaId:123") to its source text so the
+        // translation can be matched by SOURCE_HASH. Skips entries with no id or no source text.
+        private void AddContentKey(
+            Dictionary<string, string> map,
+            object? id,
+            string prefix,
+            string sourceText)
+        {
+            if (id == null ||
+                string.IsNullOrWhiteSpace(id.ToString()) ||
+                string.IsNullOrWhiteSpace(sourceText))
+            {
+                return;
+            }
+
+            map[$"{prefix}:{id}"] = sourceText;
         }
 
         private List<TranslationBase> MapTranslations(
