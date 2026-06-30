@@ -39,9 +39,5 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public int CuSer { get; set; }
 
         public string StUr { get; set; }
-        public List<TranslationBase> SpTr { get; set; } = new List<TranslationBase>();
-        public List<TranslationBase> SegTr { get; set; } = new List<TranslationBase>();
-        public List<TranslationBase> LeTr { get; set; } = new List<TranslationBase>();
-        public List<TranslationBase> FiTr { get; set; } = new List<TranslationBase>();
     }
 }
