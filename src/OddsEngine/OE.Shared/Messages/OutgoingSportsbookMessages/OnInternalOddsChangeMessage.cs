@@ -36,11 +36,6 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public bool IsSu { get; set; }
         public bool? IsBo { get; set; }
         public string StUr { get; set; }
-        public List<TranslationBase> SpTr { get; set; } = new List<TranslationBase>();
-        public List<TranslationBase> SegTr { get; set; } = new List<TranslationBase>();
-        public List<TranslationBase> LeTr { get; set; } = new List<TranslationBase>();
-        public List<TranslationBase> FiTr { get; set; } = new List<TranslationBase>();
-
 
         public List<InternalMarketMessage> Ma { get; set; } = new List<InternalMarketMessage>();
         public string HoId { get; set; }
@@ -69,7 +64,6 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string ClCo { get; set; }
         public string ClCoMa { get; set; }
         public bool InPl { get; set; }
-        public List<TranslationBase> MaTr { get; set; } = new List<TranslationBase>();
 
         public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();
     }
@@ -94,7 +88,6 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public int SoOr { get; set; }
         public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; }
-        public List<TranslationBase> SeTr { get; set; } = new List<TranslationBase>();
     }
 
 }

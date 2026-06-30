@@ -22,7 +22,6 @@ namespace OE.Sportsbook.Service.Repositories
         #region Fields
 
         private readonly IConfiguration _configuration;
-        private readonly bool _useTranslationContentKey;
         private readonly IMemCache _memCache;
         private readonly IHelper _helper;
 
@@ -36,7 +35,6 @@ namespace OE.Sportsbook.Service.Repositories
         private IMongoCollection<Selection> _selectionCollection;
 
         private readonly ILogger<SportsbookRepository> _logger;
-        private readonly ITranslationRepository _translationRepository;
 
         private const string FIXTURE_PREFIX = "fi";
         private const string MARKET_MAPPING_PREFIX = "mama";
@@ -52,16 +50,13 @@ namespace OE.Sportsbook.Service.Repositories
 
         #region Ctor
 
-        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper, Instrumentation instrumentation, ILogger<SportsbookRepository> logger,
-            ITranslationRepository translationRepository)
+        public SportsbookRepository(IConfiguration configuration, IMemCache memCache, IHelper helper, Instrumentation instrumentation, ILogger<SportsbookRepository> logger)
         {
             _configuration = configuration;
-            _useTranslationContentKey = bool.TryParse(_configuration["Custom:Translation:UseContentKey"], out var useContentKey) && useContentKey;
             _memCache = memCache;
             _helper = helper;
             _bulkWriteDurationHistogram = instrumentation.BulkWriteDurationHistogram;
             _logger = logger;
-            _translationRepository = translationRepository;
 
             PrepareDatabaseConnection();
         }
@@ -601,8 +596,6 @@ namespace OE.Sportsbook.Service.Repositories
             //var fixtureGeneration = GetFixtureId(message.FixtureSpecifier);            
             var markets = new List<InternalMarketMessage>();
 
-            var translations = LoadTranslationsAsync(message);
-
             foreach (var market in message.Ma)
             {
                 if (market.Se.Count == 0) continue;
@@ -630,7 +623,6 @@ namespace OE.Sportsbook.Service.Repositories
                         SeNa = selection.SeNa,
                         SoOr = selection.SoOr,
                         ClOd = selection.ClOd,
-                        SeTr = MapTranslations(translations, selection.SeId, "SeId"),
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -683,7 +675,6 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
-                    MaTr = MapTranslations(translations, market.MaId, "MaId"),
                     Se = selections
                 });
             }
@@ -719,10 +710,6 @@ namespace OE.Sportsbook.Service.Repositories
                 ClCo = message.ClCo,
                 CoId = correlationId,
                 IsSu = message.IsSu,
-                SpTr = MapTranslations(translations, message.SpId, "SpId"),
-                SegTr = MapTranslations(translations, message.SegId, "SegId"),
-                LeTr = MapTranslations(translations, message.LeId, "LeId"),
-                FiTr = MapTranslations(translations, message.FiId, "FiId"),
                 //IsInsert = fixtureGeneration.Item2,
                 //IsInsert = true,
                 HoId = message.HoId,
@@ -745,8 +732,6 @@ namespace OE.Sportsbook.Service.Repositories
         private OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnFixtureChangeMessage message, List<Market> filteredMarkets, List<Selection> filteredSelections, string correlationId)
         {
             var markets = new List<InternalMarketMessage>();
-
-            var translations = LoadTranslationsAsync(message, filteredMarkets, filteredSelections);
 
             foreach (var market in filteredMarkets)
             {
@@ -777,7 +762,6 @@ namespace OE.Sportsbook.Service.Repositories
                         SoOr = selection.SeSoOr,
                         SeStId = selection.SeStId,
                         //ClOd = selection.ClOd,
-                        SeTr = MapTranslations(translations, selection.SeId, "SeId"),
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -800,7 +784,6 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
-                    MaTr = MapTranslations(translations, market.MaId, "MaId"),
                     Se = selections
                 });
             }
@@ -836,10 +819,6 @@ namespace OE.Sportsbook.Service.Repositories
                 ClCo = message.ClCo,
                 CoId = correlationId,
                 IsSu = message.IsSu,
-                SpTr = MapTranslations(translations, message.SpId, "SpId"),
-                SegTr = MapTranslations(translations, message.SegId, "SegId"),
-                LeTr = MapTranslations(translations, message.LeId, "LeId"),
-                FiTr = MapTranslations(translations, message.FiId, "FiId"),
                 //IsInsert = true,
                 HoId = message.HoId,
                 AwId = message.AwId,
@@ -885,165 +864,6 @@ namespace OE.Sportsbook.Service.Repositories
             var result = _marketCollection.Find(filter).Project<MarketStatusProjection>(projection).ToList();
 
             return result != null ? result.Select(s => s.MaId).ToList() : new List<long>();
-        }
-
-        private Dictionary<string, List<TranslationItem>> LoadTranslationsAsync(
-            OnFixtureChangeMessage message,
-            List<Market> filteredMarkets,
-            List<Selection> filteredSelections)
-        {
-            var stringIds = new HashSet<string>();
-
-            // =========================
-            // FIXTURE LEVEL
-            // =========================
-            AddTranslationKey(stringIds, message.SpId, "SpId");
-            AddTranslationKey(stringIds, message.SegId, "SegId");
-            AddTranslationKey(stringIds, message.LeId, "LeId");
-            AddTranslationKey(stringIds, message.Id, "FiId");
-
-            // =========================
-            // MARKET / SELECTION LEVEL
-            // =========================
-            if (_useTranslationContentKey)
-            {
-                var map = new Dictionary<string, string>();
-
-                foreach (var market in filteredMarkets)
-                    AddContentKey(map, market.Id, "MaId", market.MaNa);
-
-                foreach (var selection in filteredSelections)
-                    AddContentKey(map, selection.SeId, "SeId", selection.SeNa);
-
-                var merged = _translationRepository.GetTranslationsAsync(stringIds.ToList());
-                foreach (var kvp in _translationRepository.GetTranslationsByContent(map))
-                    merged[kvp.Key] = kvp.Value;
-
-                return merged;
-            }
-
-            foreach (var market in filteredMarkets)
-            {
-                AddTranslationKey(stringIds, market.Id, "MaId");
-            }
-
-            foreach (var selection in filteredSelections)
-            {
-                AddTranslationKey(stringIds, selection.SeId, "SeId");
-            }
-
-            return _translationRepository.GetTranslationsAsync(stringIds.ToList());
-        }
-
-        private Dictionary<string, List<TranslationItem>> LoadTranslationsAsync(
-            OnMarketChangeMessage message)
-        {
-            var stringIds = new HashSet<string>();
-
-            // =========================
-            // FIXTURE LEVEL
-            // =========================
-            AddTranslationKey(stringIds, message.SpId, "SpId");
-            AddTranslationKey(stringIds, message.SegId, "SegId");
-            AddTranslationKey(stringIds, message.LeId, "LeId");
-            AddTranslationKey(stringIds, message.Id, "FiId");
-
-            // =========================
-            // MARKET / SELECTION LEVEL
-            // =========================
-            if (_useTranslationContentKey)
-            {
-                var map = new Dictionary<string, string>();
-
-                foreach (var market in message.Ma)
-                {
-                    AddContentKey(map, market.Id, "MaId", market.MaNa);
-
-                    foreach (var selection in market.Se)
-                        AddContentKey(map, selection.Id, "SeId", selection.SeNa);
-                }
-
-                var merged = _translationRepository.GetTranslationsAsync(stringIds.ToList());
-                foreach (var kvp in _translationRepository.GetTranslationsByContent(map))
-                    merged[kvp.Key] = kvp.Value;
-
-                return merged;
-            }
-
-            foreach (var market in message.Ma)
-            {
-                AddTranslationKey(stringIds, market.Id, "MaId");
-
-
-                // =========================
-                // SELECTION LEVEL
-                // =========================
-                foreach (var selection in market.Se)
-                {
-                    AddTranslationKey(stringIds, selection.Id, "SeId");
-                }
-            }
-
-            return _translationRepository.GetTranslationsAsync(stringIds.ToList());
-        }
-
-        private void AddTranslationKey(
-            HashSet<string> stringIds,
-            object? id,
-            string prefix)
-        {
-            if (id == null ||
-                string.IsNullOrWhiteSpace(id.ToString()))
-            {
-                return;
-            }
-
-            var key = $"{prefix}:{id}";
-
-            stringIds.Add(key);
-        }
-
-        // Content-keyed variant: maps the entity key ("MaId:123") to its source text so the
-        // translation can be matched by SOURCE_HASH. Skips entries with no id or no source text.
-        private void AddContentKey(
-            Dictionary<string, string> map,
-            object? id,
-            string prefix,
-            string sourceText)
-        {
-            if (id == null ||
-                string.IsNullOrWhiteSpace(id.ToString()) ||
-                string.IsNullOrWhiteSpace(sourceText))
-            {
-                return;
-            }
-
-            map[$"{prefix}:{id}"] = sourceText;
-        }
-
-        private List<TranslationBase> MapTranslations(
-            Dictionary<string, List<TranslationItem>> translations,
-            object id,
-            string prefix)
-        {
-            if (id == null ||
-                string.IsNullOrWhiteSpace(id.ToString()))
-            {
-                return new List<TranslationBase>();
-            }
-
-            var key = $"{prefix}:{id}";
-
-            if (!translations.TryGetValue(key, out var items))
-            {
-                return new List<TranslationBase>();
-            }
-
-            return items.Select(x => new TranslationBase
-            {
-                LaCo = x.TargetLanguageId,
-                Va = x.TargetText
-            }).ToList();
         }
 
         private static BetStatus ToBetStatus(bool result, VoidFactor? voidFactor)

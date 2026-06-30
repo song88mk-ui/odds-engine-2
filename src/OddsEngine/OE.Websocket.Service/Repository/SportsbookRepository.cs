@@ -1484,11 +1484,6 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
-                        SeNaTr = selection.SeTr.Select(ss => new OutgoingSelectionTranslation
-                        {
-                            LaCo = ss.LaCo,
-                            SeNa = message.SpId != 1 ? ss.Va : PrepareSelectionName(market.MaTeId, selection.SeTeId, ss.Va, market.Li)
-                        }).ToList()
                     });
                 }
 
@@ -1510,11 +1505,6 @@ namespace OE.WebSocket.Service.Repository
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
                     InPl = market.InPl,
-                    MaNaTr = market.MaTr.Select(mt => new OutgoingMarketTranslation
-                    {
-                        LaCo = mt.LaCo,
-                        MaNa = mt.Va
-                    }).ToList(),
                     Se = selections
                 });
             }
@@ -1550,28 +1540,6 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = isBetBuilder,
-                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SpNa = f.Va
-                    }).ToList(),
-                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SegNa = f.Va
-                    }).ToList(),
-                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
-                    {
-                        LaCo = f.LaCo,
-                        LeNa = f.Va
-                    }).ToList(),
-                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
-                    {
-                        LaCo = f.LaCo,
-                        FiNa = f.Va,
-                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
-                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
-                    }).ToList(),
                     Ma = markets
                 }
             };
@@ -1615,28 +1583,6 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
-                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SpNa = f.Va
-                    }).ToList(),
-                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SegNa = f.Va
-                    }).ToList(),
-                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
-                    {
-                        LaCo = f.LaCo,
-                        LeNa = f.Va
-                    }).ToList(),
-                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
-                    {
-                        LaCo = f.LaCo,
-                        FiNa = f.Va,
-                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
-                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
-                    }).ToList(),
                     Ma = finalMarkets.Select(m => new OutgoingMarket
                     {
                         MaTeId = m.MaTeId,
@@ -1650,11 +1596,6 @@ namespace OE.WebSocket.Service.Repository
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         InPl = m.InPl,
-                        MaNaTr = m.MaTr.Select(mt => new OutgoingMarketTranslation
-                        {
-                            LaCo = mt.LaCo,
-                            MaNa = mt.Va
-                        }).ToList(),
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
@@ -1666,11 +1607,6 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
-                            SeNaTr = s.SeTr.Select(ss => new OutgoingSelectionTranslation
-                            {
-                                LaCo = ss.LaCo,
-                                SeNa = ss.Va
-                            }).ToList()
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1721,28 +1657,6 @@ namespace OE.WebSocket.Service.Repository
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
                     StUr = message.StUr,
-                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SpNa = f.Va
-                    }).ToList(),
-                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SegNa = f.Va
-                    }).ToList(),
-                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
-                    {
-                        LaCo = f.LaCo,
-                        LeNa = f.Va
-                    }).ToList(),
-                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
-                    {
-                        LaCo = f.LaCo,
-                        FiNa = f.Va,
-                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
-                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
-                    }).ToList(),
                     Ma = message.Ma.Select(m => new OutgoingMarket
                     {
                         MaTeId = m.MaTeId,
@@ -1755,11 +1669,6 @@ namespace OE.WebSocket.Service.Repository
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         InPl = m.InPl,
-                        MaNaTr = m.MaTr.Select(mt => new OutgoingMarketTranslation
-                        {
-                            LaCo = mt.LaCo,
-                            MaNa = mt.Va
-                        }).ToList(),
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
@@ -1771,11 +1680,6 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
-                            SeNaTr = s.SeTr.Select(ss => new OutgoingSelectionTranslation
-                            {
-                                LaCo = ss.LaCo,
-                                SeNa = ss.Va
-                            }).ToList()
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1848,11 +1752,6 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
-                        SeNaTr = selection.SeTr.Select(ss => new OutgoingSelectionTranslation
-                        {
-                            LaCo = ss.LaCo,
-                            SeNa = message.SpId != 1 ? ss.Va: PrepareSelectionName(market.MaTeId, selection.SeTeId, ss.Va, market.Li)
-                        }).ToList()
                     });
                 }
 
@@ -1898,11 +1797,6 @@ namespace OE.WebSocket.Service.Repository
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
                     InPl = market.InPl,
-                    MaNaTr = market.MaTr.Select(mt => new OutgoingMarketTranslation
-                    {
-                        LaCo = mt.LaCo,
-                        MaNa = mt.Va
-                    }).ToList(),
                     Se = selections
                 });
             }
@@ -1938,28 +1832,6 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = isBetBuilder,
-                    SpNaTr = message.SpTr.Select(f => new OutgoingSportTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SpNa = f.Va
-                    }).ToList(),
-                    SegNaTr = message.SegTr.Select(f => new OutgoingSegmentTranslation
-                    {
-                        LaCo = f.LaCo,
-                        SegNa = f.Va
-                    }).ToList(),
-                    LeNaTr = message.LeTr.Select(f => new OutgoingLeagueTranslation
-                    {
-                        LaCo = f.LaCo,
-                        LeNa = f.Va
-                    }).ToList(),
-                    FiNaTr = message.FiTr.Select(f => new OutgoingFixtureTranslation
-                    {
-                        LaCo = f.LaCo,
-                        FiNa = f.Va,
-                        HoNa = GetHomeName(f.Va, (FixtureType)message.FiTyId),
-                        AwNa = GetAwayName(f.Va, (FixtureType)message.FiTyId),
-                    }).ToList(),
                     Ma = markets
                 }
             };

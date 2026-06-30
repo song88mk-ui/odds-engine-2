@@ -18,10 +18,6 @@ namespace OE.WebSocket.Service.Messages
         {
             InMa = new List<OutgoingBoostedMarket>();
             UpMa = new List<OutgoingBoostedMarket>();
-            SpNaTr = new List<OutgoingSportTranslation>();
-            SegNaTr = new List<OutgoingSegmentTranslation>();
-            LeNaTr = new List<OutgoingLeagueTranslation>();
-            FiNaTr = new List<OutgoingFixtureTranslation>();
         }
         public int SpId { get; set; }
         public string SpNa { get; set; }
@@ -45,10 +41,6 @@ namespace OE.WebSocket.Service.Messages
         public int CuMi { get; set; }
         public int SoOr { get; set; }
         public int MaCo { get; set; }
-        public List<OutgoingSportTranslation> SpNaTr { get; set; }
-        public List<OutgoingSegmentTranslation> SegNaTr { get; set; }
-        public List<OutgoingLeagueTranslation> LeNaTr { get; set; }
-        public List<OutgoingFixtureTranslation> FiNaTr { get; set; }
         public List<OutgoingBoostedMarket> InMa { get; set; }
         public List<OutgoingBoostedMarket> UpMa { get; set; }
     }
@@ -57,7 +49,6 @@ namespace OE.WebSocket.Service.Messages
         public OutgoingBoostedMarket()
         {
             Se = new List<OutgoingBoostedSelection>();
-            MaNaTr = new List<OutgoingMarketTranslation>();
         }
         public string MaTeId { get; set; }
         public string MaId { get; set; }
@@ -67,15 +58,10 @@ namespace OE.WebSocket.Service.Messages
         public string MaNa { get; set; }
         public int SoOr { get; set; }
         public bool IsIn { get; set; }
-        public List<OutgoingMarketTranslation> MaNaTr { get; set; }
         public List<OutgoingBoostedSelection> Se { get; set; }
     }
     public class OutgoingBoostedSelection
     {
-        public OutgoingBoostedSelection()
-        {
-            SeNaTr = new List<OutgoingSelectionTranslation>();
-        }
         public string SeTeId { get; set; }
         public string SeId { get; set; }
         public string SeNa { get; set; }
@@ -83,6 +69,5 @@ namespace OE.WebSocket.Service.Messages
         public string BoOd { get; set; }
         public bool IsAc { get; set; }
         public int SoOr { get; set; }
-        public List<OutgoingSelectionTranslation> SeNaTr { get; set; }
     }
 }
