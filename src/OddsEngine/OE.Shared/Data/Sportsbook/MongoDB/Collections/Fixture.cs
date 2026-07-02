@@ -47,8 +47,10 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public List<LeagueTranslationMDB> LeNaTr { get; set; }
         public List<FixtureTranslationMDB> FiNaTr { get; set; }
         public string HoId { get; set; }
+        public string HoNa { get; set; } // Home team name — source text for translation lookup
         public int HoBeId { get; set; }
         public string AwId { get; set; }
+        public string AwNa { get; set; } // Away team name — source text for translation lookup
         public int AwBeId { get; set; }
         public int LeBeId { get; set; }
         public List<PeriodScoreMDB> PeSc { get; set; }

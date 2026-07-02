@@ -379,6 +379,8 @@ namespace OE.Sportsbook.Service.Repositories
                 .Set(s => s.ClCo, message.ClCo)
                 .Set(s => s.HoId, message.HoId)
                 .Set(s => s.AwId, message.AwId)
+                .Set(s => s.HoNa, message.HoNa)
+                .Set(s => s.AwNa, message.AwNa)
                 .Set(s => s.StUr, string.IsNullOrEmpty(message.StUr) ? "-" : message.StUr);
             //s.Set(s => s.LiId, message.LiId) TODO
             //.Set(s => s.ClMa, message.ClMa) TODO
@@ -473,6 +475,7 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.MaTeId, market.MaTeId)
                         .Set(s => s.MaNa, market.MaNa)
                         .Set(s => s.Li, market.Li)
+                        .Set(s => s.IsHa, market.IsHa)
                         .Set(s => s.MaStId, market.MaStId)
                         .Set(s => s.MaStNa, market.MaStNa)
                         .Set(s => s.MaSoOr, market.SoOr)
@@ -509,6 +512,7 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.LeId, message.LeId)
                             .Set(s => s.MaTeId, market.MaTeId)
                             .Set(s => s.SeTeId, selection.SeTeId)
+                            .Set(s => s.SeTeNa, selection.SeTeNa)
                             .Set(s => s.SeNa, selection.SeNa)
                             .Set(s => s.Od, selection.Od)
                             .Set(s => s.IsAc, selection.IsAc)

@@ -21,6 +21,7 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public int LeId { get; set; }
         public string MaTeId { get; set; }
         public string SeTeId { get; set; }
+        public string SeTeNa { get; set; } // Selection template name — source text for translation lookup
         public string SeNa { get; set; }
         public decimal Od { get; set; }
         public bool IsAc { get; set; }

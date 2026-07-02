@@ -20,6 +20,8 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string FiStNa { get; set; }
         public string HoId { get; set; }
         public string AwId { get; set; }
+        public string HoNa { get; set; } // Home team name — source text for translation lookup
+        public string AwNa { get; set; } // Away team name — source text for translation lookup
         public string Sc { get; set; }
         public bool IsOfLi { get; set; }
         public int HoReCa { get; set; }

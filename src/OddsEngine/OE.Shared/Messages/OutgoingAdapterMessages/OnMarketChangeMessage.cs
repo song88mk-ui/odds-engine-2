@@ -17,6 +17,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public long MaId { get; set; }
         public string MaTeId { get; set; }
         public string Li { get; set; }
+        public bool IsHa { get; set; } // IsHandicap — needed downstream to recompose selection names from templates + line
         public int MaStId { get; set; }
         public string MaStNa { get; set; }
         public int CaStId { get; set; }
@@ -40,6 +41,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string PrSeId { get; set; }
         public string MaTeId { get; set; }
         public string SeTeId { get; set; }
+        public string SeTeNa { get; set; } // Selection template name — source text for translation lookup
         public string MaSp { get; set; }
         public long SeId { get; set; }
         public decimal Od { get; set; }
