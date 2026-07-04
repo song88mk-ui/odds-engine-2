@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OE.Adapter.Service.Repositories;
 using OE.Adapter.Service.Telemetry;
@@ -26,10 +27,14 @@ namespace OE.Adapter.Service
         private readonly IMessageBroker _messageBroker;
         private readonly ITradingRepository _tradingRepository;
         private readonly ITranslationCache _translationCache;
+        private readonly IConfiguration _configuration;
 
         // Preload must succeed before consuming starts (messages would otherwise flow through
         // un-enriched); transient SQL failures are retried, then the service crashes so the
-        // orchestrator restarts it.
+        // orchestrator restarts it. When no Translation connection string is configured at all
+        // (secrets are committed empty — deployment injects ConnectionStrings__Translation),
+        // the preload is skipped entirely so the adapter keeps flowing un-enriched instead of
+        // crash-looping.
         private const int PRELOAD_RETRY_COUNT = 5;
         private const int PRELOAD_RETRY_DELAY_SECONDS = 10;
 
@@ -41,12 +46,13 @@ namespace OE.Adapter.Service
 
         #region Ctor
 
-        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, ITranslationCache translationCache, Instrumentation instrumentation)
+        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, ITranslationCache translationCache, IConfiguration configuration, Instrumentation instrumentation)
         {
             _logger = logger;
             _messageBroker = messageBroker;
             _tradingRepository = tradingRepository;
             _translationCache = translationCache;
+            _configuration = configuration;
             _processedMessagesCounter = instrumentation.ProcessedMessagesCounter;
             _activitySource = instrumentation.ActivitySource;
         }
@@ -89,6 +95,12 @@ namespace OE.Adapter.Service
 
         private async Task PreloadTranslationCache(CancellationToken stoppingToken)
         {
+            if (string.IsNullOrWhiteSpace(_configuration.GetConnectionString("Translation")))
+            {
+                _logger.LogWarning("No Translation connection string configured — translation preload skipped; messages flow un-enriched");
+                return;
+            }
+
             for (var attempt = 1; ; attempt++)
             {
                 try
