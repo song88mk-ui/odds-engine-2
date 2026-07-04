@@ -16,6 +16,10 @@
         public const string ON_BET_STOP_GLOBAL = "OnBetStopGlobal";
         public const string ON_HEART_BEAT = "OnHeartBeat";
         public const string ON_DYNAMIC_TRANSLATION_CHANGE = "OnDynamicTranslationChange";
+        // Payload-carrying successor to ON_DYNAMIC_TRANSLATION_CHANGE (which is purge-only):
+        // carries changed TranslationCache2 rows from Platform.CacheSync.Service to the
+        // OE.Adapter.Service instances (see OnTranslationChangeMessage).
+        public const string ON_TRANSLATION_CHANGE = "OnTranslationChange";
 
         // Internal
         public const string ON_ODDS_CHANGE = "OnOddsChange";

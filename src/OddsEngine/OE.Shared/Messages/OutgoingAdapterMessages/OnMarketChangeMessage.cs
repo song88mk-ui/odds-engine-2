@@ -17,6 +17,7 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public long MaId { get; set; }
         public string MaTeId { get; set; }
         public string Li { get; set; }
+        public bool IsHa { get; set; } // IsHandicap — needed downstream to recompose selection names from templates + line
         public int MaStId { get; set; }
         public string MaStNa { get; set; }
         public int CaStId { get; set; }
@@ -24,6 +25,9 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string MaSp { get; set; }
         public string MaNa { get; set; }
         public string MaTeNa { get; set; }
+        // Market template translations (TranslationCache2 key "MaTe:{MaTeId}"); null/empty ->
+        // fall back to MaTeNa. See OnFixtureChangeMessage translation lists.
+        public List<TranslationMessage> MaTeTr { get; set; }
         public int SoOr { get; set; }
         public string ClCo { get; set; } = string.Empty;
         public string ClCoMa { get; set; } = string.Empty;
@@ -40,6 +44,10 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string PrSeId { get; set; }
         public string MaTeId { get; set; }
         public string SeTeId { get; set; }
+        public string SeTeNa { get; set; } // Selection template name — source text for translation lookup
+        // Selection template translations (TranslationCache2 key "SeTe:{MaTeId}:{SeTeId}");
+        // null/empty -> fall back to SeTeNa. See OnFixtureChangeMessage translation lists.
+        public List<TranslationMessage> SeTeTr { get; set; }
         public string MaSp { get; set; }
         public long SeId { get; set; }
         public decimal Od { get; set; }

@@ -20,6 +20,8 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string FiStNa { get; set; }
         public string HoId { get; set; }
         public string AwId { get; set; }
+        public string HoNa { get; set; } // Home team name — source text for translation lookup
+        public string AwNa { get; set; } // Away team name — source text for translation lookup
         public string Sc { get; set; }
         public bool IsOfLi { get; set; }
         public int HoReCa { get; set; }
@@ -39,5 +41,15 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public int CuSer { get; set; }
 
         public string StUr { get; set; }
+
+        // Translation lists (2026-07 translation-flow redesign): populated by OE.Adapter.Service
+        // from its TranslationCache2 preload, keyed SpId:/SegId:/LeId:/Te:{HoId}/Te:{AwId}.
+        // Null/empty means no translation exists (or, on the OE.Sportsbook -> OE.Websocket hop,
+        // unchanged since last publish) — consumers fall back to the English *Na source.
+        public List<TranslationMessage> SpTr { get; set; }
+        public List<TranslationMessage> SegTr { get; set; }
+        public List<TranslationMessage> LeTr { get; set; }
+        public List<TranslationMessage> HoTr { get; set; }
+        public List<TranslationMessage> AwTr { get; set; }
     }
 }

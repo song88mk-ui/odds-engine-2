@@ -1484,6 +1484,7 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
+                        SeTeTr = ToOutgoingTranslations(selection.SeTeTr),
                     });
                 }
 
@@ -1505,6 +1506,8 @@ namespace OE.WebSocket.Service.Repository
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
                     InPl = market.InPl,
+                    IsHa = market.IsHa,
+                    MaTeTr = ToOutgoingTranslations(market.MaTeTr),
                     Se = selections
                 });
             }
@@ -1540,7 +1543,12 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = isBetBuilder,
-                    Ma = markets
+                    Ma = markets,
+                    SpTr = ToOutgoingTranslations(message.SpTr),
+                    SegTr = ToOutgoingTranslations(message.SegTr),
+                    LeTr = ToOutgoingTranslations(message.LeTr),
+                    HoTr = ToOutgoingTranslations(message.HoTr),
+                    AwTr = ToOutgoingTranslations(message.AwTr)
                 }
             };
 
@@ -1583,6 +1591,11 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
+                    SpTr = ToOutgoingTranslations(message.SpTr),
+                    SegTr = ToOutgoingTranslations(message.SegTr),
+                    LeTr = ToOutgoingTranslations(message.LeTr),
+                    HoTr = ToOutgoingTranslations(message.HoTr),
+                    AwTr = ToOutgoingTranslations(message.AwTr),
                     Ma = finalMarkets.Select(m => new OutgoingMarket
                     {
                         MaTeId = m.MaTeId,
@@ -1596,6 +1609,8 @@ namespace OE.WebSocket.Service.Repository
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         InPl = m.InPl,
+                        IsHa = m.IsHa,
+                        MaTeTr = ToOutgoingTranslations(m.MaTeTr),
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
@@ -1607,6 +1622,7 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
+                            SeTeTr = ToOutgoingTranslations(s.SeTeTr),
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1657,6 +1673,11 @@ namespace OE.WebSocket.Service.Repository
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = false,
                     StUr = message.StUr,
+                    SpTr = ToOutgoingTranslations(message.SpTr),
+                    SegTr = ToOutgoingTranslations(message.SegTr),
+                    LeTr = ToOutgoingTranslations(message.LeTr),
+                    HoTr = ToOutgoingTranslations(message.HoTr),
+                    AwTr = ToOutgoingTranslations(message.AwTr),
                     Ma = message.Ma.Select(m => new OutgoingMarket
                     {
                         MaTeId = m.MaTeId,
@@ -1669,6 +1690,8 @@ namespace OE.WebSocket.Service.Repository
                         CaStId = m.CaStId,
                         CaStNa = m.CaStNa,
                         InPl = m.InPl,
+                        IsHa = m.IsHa,
+                        MaTeTr = ToOutgoingTranslations(m.MaTeTr),
                         Se = m.Se.Select(s => new OutgoingSelection
                         {
                             SeTeId = s.SeTeId,
@@ -1680,6 +1703,7 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
+                            SeTeTr = ToOutgoingTranslations(s.SeTeTr),
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1752,6 +1776,7 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
+                        SeTeTr = ToOutgoingTranslations(selection.SeTeTr),
                     });
                 }
 
@@ -1797,6 +1822,8 @@ namespace OE.WebSocket.Service.Repository
                     CaStId = market.CaStId,
                     CaStNa = market.CaStNa,
                     InPl = market.InPl,
+                    IsHa = market.IsHa,
+                    MaTeTr = ToOutgoingTranslations(market.MaTeTr),
                     Se = selections
                 });
             }
@@ -1832,7 +1859,12 @@ namespace OE.WebSocket.Service.Repository
                     SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
                     MaCo = GetMarketCount(message.FiId),
                     IsBeBu = isBetBuilder,
-                    Ma = markets
+                    Ma = markets,
+                    SpTr = ToOutgoingTranslations(message.SpTr),
+                    SegTr = ToOutgoingTranslations(message.SegTr),
+                    LeTr = ToOutgoingTranslations(message.LeTr),
+                    HoTr = ToOutgoingTranslations(message.HoTr),
+                    AwTr = ToOutgoingTranslations(message.AwTr)
                 }
             };
 
@@ -1841,6 +1873,16 @@ namespace OE.WebSocket.Service.Repository
                         new KeyValuePair<string, object?>("method", "PublishOddsChangeForAllMarkets"),
                         new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
             await PublishToWebSocket("PublishOddsChangeForAllMarkets", hubConnection, payload);
+        }
+
+        // Forwards translation deltas only when there is something to forward (count > 0);
+        // null keeps the property off the wire so clients retain their current translated names.
+        // Internal for OE.Websocket.Service.Tests.
+        internal static List<OutgoingTranslation> ToOutgoingTranslations(List<TranslationMessage> translations)
+        {
+            return translations?.Count > 0
+                ? translations.Select(t => new OutgoingTranslation { LaCo = t.LaCo, Tx = t.Tx }).ToList()
+                : null;
         }
 
         #endregion

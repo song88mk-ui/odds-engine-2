@@ -20,6 +20,7 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public string MaTeId { get; set; }
         public string MaNa { get; set; }
         public string Li { get; set; }
+        public bool IsHa { get; set; } // IsHandicap — used by platform-final to recompose selection names (template + line)
         public int MaStId { get; set; }
         public string MaStNa { get; set; }
         public int MaSoOr { get; set; }

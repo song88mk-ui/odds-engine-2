@@ -4,6 +4,7 @@ using OE.Shared.Constants;
 using OE.Shared.Enums;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingAdapterMessages.Base;
+using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
 using System.Diagnostics;
 using System.Text.Json;
@@ -16,6 +17,7 @@ namespace OE.Adapter.Service.Repositories
 
         private readonly IHelper _helper;
         private readonly ILogger<TradingRepository> _logger;
+        private readonly ITranslationCache _translationCache;
         private const ChannelType _bgProvider = ChannelType.BG;
         private readonly ActivitySource _activitySource;
 
@@ -23,10 +25,11 @@ namespace OE.Adapter.Service.Repositories
 
         #region Ctor
 
-        public TradingRepository(IHelper helper, ILogger<TradingRepository> logger, Instrumentation instrumentation)
+        public TradingRepository(IHelper helper, ILogger<TradingRepository> logger, ITranslationCache translationCache, Instrumentation instrumentation)
         {
             _helper = helper;
             _logger = logger;
+            _translationCache = translationCache;
             _activitySource = instrumentation.ActivitySource;
         }
 
@@ -36,11 +39,16 @@ namespace OE.Adapter.Service.Repositories
 
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
+            EnrichFixtureTranslations(message);
+
             PublishMessage(messageBroker, message, MessageType.ON_FIXTURE_CHANGE, correlationId);
         }
 
         public void ProcessOnMarketChangeMessage(IMessageBroker messageBroker, OnMarketChangeMessage message, string correlationId)
         {
+            EnrichFixtureTranslations(message);
+            EnrichMarketTranslations(message);
+
             PublishMessage(messageBroker, message, MessageType.ON_MARKET_CHANGE, correlationId);
         }
 
@@ -88,9 +96,57 @@ namespace OE.Adapter.Service.Repositories
             PublishMessage(messageBroker, message, MessageType.ON_BET_STOP_FIXTURE, correlationId);
         }
 
+        // Cache-apply only (2026-07 translation-flow redesign): the enrichment snapshot follows
+        // the change. Persistence + translation-only odds pushes are OE.Translation.Service's job —
+        // its queue binds the same r.oe.ontranslationchange key on the topic exchange, so no
+        // forwarding is needed here.
+        public void ProcessOnTranslationChangeMessage(IMessageBroker messageBroker, OnTranslationChangeMessage message, string correlationId)
+        {
+            if (message?.Tr == null || message.Tr.Count == 0)
+                return;
+
+            _translationCache.Apply(message.Tr);
+        }
+
         #endregion
 
         #region Utilities
+
+        // Attaches translations from the preloaded TranslationCache2 snapshot. A missing key leaves
+        // the *Tr property null — downstream consumers fall back to the English *Na source.
+        private void EnrichFixtureTranslations(OnFixtureChangeMessage message)
+        {
+            message.SpTr = _translationCache.GetTranslations($"SpId:{message.SpId}");
+            message.SegTr = _translationCache.GetTranslations($"SegId:{message.SegId}");
+            message.LeTr = _translationCache.GetTranslations($"LeId:{message.LeId}");
+            message.HoTr = _translationCache.GetTranslations($"Te:{message.HoId}");
+            message.AwTr = _translationCache.GetTranslations($"Te:{message.AwId}");
+        }
+
+        private void EnrichMarketTranslations(OnMarketChangeMessage message)
+        {
+            if (message.Ma == null)
+                return;
+
+            foreach (var market in message.Ma)
+            {
+                if (market == null)
+                    continue;
+
+                market.MaTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}");
+
+                if (market.Se == null)
+                    continue;
+
+                foreach (var selection in market.Se)
+                {
+                    if (selection == null)
+                        continue;
+
+                    selection.SeTeTr = _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}");
+                }
+            }
+        }
 
         private FixtureStatus GetFixtureStatus(int fixtureStatusId)
         {

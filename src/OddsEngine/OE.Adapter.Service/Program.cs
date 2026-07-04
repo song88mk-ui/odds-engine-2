@@ -1,9 +1,11 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OE.Adapter.Service.Repositories;
 using OE.Adapter.Service.Telemetry;
+using OE.Shared.Data.Translation;
 using OE.Shared.Utilities;
 using Serilog;
 
@@ -24,13 +26,26 @@ namespace OE.Adapter.Service
                 })
                 .ConfigureServices((hostContext, services) =>
                 {
+                    var configuration = hostContext.Configuration;
+                    var dbContextTimeout = configuration.GetValue("Custom:DbContextTimeout", 180);
+
                     services.AddSingleton<Instrumentation>();
                     services.AddTelemetry(new TelemetrySettings(
                         ServiceName: Instrumentation.ActivitySourceName,
                         ActivitySourceName: Instrumentation.ActivitySourceName,
                         MeterName: Instrumentation.MeterName));
+
+                    // Translation DB (TranslationCache2) — read-only source of the in-memory
+                    // translation cache preloaded at startup.
+                    services.AddDbContextPool<TranslationContext>(options =>
+                        options.UseSqlServer(
+                            configuration.GetConnectionString("Translation"),
+                            sqlOptions => sqlOptions.CommandTimeout(dbContextTimeout)
+                        ));
+
                     services.AddSingleton<IHelper, Helper>();
                     services.AddSingleton<IMessageBroker, MessageBroker>();
+                    services.AddSingleton<ITranslationCache, TranslationCache>();
                     services.AddSingleton<ITradingRepository, TradingRepository>();
 
                     services.AddHostedService<Worker>();

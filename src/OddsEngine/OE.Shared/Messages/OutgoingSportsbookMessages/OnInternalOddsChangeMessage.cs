@@ -45,6 +45,16 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public int CuSer { get; set; }
         public long TiSe { get; set; }
         public long TiRe { get; set; }
+
+        // Translation lists — property names intentionally match OnFixtureChangeMessage because
+        // OE.Websocket.Service deserializes ON_ODDS_CHANGE as OnMarketChangeMessage. Only set when
+        // the translation changed since the last publish (change-detection gate in
+        // OE.Sportsbook.Service); null means "unchanged or none" and consumers keep what they have.
+        public List<TranslationMessage> SpTr { get; set; }
+        public List<TranslationMessage> SegTr { get; set; }
+        public List<TranslationMessage> LeTr { get; set; }
+        public List<TranslationMessage> HoTr { get; set; }
+        public List<TranslationMessage> AwTr { get; set; }
     }
 
     public class InternalMarketMessage
@@ -54,6 +64,7 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string MaTeId { get; set; }
         public string PrMaId { get; set; }
         public string Li { get; set; }
+        public bool IsHa { get; set; } // IsHandicap — needed downstream to recompose translated selection names from templates + line
         public int MaStId { get; set; }
         public string MaStNa { get; set; }
         public int CaStId { get; set; }
@@ -64,6 +75,8 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public string ClCo { get; set; }
         public string ClCoMa { get; set; }
         public bool InPl { get; set; }
+        // See OnInternalOddsChangeMessage translation lists — name matches MarketMessage.MaTeTr.
+        public List<TranslationMessage> MaTeTr { get; set; }
 
         public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();
     }
@@ -88,6 +101,8 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public int SoOr { get; set; }
         public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; }
+        // See OnInternalOddsChangeMessage translation lists — name matches SelectionMessage.SeTeTr.
+        public List<TranslationMessage> SeTeTr { get; set; }
     }
 
 }

@@ -41,6 +41,14 @@
         public bool IsBeBu { get; set; }
         public string StUr { get; set; }
         public List<OutgoingMarket> Ma { get; set; }
+        // Translation deltas ({language code, translated text}), forwarded only when the value
+        // changed upstream (OE.Sportsbook.Service change gate) and the list is non-empty.
+        // Null = unchanged/none — clients keep their current translated names.
+        public List<OutgoingTranslation> SpTr { get; set; }
+        public List<OutgoingTranslation> SegTr { get; set; }
+        public List<OutgoingTranslation> LeTr { get; set; }
+        public List<OutgoingTranslation> HoTr { get; set; }
+        public List<OutgoingTranslation> AwTr { get; set; }
     }
     public class OutgoingMarket
     {
@@ -51,6 +59,7 @@
         public string MaTeId { get; set; }
         public string MaId { get; set; }
         public string Li { get; set; }
+        public bool IsHa { get; set; } // IsHandicap — clients recompose translated selection names from template + line
         public int MaStId { get; set; }
         public string MaStNa { get; set; }
         public string MaNa { get; set; }
@@ -60,6 +69,8 @@
         public int CaStId { get; set; }
         public string CaStNa { get; set; }
         public bool InPl { get; set; }
+        // See OddsChangeFixture translation deltas.
+        public List<OutgoingTranslation> MaTeTr { get; set; }
         public List<OutgoingSelection> Se { get; set; }
     }
     public class OutgoingSelection
@@ -73,6 +84,13 @@
         public string InOd { get; set; }
         public bool IsAc { get; set; }
         public int SoOr { get; set; }
+        // See OddsChangeFixture translation deltas.
+        public List<OutgoingTranslation> SeTeTr { get; set; }
+    }
+    public class OutgoingTranslation
+    {
+        public string LaCo { get; set; }
+        public string Tx { get; set; }
     }
     public class OutgoingSportTranslation
     {
