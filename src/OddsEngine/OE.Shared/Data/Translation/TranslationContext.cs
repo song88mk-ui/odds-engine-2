@@ -1,4 +1,4 @@
-﻿using OE.Shared.Data.Translation.Entities;
+using OE.Shared.Data.Translation.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace OE.Shared.Data.Translation
@@ -10,96 +10,71 @@ namespace OE.Shared.Data.Translation
         {
         }
 
-        public DbSet<SportsbookDynamic> SportsbookDynamic { get; set; }
+        public DbSet<TranslationCache2> TranslationCache2 { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<SportsbookDynamic>(entity =>
+            modelBuilder.Entity<TranslationCache2>(entity =>
             {
-                // Table
-                entity.ToTable("SportsbookDynamic");
+                // The single translation store (2026-07 translation-flow redesign; the retired
+                // SportsbookDynamic/SportsbookGlossary tables are gone). Flat: one row per
+                // STRING_ID, fixed TARGET_TEXT_* column per language. Source columns + liveness
+                // are written by OE.Translation.Service, HAS_BET_PLACEMENT by OE.Translation.Job,
+                // TARGET_TEXT_* by the external translation pipeline only; OE.Adapter.Service
+                // preloads the whole table read-only at startup.
+                entity.ToTable("TranslationCache2");
 
-                // Primary Key
                 entity.HasKey(e => e.Id)
-                    .HasName("PK_SportsbookDynamic_v2");
+                      .HasName("PK_TranslationCache2");
 
-                // Unique Index
-                entity.HasIndex(e => new
-                {
-                    e.StringId,
-                    e.TargetLanguageId
-                })
-                .IsUnique()
-                .HasName("UX_SBD_STRING_LANG");
-
-                // Non-Unique Lookup Index
-                entity.HasIndex(e => new
-                {
-                    e.StringId,
-                    e.TargetLanguageId
-                })
-                .HasName("IX_SBD_STRING_LANG");
-
-                // Hash + Language + Version Index
-                entity.HasIndex(e => new
-                {
-                    e.SourceHash,
-                    e.SourceLanguageId,
-                    e.TargetLanguageId,
-                    e.GlossaryVersion
-                })
-                .HasName("IX_SBD_HASH_LANG");
-
-                // Missing Translation Filtered Index
-                entity.HasIndex(e => e.TargetLanguageId)
-                    .HasName("IX_SBD_MISSING")
-                    .HasFilter("[TARGET_TEXT] IS NULL");
-
-                // Property Configurations
+                entity.HasIndex(e => e.StringId)
+                    .IsUnique()
+                    .HasName("UX_TC2_STRING");
 
                 entity.Property(e => e.Id)
                     .HasColumnName("ID");
 
                 entity.Property(e => e.StringId)
-                    .HasColumnName("String_ID")
-                    .HasMaxLength(100)
+                    .HasColumnName("STRING_ID")
+                    .HasMaxLength(200)
                     .IsRequired();
 
-                entity.Property(e => e.SourceLanguageId)
-                    .HasColumnName("SOURCE_LANGUAGE_ID")
-                    .HasMaxLength(10)
-                    .IsRequired();
-
-                entity.Property(e => e.TargetLanguageId)
-                    .HasColumnName("TARGET_LANGUAGE_ID")
+                entity.Property(e => e.SourceLanguage)
+                    .HasColumnName("SOURCE_LANGUAGE")
                     .HasMaxLength(10)
                     .IsRequired();
 
                 entity.Property(e => e.SourceText)
                     .HasColumnName("SOURCE_TEXT")
+                    .HasMaxLength(1000)
                     .IsRequired();
 
-                entity.Property(e => e.TargetText)
-                    .HasColumnName("TARGET_TEXT");
+                entity.Property(e => e.TargetTextZh)
+                    .HasColumnName("TARGET_TEXT_ZH")
+                    .HasMaxLength(1000)
+                    .IsRequired();
 
-                entity.Property(e => e.SourceHash)
-                    .HasColumnName("SOURCE_HASH")
-                    .ValueGeneratedOnAddOrUpdate();
+                entity.Property(e => e.TargetTextEs)
+                    .HasColumnName("TARGET_TEXT_ES")
+                    .HasMaxLength(1000)
+                    .IsRequired();
 
-                entity.Property(e => e.GlossaryVersion)
-                    .HasColumnName("GLOSSARY_VERSION")
-                    .HasDefaultValue(1);
+                entity.Property(e => e.TargetTextFr)
+                    .HasColumnName("TARGET_TEXT_FR")
+                    .HasMaxLength(1000)
+                    .IsRequired();
+
+                entity.Property(e => e.HasBetPlacement)
+                    .HasColumnName("HAS_BET_PLACEMENT");
 
                 entity.Property(e => e.CreatedAt)
-                    .HasColumnName("CREATED_AT")
-                    .HasDefaultValueSql("GETDATE()");
+                    .HasColumnName("CREATED_AT");
+
+                entity.Property(e => e.GlossaryVersion)
+                    .HasColumnName("GLOSSARY_VERSION");
 
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnName("UPDATED_AT");
-
-                entity.Property(e => e.Processed)
-                    .HasColumnName("PROCESSED")
-                    .HasDefaultValue(false);
             });
         }
     }

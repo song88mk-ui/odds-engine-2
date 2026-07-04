@@ -52,6 +52,10 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public string AwId { get; set; }
         public string AwNa { get; set; } // Away team name — source text for translation lookup
         public int AwBeId { get; set; }
+        // Team-name translations (TranslationCache2 keys "Te:{HoId}" / "Te:{AwId}"), added with the
+        // 2026-07 translation-flow redesign alongside the existing *NaTr lists above.
+        public List<TeamTranslationMDB> HoNaTr { get; set; }
+        public List<TeamTranslationMDB> AwNaTr { get; set; }
         public int LeBeId { get; set; }
         public List<PeriodScoreMDB> PeSc { get; set; }
         public int CuSe { get; set; }
@@ -83,6 +87,13 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         [BsonId]
         public string LaCo { get; set; }
         public string FiNa { get; set; }
+    }
+
+    public class TeamTranslationMDB
+    {
+        [BsonId]
+        public string LaCo { get; set; }
+        public string TeNa { get; set; }
     }
 
     public class PeriodScoreMDB
