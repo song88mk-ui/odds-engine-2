@@ -4,6 +4,7 @@ using OE.Adapter.Service.Repositories;
 using OE.Adapter.Service.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
 using OpenTelemetry;
 using OpenTelemetry.Context.Propagation;
@@ -24,6 +25,13 @@ namespace OE.Adapter.Service
         private readonly ILogger<Worker> _logger;
         private readonly IMessageBroker _messageBroker;
         private readonly ITradingRepository _tradingRepository;
+        private readonly ITranslationCache _translationCache;
+
+        // Preload must succeed before consuming starts (messages would otherwise flow through
+        // un-enriched); transient SQL failures are retried, then the service crashes so the
+        // orchestrator restarts it.
+        private const int PRELOAD_RETRY_COUNT = 5;
+        private const int PRELOAD_RETRY_DELAY_SECONDS = 10;
 
         private readonly ActivitySource _activitySource;
         private readonly Counter<long> _processedMessagesCounter;
@@ -33,11 +41,12 @@ namespace OE.Adapter.Service
 
         #region Ctor
 
-        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, Instrumentation instrumentation)
+        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, ITranslationCache translationCache, Instrumentation instrumentation)
         {
             _logger = logger;
             _messageBroker = messageBroker;
             _tradingRepository = tradingRepository;
+            _translationCache = translationCache;
             _processedMessagesCounter = instrumentation.ProcessedMessagesCounter;
             _activitySource = instrumentation.ActivitySource;
         }
@@ -62,6 +71,8 @@ namespace OE.Adapter.Service
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await PreloadTranslationCache(stoppingToken);
+
             try
             {
                 _logger.LogInformation("Connecting to RabbitMQ Server");
@@ -74,6 +85,28 @@ namespace OE.Adapter.Service
                 throw e;
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
+        }
+
+        private async Task PreloadTranslationCache(CancellationToken stoppingToken)
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    _logger.LogInformation("Preloading translation cache");
+                    _translationCache.Preload();
+                    return;
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError($"Error preloading translation cache (attempt {attempt}/{PRELOAD_RETRY_COUNT}): {e.Message}");
+
+                    if (attempt >= PRELOAD_RETRY_COUNT)
+                        throw;
+
+                    await Task.Delay(TimeSpan.FromSeconds(PRELOAD_RETRY_DELAY_SECONDS), stoppingToken);
+                }
+            }
         }
 
         #endregion
@@ -139,6 +172,13 @@ namespace OE.Adapter.Service
                             ProcessMessage<OnBetStopFixtureMessage>(
                                 payload,
                                 (msg) => _tradingRepository.ProcessOnBetStopFixture(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_TRANSLATION_CHANGE:
+                            _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
+                            ProcessMessage<OnTranslationChangeMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnTranslationChangeMessage(_messageBroker, msg, correlationId)
                             );
                             break;
                     }

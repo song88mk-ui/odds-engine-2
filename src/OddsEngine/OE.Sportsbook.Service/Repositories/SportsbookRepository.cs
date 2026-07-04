@@ -1,4 +1,4 @@
-﻿using IdGen;
+using IdGen;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
@@ -11,6 +11,7 @@ using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Models;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Telemetry;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text.Json;
@@ -45,6 +46,20 @@ namespace OE.Sportsbook.Service.Repositories
         private static IdGenerator _defaultIdGenerator;
 
         private bool _IsBetStopGlobally = false;
+
+        // Change-detection gate for the websocket path: last translations published per entity
+        // INSTANCE ("{fixture.Id}:Sp|Seg|Le|Ho|Aw", "{market.Id}:MaTe", "{selection.Id}:SeTe") —
+        // NOT per glossary key. Instance scoping is deliberate: a payload usually contains many
+        // markets sharing one template (multi-line Over/Under), and clients apply *Tr per
+        // market/selection with no cross-instance memory — a template-scoped gate would strip the
+        // translation from every market after the first. MongoDB persistence is not gated (that
+        // lives in OE.Translation.Service) — only the ON_ODDS_CHANGE payload omits *Tr properties
+        // when that instance's value is unchanged. Cold start just re-sends once per instance.
+        // Cardinality follows the live catalogue, so GateTranslations clears the map wholesale at
+        // a size cap (harmless: one redundant re-send per instance) instead of leaking forever.
+        private readonly ConcurrentDictionary<string, List<TranslationMessage>> _publishedTranslations = new();
+
+        private const int MAX_PUBLISHED_TRANSLATION_ENTRIES = 500_000;
 
         #endregion
 
@@ -330,6 +345,7 @@ namespace OE.Sportsbook.Service.Repositories
                 _memCache.DeleteCache($"{CACHE_PREFIX}{cache}");
             }
         }
+
         #endregion
 
         #region Utilities
@@ -387,15 +403,14 @@ namespace OE.Sportsbook.Service.Repositories
             //.Set(s => s.GeAl, message.GeAl) TODO
             //.Set(s => s.IsBo, message.IsBo) TODO
             //.Set(s => s.ClBo, message.ClBo) TODO
-            //.Set(s => s.SpNaTr, message.SpNaTr) TODO
-            //.Set(s => s.SegNaTr, message.SegNaTr) TODO
-            //.Set(s => s.LeNaTr, message.LeNaTr) TODO
-            //.Set(s => s.FiNaTr, message.FiNaTr) TODO
             //.Set(s => s.HoBeId, message.HoBeId) TODO
             //.Set(s => s.AwBeId, message.AwBeId) TODO
             //.Set(s => s.LeBeId, message.LeBeId) TODO
             //.Set(s => s.PeSc, message.PeSc) TODO
-            
+
+            // Translations are NOT written here: OE.Translation.Service owns all *NaTr writes
+            // (2026-07 translation-flow redesign). The *Tr lists on the message feed only the
+            // websocket payload gate (see PrepareInternalOddsChangeMessage).
 
             if (!string.IsNullOrEmpty(message.Sc))
                 updateFixture = updateFixture.Set(
@@ -461,8 +476,7 @@ namespace OE.Sportsbook.Service.Repositories
 
             foreach (var market in message.Ma)
             {
-                markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id),
-                    Builders<Market>.Update
+                var marketUpdate = Builders<Market>.Update
                         .Set(s => s.Id, market.Id)
                         .Set(s => s.ChTyId, message.ChTyId)
                         .Set(s => s.PrFiId, message.PrFiId)
@@ -487,19 +501,14 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.ClCoMa, market.ClCoMa)
                         .Set(s => s.CaStId, market.CaStId)
                         .Set(s => s.CaStNa, market.CaStNa)
-                        .Set(s => s.InPl, market.InPl)
-                //TODO
-                //.AddToSetEach(s => s.MaNaTr, 
-                //    market.MarketTranslations.Select(
-                //        ss => new MarketTranslationMDB 
-                //            { LaCo = ss.LanguageCode, MaNa = ss.MarketName }).ToArray())
-                )
+                        .Set(s => s.InPl, market.InPl);
+
+                markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id), marketUpdate)
                 { IsUpsert = true });
 
                 foreach (var selection in market.Se)
                 {
-                    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id),
-                        Builders<Selection>.Update
+                    var selectionUpdate = Builders<Selection>.Update
                             .Set(s => s.ChTyId, message.ChTyId)
                             .Set(s => s.PrFiId, message.PrFiId)
                             .Set(s => s.PrMaId, market.PrMaId)
@@ -528,10 +537,9 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.LoPr, selection.LoPr)
                             .Set(s => s.VoPr, selection.VoPr)
                             .Set(s => s.HaWoPr, selection.HaWoPr)
-                            .Set(s => s.HaLoPr, selection.HaLoPr)
-                    //TODO
-                    //.AddToSetEach(s => s.SeNaTr, selection.SelectionTranslations.Select(ss => new SelectionTranslationMDB { LaCo = ss.LanguageCode, SeNa = ss.SelectionName }).ToArray())
-                    )
+                            .Set(s => s.HaLoPr, selection.HaLoPr);
+
+                    selections.Add(new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq("Id", selection.Id), selectionUpdate)
                     { IsUpsert = true });
                 }
             }
@@ -627,6 +635,7 @@ namespace OE.Sportsbook.Service.Repositories
                         SeNa = selection.SeNa,
                         SoOr = selection.SoOr,
                         ClOd = selection.ClOd,
+                        SeTeTr = GateTranslations($"{selection.Id}:SeTe", selection.SeTeTr),
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -668,6 +677,7 @@ namespace OE.Sportsbook.Service.Repositories
                     MaId = market.MaId,
                     MaTeId = market.MaTeId,
                     Li = market.Li,
+                    IsHa = market.IsHa,
                     MaStId = market.MaStId,
                     MaStNa = market.MaStNa,
                     CaStId = market.CaStId,
@@ -679,6 +689,7 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
+                    MaTeTr = GateTranslations($"{market.Id}:MaTe", market.MaTeTr),
                     Se = selections
                 });
             }
@@ -730,7 +741,12 @@ namespace OE.Sportsbook.Service.Repositories
                 //    PeriodType = s.PeriodType
                 //}).ToList()
                 StUr = message.StUr,
-                Ma = markets
+                Ma = markets,
+                SpTr = GateTranslations($"{message.Id}:Sp", message.SpTr),
+                SegTr = GateTranslations($"{message.Id}:Seg", message.SegTr),
+                LeTr = GateTranslations($"{message.Id}:Le", message.LeTr),
+                HoTr = GateTranslations($"{message.Id}:Ho", message.HoTr),
+                AwTr = GateTranslations($"{message.Id}:Aw", message.AwTr)
             };
         }
         private OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnFixtureChangeMessage message, List<Market> filteredMarkets, List<Selection> filteredSelections, string correlationId)
@@ -777,6 +793,7 @@ namespace OE.Sportsbook.Service.Repositories
                     MaId = market.MaId,
                     MaTeId = market.MaTeId,
                     Li = market.Li,
+                    IsHa = market.IsHa,
                     MaStId = market.MaStId,
                     MaStNa = market.MaStNa,
                     CaStId = market.CaStId,
@@ -838,7 +855,12 @@ namespace OE.Sportsbook.Service.Repositories
                 //    PeriodType = s.PeriodType
                 //}).ToList()
                 StUr = message.StUr,
-                Ma = markets
+                Ma = markets,
+                SpTr = GateTranslations($"{message.Id}:Sp", message.SpTr),
+                SegTr = GateTranslations($"{message.Id}:Seg", message.SegTr),
+                LeTr = GateTranslations($"{message.Id}:Le", message.LeTr),
+                HoTr = GateTranslations($"{message.Id}:Ho", message.HoTr),
+                AwTr = GateTranslations($"{message.Id}:Aw", message.AwTr)
             };
         }
 
@@ -848,6 +870,49 @@ namespace OE.Sportsbook.Service.Repositories
 
             return result;
         }
+
+        // Websocket-path change gate: returns the incoming list when it differs from what was last
+        // published for this glossary key (recording it), or null when unchanged so the payload
+        // omits the property. Mongo writes are never gated.
+        internal List<TranslationMessage> GateTranslations(string key, List<TranslationMessage> incoming)
+        {
+            if (incoming == null || incoming.Count == 0)
+                return null;
+
+            if (_publishedTranslations.TryGetValue(key, out var last) && TranslationsEqual(last, incoming))
+                return null;
+
+            if (_publishedTranslations.Count >= MAX_PUBLISHED_TRANSLATION_ENTRIES)
+            {
+                _publishedTranslations.Clear();
+                _logger.LogWarningEx($"Translation gate reset at {MAX_PUBLISHED_TRANSLATION_ENTRIES} entries — each live instance re-sends its *Tr once");
+            }
+
+            _publishedTranslations[key] = incoming;
+
+            return incoming;
+        }
+
+        internal static bool TranslationsEqual(List<TranslationMessage> a, List<TranslationMessage> b)
+        {
+            if (a.Count != b.Count)
+                return false;
+
+            foreach (var item in a)
+            {
+                if (!b.Any(x => x.LaCo == item.LaCo && x.Tx == item.Tx))
+                    return false;
+            }
+
+            return true;
+        }
+
+        // NOTE (2026-07 translation-flow redesign): the ON_TRANSLATION_CHANGE change path (Mongo
+        // *NaTr delta persistence + translation-only odds pushes) lives in OE.Translation.Service.
+        // After a delta lands there, this service's gate simply re-publishes that key's *Tr once on
+        // the next enriched adapter message (harmless duplicate), then re-gates — no cross-service
+        // gate merge is needed.
+
 
         private async Task SetBetStopStatus()
         {

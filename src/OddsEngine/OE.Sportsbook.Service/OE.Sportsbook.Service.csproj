@@ -33,4 +33,8 @@
     <ProjectReference Include="..\OE.Shared\OE.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OE.Sportsbook.Service.Tests" />
+  </ItemGroup>
+
 </Project>

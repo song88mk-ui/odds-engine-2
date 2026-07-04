@@ -1,14 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MongoDB.Driver;
-using OE.Shared.Data.Translation;
 using OE.Shared.Utilities;
 using OE.Sportsbook.Service.Repositories;
 using OE.Sportsbook.Service.Telemetry;
 using Serilog;
-using System.Configuration;
 
 namespace OE.Sportsbook.Service
 {
@@ -36,26 +33,16 @@ namespace OE.Sportsbook.Service
                 })
                 .ConfigureServices((hostContext, services) =>
                 {
-                    var configuration = hostContext.Configuration;
-                    var dbContextTimeout = configuration.GetValue<int>("Custom:DbContextTimeout", 180);
-
                     services.AddSingleton<Instrumentation>();
                     services.AddTelemetry(new TelemetrySettings(
                         ServiceName: Instrumentation.ActivitySourceName,
                         ActivitySourceName: Instrumentation.ActivitySourceName,
                         MeterName: Instrumentation.MeterName));
 
-                    services.AddDbContextPool<TranslationContext>(options =>
-                        options.UseSqlServer(
-                            configuration.GetConnectionString("Translation"),
-                            sqlOptions => sqlOptions.CommandTimeout(dbContextTimeout)
-                        ));
-
                     services.AddSingleton<IHelper, Helper>();
                     services.AddSingleton<IMemCache, MemCache>();
                     services.AddSingleton<IMessageBroker, MessageBroker>();
                     services.AddSingleton<ISportsbookRepository, SportsbookRepository>();
-                    services.AddSingleton<ITranslationRepository, TranslationRepository>();
 
                     // MongoDB
                     services.AddSingleton<IMongoClient>(sp =>

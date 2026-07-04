@@ -1,4 +1,5 @@
 ﻿using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
 
 namespace OE.Adapter.Service.Repositories
@@ -12,5 +13,6 @@ namespace OE.Adapter.Service.Repositories
         void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId);
         void ProcessMarketCancellation(IMessageBroker messageBroker, OnMarketCancellationMessage message, string correlationId);
         void ProcessOnBetStopFixture(IMessageBroker messageBroker, OnBetStopFixtureMessage message, string correlationId);
+        void ProcessOnTranslationChangeMessage(IMessageBroker messageBroker, OnTranslationChangeMessage message, string correlationId);
     }
 }
