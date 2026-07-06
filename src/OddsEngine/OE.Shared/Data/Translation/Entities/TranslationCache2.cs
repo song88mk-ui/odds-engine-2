@@ -6,7 +6,8 @@ namespace OE.Shared.Data.Translation.Entities
     // STRING_ID with a fixed column per target language. BG.Translation.Service seeds the source
     // columns; the external translation pipeline fills TARGET_TEXT_*. Read-only from odds-engine-2:
     // OE.Adapter.Service preloads the whole table into its in-memory translation cache at startup
-    // (2026-07 translation-flow redesign). Empty target text means "not translated yet".
+    // (2026-07 translation-flow redesign). Empty target text means "not translated yet"; PROCESSED
+    // is the pipeline's worklist flag (0 = needs translation, set back to 0 on source-text change).
     public class TranslationCache2
     {
         public long Id { get; set; }
@@ -27,7 +28,7 @@ namespace OE.Shared.Data.Translation.Entities
 
         public DateTime? CreatedAt { get; set; }
 
-        public int? GlossaryVersion { get; set; }
+        public bool Processed { get; set; }
 
         public DateTime? UpdatedAt { get; set; }
     }
