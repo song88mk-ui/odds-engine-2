@@ -187,11 +187,12 @@ namespace OE.Translation.Service.Repositories
         }
 
         // Seeds the source side of TranslationCache2: insert-if-missing with empty TARGET_TEXT_*
-        // columns; on a genuine source-name change update SOURCE_TEXT only (targets stay stale
-        // until the external pipeline re-translates); otherwise a liveness touch bumps UPDATED_AT
-        // so OE.Translation.Job's retention sweep never reaps a row the feed still emits.
-        // The TARGET_TEXT_* columns are owned by the external translation pipeline and are never
-        // written here.
+        // columns and PROCESSED = 0 (the pipeline's worklist flag); on a genuine source-name
+        // change update SOURCE_TEXT, clear the now-stale targets and reset PROCESSED so the
+        // external pipeline re-translates; otherwise a liveness touch bumps UPDATED_AT so
+        // OE.Translation.Job's retention sweep never reaps a row the feed still emits.
+        // The TARGET_TEXT_* columns are otherwise owned by the external translation pipeline —
+        // clearing on source change is invalidation, not translation.
         private async Task BulkSeed(List<(string id, string value)> items)
         {
             var distinctItems = items
@@ -218,18 +219,23 @@ namespace OE.Translation.Service.Repositories
 
             foreach (var item in distinctItems)
             {
-                // Defensive: SOURCE_TEXT is NVARCHAR(1000) NOT NULL.
-                var sourceText = item.value.Length <= 1000
+                // Defensive: SOURCE_TEXT is NVARCHAR(250) NOT NULL.
+                var sourceText = item.value.Length <= 250
                     ? item.value
-                    : item.value.Substring(0, 1000);
+                    : item.value.Substring(0, 250);
 
                 if (dict.TryGetValue(item.id, out var entity))
                 {
                     if (entity.SourceText != sourceText)
                     {
-                        // Genuine name change; the external pipeline re-reads SOURCE_TEXT and
-                        // decides for itself whether to re-translate.
+                        // Genuine name change: stale targets are cleared and the row goes back
+                        // on the pipeline's worklist (PROCESSED = 0) so every configured
+                        // language is re-translated from the new SOURCE_TEXT.
                         entity.SourceText = sourceText;
+                        entity.TargetTextZh = string.Empty;
+                        entity.TargetTextEs = string.Empty;
+                        entity.TargetTextFr = string.Empty;
+                        entity.Processed = false;
                     }
 
                     // Liveness touch (throttled to ~once per cache TTL because cached keys never
@@ -247,7 +253,7 @@ namespace OE.Translation.Service.Repositories
                         TargetTextEs = string.Empty,
                         TargetTextFr = string.Empty,
                         HasBetPlacement = false,
-                        GlossaryVersion = 1,
+                        Processed = false,
                         CreatedAt = DateTime.UtcNow
                     };
 
@@ -273,9 +279,10 @@ namespace OE.Translation.Service.Repositories
         // by String_ID. For each row just seeded/touched that still has an empty target column,
         // hash its SOURCE_TEXT the way SQL Server computed the legacy persisted column and copy
         // any matching EN-source targets into the EMPTY TARGET_TEXT_* columns only — a target the
-        // external pipeline already wrote is never overwritten. Throttled per String_ID via
-        // BackfillCachePrefix so a hot, already-checked key isn't re-queried on every message.
-        // Remove once the external pipeline has drained the empty-target worklist.
+        // external pipeline already wrote is never overwritten. A row that received a backfilled
+        // target is marked PROCESSED = 1 (the legacy cache satisfied it — no DeepL pass needed).
+        // Throttled per String_ID via BackfillCachePrefix so a hot, already-checked key isn't
+        // re-queried on every message. Remove once the external pipeline has drained the worklist.
         internal async Task BackfillTranslationCache2(TranslationContext context, List<TranslationCache2> entities)
         {
             var candidates = entities
@@ -310,6 +317,8 @@ namespace OE.Translation.Service.Repositories
 
             foreach (var candidate in candidates)
             {
+                var candidateBackfilled = 0;
+
                 if (matchesByHash.TryGetValue(hashByStringId[candidate.StringId], out var hits))
                 {
                     foreach (var hit in hits)
@@ -318,31 +327,40 @@ namespace OE.Translation.Service.Repositories
                             continue; // legacy row not translated yet
 
                         // Defensive: legacy TARGET_TEXT is unbounded, the flat columns are
-                        // NVARCHAR(1000).
-                        var targetText = hit.TargetText.Length <= 1000
+                        // NVARCHAR(250).
+                        var targetText = hit.TargetText.Length <= 250
                             ? hit.TargetText
-                            : hit.TargetText.Substring(0, 1000);
+                            : hit.TargetText.Substring(0, 250);
 
                         switch (hit.TargetLanguage?.ToUpperInvariant())
                         {
                             case LANGUAGE_ZH when string.IsNullOrEmpty(candidate.TargetTextZh):
                                 candidate.TargetTextZh = targetText;
-                                backfilled++;
+                                candidateBackfilled++;
                                 break;
 
                             case LANGUAGE_ES when string.IsNullOrEmpty(candidate.TargetTextEs):
                                 candidate.TargetTextEs = targetText;
-                                backfilled++;
+                                candidateBackfilled++;
                                 break;
 
                             case LANGUAGE_FR when string.IsNullOrEmpty(candidate.TargetTextFr):
                                 candidate.TargetTextFr = targetText;
-                                backfilled++;
+                                candidateBackfilled++;
                                 break;
 
                             // Any other language has no column in the flat schema — skipped.
                         }
                     }
+                }
+
+                if (candidateBackfilled > 0)
+                {
+                    // The legacy cache already carried this translation, so the row doesn't need
+                    // a DeepL pass — take it off the pipeline's worklist. If a configured language
+                    // is still empty, the pipeline's startup missing-language reset re-opens it.
+                    candidate.Processed = true;
+                    backfilled += candidateBackfilled;
                 }
 
                 _memCache.AddOrUpdateCache(BackfillCachePrefix + candidate.StringId, candidate.StringId, 24);

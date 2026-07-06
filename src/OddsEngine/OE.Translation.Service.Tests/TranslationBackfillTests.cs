@@ -139,12 +139,14 @@ namespace OE.Translation.Service.Tests
             Assert.Equal("阿森纳", row.TargetTextZh);
             Assert.Equal("Arsenal ES", row.TargetTextEs);
             Assert.Equal("Arsenal FR", row.TargetTextFr);
+            Assert.True(row.Processed); // legacy cache satisfied it — no DeepL pass needed
 
             // Keys with no legacy translation stay on the external pipeline's worklist.
             var untouched = context.TranslationCache2.Single(r => r.StringId == "Te:A1");
             Assert.Equal(string.Empty, untouched.TargetTextZh);
             Assert.Equal(string.Empty, untouched.TargetTextEs);
             Assert.Equal(string.Empty, untouched.TargetTextFr);
+            Assert.False(untouched.Processed);
         }
 
         [Fact]
@@ -157,7 +159,9 @@ namespace OE.Translation.Service.Tests
             await repository.OnProcessMarketSetUpdate(MarketMessage());
 
             using var context = GetContext(provider);
-            Assert.Equal("赛果", context.TranslationCache2.Single(r => r.StringId == "MaTe:16").TargetTextZh);
+            var row = context.TranslationCache2.Single(r => r.StringId == "MaTe:16");
+            Assert.Equal("赛果", row.TargetTextZh);
+            Assert.True(row.Processed);
         }
 
         [Fact]
@@ -176,7 +180,6 @@ namespace OE.Translation.Service.Tests
                     TargetTextZh = "现有翻译",
                     TargetTextEs = string.Empty,
                     TargetTextFr = string.Empty,
-                    GlossaryVersion = 1,
                     CreatedAt = DateTime.UtcNow
                 });
                 context.SaveChanges();
@@ -192,6 +195,7 @@ namespace OE.Translation.Service.Tests
 
             Assert.Equal("现有翻译", row.TargetTextZh); // pipeline value kept
             Assert.Equal("Arsenal ES", row.TargetTextEs); // empty column still backfilled
+            Assert.True(row.Processed); // the backfilled hit takes the row off the worklist
         }
 
         [Fact]
@@ -204,7 +208,9 @@ namespace OE.Translation.Service.Tests
             await repository.OnProcessFixtureSetUpdate(FixtureMessage());
 
             using var context = GetContext(provider);
-            Assert.Equal(string.Empty, context.TranslationCache2.Single(r => r.StringId == "Te:H1").TargetTextZh);
+            var row = context.TranslationCache2.Single(r => r.StringId == "Te:H1");
+            Assert.Equal(string.Empty, row.TargetTextZh);
+            Assert.False(row.Processed);
         }
 
         [Fact]
@@ -243,12 +249,12 @@ namespace OE.Translation.Service.Tests
         {
             var (repository, provider) = CreateRepository(nameof(Backfill_TruncatesLegacyTargetTextToColumnLimit));
 
-            AddLegacyTranslation(provider, "Arsenal", "ZH", new string('翻', 1200));
+            AddLegacyTranslation(provider, "Arsenal", "ZH", new string('翻', 400));
 
             await repository.OnProcessFixtureSetUpdate(FixtureMessage());
 
             using var context = GetContext(provider);
-            Assert.Equal(1000, context.TranslationCache2.Single(r => r.StringId == "Te:H1").TargetTextZh.Length);
+            Assert.Equal(250, context.TranslationCache2.Single(r => r.StringId == "Te:H1").TargetTextZh.Length);
         }
     }
 }

@@ -48,22 +48,22 @@ namespace OE.Shared.Data.Translation
 
                 entity.Property(e => e.SourceText)
                     .HasColumnName("SOURCE_TEXT")
-                    .HasMaxLength(1000)
+                    .HasMaxLength(250)
                     .IsRequired();
 
                 entity.Property(e => e.TargetTextZh)
                     .HasColumnName("TARGET_TEXT_ZH")
-                    .HasMaxLength(1000)
+                    .HasMaxLength(250)
                     .IsRequired();
 
                 entity.Property(e => e.TargetTextEs)
                     .HasColumnName("TARGET_TEXT_ES")
-                    .HasMaxLength(1000)
+                    .HasMaxLength(250)
                     .IsRequired();
 
                 entity.Property(e => e.TargetTextFr)
                     .HasColumnName("TARGET_TEXT_FR")
-                    .HasMaxLength(1000)
+                    .HasMaxLength(250)
                     .IsRequired();
 
                 entity.Property(e => e.HasBetPlacement)
@@ -72,8 +72,8 @@ namespace OE.Shared.Data.Translation
                 entity.Property(e => e.CreatedAt)
                     .HasColumnName("CREATED_AT");
 
-                entity.Property(e => e.GlossaryVersion)
-                    .HasColumnName("GLOSSARY_VERSION");
+                entity.Property(e => e.Processed)
+                    .HasColumnName("PROCESSED");
 
                 entity.Property(e => e.UpdatedAt)
                     .HasColumnName("UPDATED_AT");

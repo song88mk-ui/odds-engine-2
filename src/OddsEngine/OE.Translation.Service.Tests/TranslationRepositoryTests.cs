@@ -126,14 +126,15 @@ namespace OE.Translation.Service.Tests
                 Assert.Equal(string.Empty, row.TargetTextEs);
                 Assert.Equal(string.Empty, row.TargetTextFr);
                 Assert.False(row.HasBetPlacement);
+                Assert.False(row.Processed); // fresh rows are on the pipeline's worklist
                 Assert.NotNull(row.CreatedAt);
             }
         }
 
         [Fact]
-        public async Task FixtureUpdate_SourceNameChange_UpdatesSourceTextButNeverTouchesTargets()
+        public async Task FixtureUpdate_SourceNameChange_ClearsTargetsAndReopensWorklist()
         {
-            var (repository, provider) = CreateRepository(nameof(FixtureUpdate_SourceNameChange_UpdatesSourceTextButNeverTouchesTargets));
+            var (repository, provider) = CreateRepository(nameof(FixtureUpdate_SourceNameChange_ClearsTargetsAndReopensWorklist));
 
             await repository.OnProcessFixtureSetUpdate(FixtureMessage(homeName: "Arsenal"));
 
@@ -141,6 +142,7 @@ namespace OE.Translation.Service.Tests
             {
                 var row = context.TranslationCache2.Single(r => r.StringId == "Te:H1");
                 row.TargetTextZh = "阿森纳"; // the external pipeline translated it in the meantime
+                row.Processed = true;
                 context.SaveChanges();
             }
 
@@ -150,7 +152,8 @@ namespace OE.Translation.Service.Tests
             var updated = verify.TranslationCache2.Single(r => r.StringId == "Te:H1");
 
             Assert.Equal("Arsenal FC", updated.SourceText); // source side updated
-            Assert.Equal("阿森纳", updated.TargetTextZh);    // target side untouched (stale until re-translated)
+            Assert.Equal(string.Empty, updated.TargetTextZh); // stale target invalidated
+            Assert.False(updated.Processed); // back on the pipeline's worklist
         }
 
         [Fact]
@@ -208,12 +211,12 @@ namespace OE.Translation.Service.Tests
         {
             var (repository, provider) = CreateRepository(nameof(Seeding_TruncatesSourceTextToColumnLimit));
 
-            await repository.OnProcessFixtureSetUpdate(FixtureMessage(leagueName: new string('x', 1200)));
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage(leagueName: new string('x', 400)));
 
             using var context = GetContext(provider);
             var row = context.TranslationCache2.Single(r => r.StringId == "LeId:3");
 
-            Assert.Equal(1000, row.SourceText.Length);
+            Assert.Equal(250, row.SourceText.Length);
         }
     }
 }
