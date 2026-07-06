@@ -12,6 +12,8 @@ namespace OE.Shared.Data.Translation
 
         public DbSet<TranslationCache2> TranslationCache2 { get; set; }
 
+        public DbSet<LegacyTranslationCache> TranslationCache { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<TranslationCache2>(entity =>
@@ -66,6 +68,50 @@ namespace OE.Shared.Data.Translation
 
                 entity.Property(e => e.HasBetPlacement)
                     .HasColumnName("HAS_BET_PLACEMENT");
+
+                entity.Property(e => e.CreatedAt)
+                    .HasColumnName("CREATED_AT");
+
+                entity.Property(e => e.GlossaryVersion)
+                    .HasColumnName("GLOSSARY_VERSION");
+
+                entity.Property(e => e.UpdatedAt)
+                    .HasColumnName("UPDATED_AT");
+            });
+
+            modelBuilder.Entity<LegacyTranslationCache>(entity =>
+            {
+                // External table owned by the translation pipeline (no DDL in this repo) —
+                // read-only, and only queried while OE.Translation.Service's temporary
+                // Custom:Translation:CacheBackfill bridge is on, so environments without the
+                // table are unaffected as long as the flag stays off.
+                entity.ToTable("TranslationCache");
+
+                entity.HasKey(e => new { e.SourceHash, e.SourceLanguage, e.TargetLanguage });
+
+                entity.Property(e => e.SourceHash)
+                    .HasColumnName("SOURCE_HASH")
+                    .HasMaxLength(64)
+                    .IsUnicode(false)
+                    .IsRequired();
+
+                entity.Property(e => e.SourceLanguage)
+                    .HasColumnName("SOURCE_LANGUAGE")
+                    .HasMaxLength(10)
+                    .IsUnicode(false)
+                    .IsRequired();
+
+                entity.Property(e => e.TargetLanguage)
+                    .HasColumnName("TARGET_LANGUAGE")
+                    .HasMaxLength(10)
+                    .IsUnicode(false)
+                    .IsRequired();
+
+                entity.Property(e => e.SourceText)
+                    .HasColumnName("SOURCE_TEXT");
+
+                entity.Property(e => e.TargetText)
+                    .HasColumnName("TARGET_TEXT");
 
                 entity.Property(e => e.CreatedAt)
                     .HasColumnName("CREATED_AT");
