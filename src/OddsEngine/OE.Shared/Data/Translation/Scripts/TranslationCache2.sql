@@ -112,3 +112,14 @@ BEGIN
         WHERE (PROCESSED = 0);
 END;
 GO
+
+-- 2026-07: supports update.py's same-SOURCE_TEXT propagation (once one row's text is
+-- DeepL-translated, fill every other row sharing that SOURCE_TEXT/SOURCE_LANGUAGE that
+-- doesn't have that language yet) — WHERE SOURCE_TEXT = ? AND SOURCE_LANGUAGE = ?.
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_TC2_SOURCE_TEXT' AND object_id = OBJECT_ID(N'dbo.TranslationCache2'))
+BEGIN
+    CREATE NONCLUSTERED INDEX IX_TC2_SOURCE_TEXT
+        ON dbo.TranslationCache2 (SOURCE_TEXT, SOURCE_LANGUAGE)
+        INCLUDE (STRING_ID, TARGET_TEXT_ZH, TARGET_TEXT_ES, TARGET_TEXT_FR);
+END;
+GO
