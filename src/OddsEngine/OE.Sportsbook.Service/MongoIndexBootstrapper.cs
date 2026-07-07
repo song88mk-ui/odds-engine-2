@@ -21,6 +21,13 @@ namespace OE.Sportsbook.Service
                 new CreateIndexModel<Fixture>(
                     Builders<Fixture>.IndexKeys.Ascending(x => x.FiId),
                     new CreateIndexOptions { Name = "idx_fiid", Unique = true }
+                ),
+                // single compound index serving the Platform.Sportsbook.API fixture queries:
+                // - cross-sport (sports tree, search): FiTyId (eq/$in) && FiStId (eq or < 2) && FiStDa range — exact prefix match
+                // - per-sport (live/today/daily/outright/allleagues): same prefix, SpId applied as an in-index filter
+                new CreateIndexModel<Fixture>(
+                    Builders<Fixture>.IndexKeys.Ascending(x => x.FiTyId).Ascending(x => x.FiStId).Ascending(x => x.FiStDa).Ascending(x => x.SpId),
+                    new CreateIndexOptions { Name = "idx_fityid_fistid_fistda_spid" }
                 )
             };
 
