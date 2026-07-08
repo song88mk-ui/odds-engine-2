@@ -635,7 +635,10 @@ namespace OE.Sportsbook.Service.Repositories
                         SeNa = selection.SeNa,
                         SoOr = selection.SoOr,
                         ClOd = selection.ClOd,
-                        SeTeTr = GateTranslations($"{selection.Id}:SeTe", selection.SeTeTr),
+                        // Deliberately not gated: unlike fixture names, late-joining clients have no
+                        // REST fallback to correct a stale English selection name (e.g. reopening
+                        // cricket next-ball Over/Under lines).
+                        SeTeTr = selection.SeTeTr,
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -689,7 +692,8 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
-                    MaTeTr = GateTranslations($"{market.Id}:MaTe", market.MaTeTr),
+                    // Deliberately not gated — see SeTeTr above.
+                    MaTeTr = market.MaTeTr,
                     Se = selections
                 });
             }
