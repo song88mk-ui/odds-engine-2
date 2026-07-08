@@ -356,24 +356,41 @@ namespace OE.Translation.Service.Repositories
 
                 var payload = PrepareTranslationOddsChangeMessage(fixture, markets, selections, correlationId);
 
-                payload.SpTr = sportDeltas.TryGetValue(fixture.SpId, out var spTr) ? spTr : null;
-                payload.SegTr = segmentDeltas.TryGetValue(fixture.SegId, out var segTr) ? segTr : null;
-                payload.LeTr = leagueDeltas.TryGetValue(fixture.LeId, out var leTr) ? leTr : null;
-                payload.HoTr = fixture.HoId != null && teamDeltas.TryGetValue(fixture.HoId, out var hoTr) ? hoTr : null;
-                payload.AwTr = fixture.AwId != null && teamDeltas.TryGetValue(fixture.AwId, out var awTr) ? awTr : null;
-
-                foreach (var market in payload.Ma)
-                {
-                    market.MaTeTr = market.MaTeId != null && marketTemplateDeltas.TryGetValue(market.MaTeId, out var maTeTr) ? maTeTr : null;
-
-                    foreach (var selection in market.Se)
-                    {
-                        selection.SeTeTr = selection.MaTeId != null && selection.SeTeId != null
-                            && selectionTemplateDeltas.TryGetValue((selection.MaTeId, selection.SeTeId), out var seTeTr) ? seTeTr : null;
-                    }
-                }
+                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas);
 
                 messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
+            }
+        }
+
+        // Pure mapping from the changed-glossary-key deltas onto one fixture's payload — split out
+        // of PublishTranslationOnlyOddsChanges so it's unit-testable without a live Mongo connection.
+        // Each *Tr is set only when this fixture/market/selection actually matches a changed key;
+        // everything else stays null so consumers keep whatever they already have.
+        internal static void ApplyTranslationDeltas(
+            OnInternalOddsChangeMessage payload,
+            Fixture fixture,
+            Dictionary<int, List<TranslationMessage>> sportDeltas,
+            Dictionary<int, List<TranslationMessage>> segmentDeltas,
+            Dictionary<int, List<TranslationMessage>> leagueDeltas,
+            Dictionary<string, List<TranslationMessage>> teamDeltas,
+            Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
+            Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas)
+        {
+            payload.SpTr = sportDeltas.TryGetValue(fixture.SpId, out var spTr) ? spTr : null;
+            payload.SegTr = segmentDeltas.TryGetValue(fixture.SegId, out var segTr) ? segTr : null;
+            payload.LeTr = leagueDeltas.TryGetValue(fixture.LeId, out var leTr) ? leTr : null;
+            payload.HoTr = fixture.HoId != null && teamDeltas.TryGetValue(fixture.HoId, out var hoTr) ? hoTr : null;
+            payload.AwTr = fixture.AwId != null && teamDeltas.TryGetValue(fixture.AwId, out var awTr) ? awTr : null;
+
+            foreach (var market in payload.Ma)
+            {
+                market.MaTeTr = market.MaTeId != null && marketTemplateDeltas.TryGetValue(market.MaTeId, out var maTeTr) ? maTeTr : null;
+
+                foreach (var selection in market.Se)
+                {
+                    selection.SeTeTr = selection.MaTeId != null && selection.SeTeId != null
+                        && selectionTemplateDeltas.TryGetValue((selection.MaTeId, selection.SeTeId), out var seTeTr) ? seTeTr : null;
+                }
             }
         }
 
