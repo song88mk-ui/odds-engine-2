@@ -204,6 +204,54 @@ namespace OE.Websocket.Service
                                     .Build();
             }
 
+            _hubConnection.Reconnecting += OnHubConnectionReconnecting;
+            _hubConnection.Reconnected += OnHubConnectionReconnected;
+            _hubConnection.Closed += OnHubConnectionClosed;
+        }
+
+        private Task OnHubConnectionReconnecting(Exception error)
+        {
+            _logger.LogWarning(error, "hub connection lost, automatic reconnect in progress. State={state}", _hubConnection.State);
+            return Task.CompletedTask;
+        }
+
+        private Task OnHubConnectionReconnected(string connectionId)
+        {
+            _logger.LogInformation("hub connection reconnected. connectionId: {connectionId}", connectionId);
+            return Task.CompletedTask;
+        }
+
+        // WithAutomaticReconnect() gives up after its default retry sequence (0s/2s/10s/30s) and
+        // leaves the connection permanently Disconnected - without this handler the service would
+        // never push updates again until the process itself is restarted.
+        private async Task OnHubConnectionClosed(Exception error)
+        {
+            if (error == null)
+            {
+                _logger.LogInformation("hub connection closed intentionally, not reconnecting");
+                return;
+            }
+
+            _logger.LogError(error, "hub connection closed permanently after automatic reconnect gave up. Reconnecting manually");
+
+            var delay = TimeSpan.FromSeconds(1);
+            var maxDelay = TimeSpan.FromSeconds(30);
+
+            while (true)
+            {
+                try
+                {
+                    await Task.Delay(delay);
+                    await _hubConnection.StartAsync();
+                    _logger.LogInformation("hub connection re-established after manual reconnect");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "manual reconnect attempt failed, retrying in {delaySeconds}s", delay.TotalSeconds);
+                    delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, maxDelay.TotalSeconds));
+                }
+            }
         }
         public override async Task StopAsync(CancellationToken cancellationToken)
         {

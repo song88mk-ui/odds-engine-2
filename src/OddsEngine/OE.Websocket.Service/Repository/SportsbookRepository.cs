@@ -417,8 +417,9 @@ namespace OE.WebSocket.Service.Repository
 
                 await Task.CompletedTask;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessFavorites");
             }
         }
 
@@ -450,8 +451,9 @@ namespace OE.WebSocket.Service.Repository
 
                 await Task.CompletedTask;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessRemoveFavorites");
             }
         }
 
@@ -463,8 +465,9 @@ namespace OE.WebSocket.Service.Repository
 
                 await Task.CompletedTask;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessBoostedFixtures");
             }
         }
 
@@ -574,8 +577,9 @@ namespace OE.WebSocket.Service.Repository
                             new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
                 await PublishToWebSocket("PublishPayableChange", hubConnection, payload);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "error ProcessPayableChange");
             }
         }
 
@@ -583,7 +587,7 @@ namespace OE.WebSocket.Service.Repository
 
         #region Utilities
 
-        private static async Task PublishToWebSocket<T>(string method, HubConnection hubConnection, T payload)
+        private async Task PublishToWebSocket<T>(string method, HubConnection hubConnection, T payload)
         {
             try
             {
@@ -591,6 +595,7 @@ namespace OE.WebSocket.Service.Repository
             }
             catch (Exception e)
             {
+                _logger.LogError(e, "error publishing {method} to websocket hub. HubState={hubState}", method, hubConnection.State);
             }
         }
 
