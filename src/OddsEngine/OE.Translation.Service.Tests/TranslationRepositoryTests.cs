@@ -335,15 +335,20 @@ namespace OE.Translation.Service.Tests
             Assert.Equal("Karpaty Lviv 1-0", rows["Co:116180"].SourceText);
         }
 
-        // Content-reuse-on-rename (2026-07-09): a genuine SOURCE_TEXT change adopts an existing
-        // translation for identical text elsewhere instead of always clearing targets and waiting
-        // on the external pipeline.
+        // Regression guard (2026-07-09): a content-reuse-on-rename shortcut was tried and reverted
+        // — TARGET_TEXT_*/PROCESSED are the external pipeline's columns only (see
+        // Scripts/TranslationCache2.sql). Even when another row already carries an identical
+        // SOURCE_TEXT with a real translation, a rename must still clear targets and reset
+        // PROCESSED = 0 so the row stays on update.py's worklist — update.py owns same-SOURCE_TEXT
+        // fan-out (IX_TC2_SOURCE_TEXT) and is the only thing that may set PROCESSED = 1 /
+        // call v1/cachepreload. Writing a target here silently breaks that notification.
         [Fact]
-        public async Task MarketUpdate_RenameToTextWithExistingTranslation_AdoptsTargetsImmediately()
+        public async Task MarketUpdate_RenameToTextMatchingAnotherTranslatedRow_StillClearsTargetsAndResetsWorklist()
         {
-            var (repository, provider) = CreateRepository(nameof(MarketUpdate_RenameToTextWithExistingTranslation_AdoptsTargetsImmediately));
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_RenameToTextMatchingAnotherTranslatedRow_StillClearsTargetsAndResetsWorklist));
 
-            // Seed a second competitor whose name is already fully translated.
+            // Seed a second competitor whose name is already fully translated (by the external
+            // pipeline, simulated here).
             await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 200, seNa: "Player Y"));
 
             using (var context = GetContext(provider))
@@ -364,14 +369,14 @@ namespace OE.Translation.Service.Tests
             var renamed = verify.TranslationCache2.Single(r => r.StringId == "Co:100");
 
             Assert.Equal("Player Y", renamed.SourceText);
-            Assert.Equal("球员Y", renamed.TargetTextZh); // adopted, not cleared
-            Assert.True(renamed.Processed); // no external pipeline round-trip needed
+            Assert.Equal(string.Empty, renamed.TargetTextZh); // NOT adopted from Co:200
+            Assert.False(renamed.Processed); // stays on update.py's worklist
         }
 
         [Fact]
-        public async Task MarketUpdate_NewKeyMatchingExistingTranslatedText_AdoptsTargetsImmediately()
+        public async Task MarketUpdate_NewKeyMatchingExistingTranslatedText_StillInsertsUntranslated()
         {
-            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NewKeyMatchingExistingTranslatedText_AdoptsTargetsImmediately));
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NewKeyMatchingExistingTranslatedText_StillInsertsUntranslated));
 
             await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 200, seNa: "Player Y"));
 
@@ -384,14 +389,15 @@ namespace OE.Translation.Service.Tests
             }
 
             // A brand-new competitor id whose literal name already matches an existing
-            // translation — should adopt it on insert rather than starting untranslated.
+            // translation — must still insert untranslated so update.py's own fan-out (and its
+            // v1/cachepreload notification) is the thing that fills and announces it.
             await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 300, seNa: "Player Y"));
 
             using var verify = GetContext(provider);
             var inserted = verify.TranslationCache2.Single(r => r.StringId == "Co:300");
 
-            Assert.Equal("球员Y", inserted.TargetTextZh);
-            Assert.True(inserted.Processed);
+            Assert.Equal(string.Empty, inserted.TargetTextZh);
+            Assert.False(inserted.Processed);
         }
 
         [Fact]
