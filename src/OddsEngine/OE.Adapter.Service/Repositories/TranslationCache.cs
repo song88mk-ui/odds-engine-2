@@ -101,7 +101,10 @@ namespace OE.Adapter.Service.Repositories
                 // seeded purely via ON_TRANSLATION_CHANGE deltas after startup have none and are
                 // trusted as-is (unchanged from pre-fallback behavior). A tracked mismatch means
                 // the feed renamed this entity — fall through to the content match below instead.
-                if (!_sourceTextByStringId.TryGetValue(stringId, out var cachedText) || cachedText == currentText)
+                // An empty currentText (market/coverage-derived messages don't carry team/league
+                // names — see BG.Receiver.Service.OddsFeedRepository.ProcessMarkets/ProcessCoverage)
+                // is "no information to compare," not a rename — trust the cached row as-is.
+                if (string.IsNullOrEmpty(currentText) || !_sourceTextByStringId.TryGetValue(stringId, out var cachedText) || cachedText == currentText)
                     return translations;
             }
 

@@ -197,6 +197,25 @@ namespace OE.Adapter.Service.Tests
             Assert.Null(cache.GetTranslations("Co:100", "Player X Renamed"));
         }
 
+        // 2026-07-09 fix: market/coverage-derived OnMarketChangeMessage/OnFixtureChangeMessage
+        // payloads never carry team/league names (see
+        // BG.Receiver.Service.OddsFeedRepository.ProcessMarkets/ProcessCoverage — only the
+        // fixture-change payload from ProcessFixture does). An empty currentText on those messages
+        // is "no information to compare," not a rename, so the cached row must still be trusted —
+        // otherwise a team's HoTr/AwTr can never be attached except on the rare genuine
+        // fixture-change message.
+        [Fact]
+        public void GetTranslations_EmptyCurrentText_TrustsCachedRowInsteadOfTreatingAsRename()
+        {
+            var cache = Cache(nameof(GetTranslations_EmptyCurrentText_TrustsCachedRowInsteadOfTreatingAsRename),
+                Row("Te:108358", zh: "翁特哈兴", sourceText: "SpVgg Unterhaching"));
+
+            cache.Preload();
+
+            Assert.Equal("翁特哈兴", cache.GetTranslations("Te:108358", null)!.Single().Tx);
+            Assert.Equal("翁特哈兴", cache.GetTranslations("Te:108358", string.Empty)!.Single().Tx);
+        }
+
         [Fact]
         public void Apply_KeepsContentIndexInSyncForTrackedRows()
         {
