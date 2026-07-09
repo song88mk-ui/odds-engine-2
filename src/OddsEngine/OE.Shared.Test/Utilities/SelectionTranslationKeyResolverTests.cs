@@ -102,5 +102,36 @@ namespace OE.Shared.Test.Utilities
             Assert.Equal("SeTe:8660:25", key.StringId);
             Assert.Equal("player 1", key.SourceText);
         }
+
+        // A generic-template selection whose SeTeNa is a bare vendor outcome code with no
+        // descriptive text at all (e.g. some Correct Score outcomes with no CompId) must not be
+        // cached/translated: the digit string round-trips through translation unchanged and would
+        // permanently mask the correctly-composed English SeNa fallback ("Stade Rennais 4-0").
+        [Fact]
+        public void CompIdNullNonDescriptiveNumericSeTeNa_ReturnsEmptyKey()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Stade Rennais 4-0", seTeNa: "29", seTeId: "29", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Stade Rennais", awId: "A1", awNa: "SM Caen");
+
+            Assert.Equal(string.Empty, key.StringId);
+            Assert.Equal(string.Empty, key.SourceText);
+        }
+
+        // An empty/missing SeTeNa is a DIFFERENT case from non-descriptive digits — it means "no
+        // name info on this message," which GetTranslations already treats as "no info to compare,
+        // trust whatever's cached" (see TranslationCache.GetTranslations remarks). The guard above
+        // must not swallow this — it still needs the real SeTe: key so a prior cached translation
+        // keeps applying.
+        [Fact]
+        public void CompIdNullEmptySeTeNa_StillFallsBackToSeTeKey()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Stade Rennais 4-0", seTeNa: "", seTeId: "29", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Stade Rennais", awId: "A1", awNa: "SM Caen");
+
+            Assert.Equal("SeTe:91:29", key.StringId);
+            Assert.Equal(string.Empty, key.SourceText);
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace OE.Shared.Utilities
 {
@@ -55,6 +56,20 @@ namespace OE.Shared.Utilities
 
                 if (seTeNa == PositionalPlayer2Template)
                     return new SelectionTranslationKey($"Te:{awId}", awNa);
+
+                // A generic template label is only worth caching/translating if it's real
+                // descriptive text. Some vendor market templates (e.g. Correct Score outcomes
+                // with no CompId) fall back to a bare numeric outcome code in SeTeNa when the
+                // vendor never supplied a proper name. That code round-trips through translation
+                // unchanged (digits need no translating), gets cached as if it were a genuine
+                // translation, and permanently masks the correctly-composed English SeNa. Return
+                // an empty key so the caller's existing "no StringId" fallback (SeNa as-is)
+                // applies for every language instead. An EMPTY SeTeNa is a different, already
+                // -handled case (no information on this message — GetTranslations trusts the
+                // existing cached row per its own "no info to compare" rule) and must fall
+                // through to the normal SeTe: key untouched.
+                if (!string.IsNullOrEmpty(seTeNa) && !seTeNa.Any(char.IsLetter))
+                    return new SelectionTranslationKey(string.Empty, string.Empty);
 
                 return new SelectionTranslationKey($"SeTe:{maTeId}:{seTeId}", seTeNa);
             }
