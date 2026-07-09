@@ -361,7 +361,7 @@ namespace OE.Sportsbook.Service.Repositories
             _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
         }
 
-        private WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)
+        internal WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)
         {
             var filter = Builders<Fixture>.Filter.Eq(f => f.Id, message.Id);
 
@@ -395,8 +395,6 @@ namespace OE.Sportsbook.Service.Repositories
                 .Set(s => s.ClCo, message.ClCo)
                 .Set(s => s.HoId, message.HoId)
                 .Set(s => s.AwId, message.AwId)
-                .Set(s => s.HoNa, message.HoNa)
-                .Set(s => s.AwNa, message.AwNa)
                 .Set(s => s.StUr, string.IsNullOrEmpty(message.StUr) ? "-" : message.StUr);
             //s.Set(s => s.LiId, message.LiId) TODO
             //.Set(s => s.ClMa, message.ClMa) TODO
@@ -415,6 +413,18 @@ namespace OE.Sportsbook.Service.Repositories
             if (!string.IsNullOrEmpty(message.Sc))
                 updateFixture = updateFixture.Set(
                     s => s.Sc, message.Sc);
+
+            // 2026-07-09 fix: unlike HoId/AwId, a blank HoNa/AwNa on the incoming message is not
+            // "no change" here — some producers (e.g. OE.Job.Settlement's force-close path) build
+            // a fixture-change message without them, and an unconditional Set was overwriting an
+            // already-correct name with null. No legitimate case sets a real name back to blank.
+            if (!string.IsNullOrEmpty(message.HoNa))
+                updateFixture = updateFixture.Set(
+                    s => s.HoNa, message.HoNa);
+
+            if (!string.IsNullOrEmpty(message.AwNa))
+                updateFixture = updateFixture.Set(
+                    s => s.AwNa, message.AwNa);
 
             if (message.Fa != FavoriteSelection.None.ToString())
             {

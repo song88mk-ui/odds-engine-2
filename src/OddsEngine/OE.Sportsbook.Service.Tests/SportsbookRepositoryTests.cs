@@ -135,6 +135,57 @@ namespace OE.Sportsbook.Service.Tests
             Assert.Equal("主胜", selection.SeNaTr!.Single().Tx);
         }
 
+        private static OnFixtureChangeMessage FixtureChangeMessage(string hoNa, string awNa)
+        {
+            return new OnFixtureChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = "1234567890",
+                FiId = 1,
+                HoId = "H1",
+                AwId = "A1",
+                HoNa = hoNa,
+                AwNa = awNa
+            };
+        }
+
+        // 2026-07-09 fix: some producers (e.g. OE.Job.Settlement's force-close path) build a
+        // fixture-change message without HoNa/AwNa — an unconditional Set was overwriting an
+        // already-correct name with null/blank. Blank now means "no information," matching the
+        // existing Sc/Fa fields in this same update, not "clear the field."
+        [Fact]
+        public void ToFixture_BlankHoNaAwNa_OmitsThemFromTheUpdate()
+        {
+            var repository = CreateRepository();
+            var message = FixtureChangeMessage(hoNa: null!, awNa: string.Empty);
+
+            var update = Assert.IsType<UpdateOneModel<Fixture>>(Assert.Single(repository.ToFixture(message)));
+            var rendered = update.Update.Render(new RenderArgs<Fixture>(
+                BsonSerializer.SerializerRegistry.GetSerializer<Fixture>(),
+                BsonSerializer.SerializerRegistry));
+
+            Assert.False(rendered["$set"].AsBsonDocument.Contains("HoNa"));
+            Assert.False(rendered["$set"].AsBsonDocument.Contains("AwNa"));
+            // HoId/AwId are unaffected — they're always carried, even on messages missing names.
+            Assert.Equal("H1", rendered["$set"]["HoId"].AsString);
+            Assert.Equal("A1", rendered["$set"]["AwId"].AsString);
+        }
+
+        [Fact]
+        public void ToFixture_RealHoNaAwNa_IncludesThemInTheUpdate()
+        {
+            var repository = CreateRepository();
+            var message = FixtureChangeMessage(hoNa: "Arsenal", awNa: "Chelsea");
+
+            var update = Assert.IsType<UpdateOneModel<Fixture>>(Assert.Single(repository.ToFixture(message)));
+            var rendered = update.Update.Render(new RenderArgs<Fixture>(
+                BsonSerializer.SerializerRegistry.GetSerializer<Fixture>(),
+                BsonSerializer.SerializerRegistry));
+
+            Assert.Equal("Arsenal", rendered["$set"]["HoNa"].AsString);
+            Assert.Equal("Chelsea", rendered["$set"]["AwNa"].AsString);
+        }
+
         private static Selection MongoSelection(int? compId)
         {
             return new Selection

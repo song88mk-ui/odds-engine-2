@@ -92,6 +92,8 @@ namespace OE.Job.Settlement.Repository
                             LeNa = fixture.LeNa,
                             HoId = fixture.HoId,
                             AwId = fixture.AwId,
+                            HoNa = fixture.HoNa,
+                            AwNa = fixture.AwNa,
                             FiId = fixture.FiId,
                             FiSp = fixture.FiSp,
                             FiNa = fixture.FiNa,
