@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace OE.Shared.Repositories
 {
@@ -30,6 +31,38 @@ namespace OE.Shared.Repositories
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
                         return JsonSerializer.Deserialize<BaseResponseDTO<MessageResponseDTO>>(response.Content.ReadAsStringAsync().Result, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    else
+                    {
+                        return new BaseResponseDTO<MessageResponseDTO>()
+                        {
+                            StatusCode = StatusCode.Error,
+                            Message = $"{StatusCode.Error} ({response.ReasonPhrase})"
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                return new BaseResponseDTO<MessageResponseDTO>
+                {
+                    StatusCode = StatusCode.Error,
+                    Message = $"{StatusCode.Error} ({ex.Message}) StackTrace:{ex.StackTrace}"
+                };
+            }
+        }
+
+        public async Task<BaseResponseDTO<MessageResponseDTO>> PublishViaHttpAsync(MessageRequestDTO request)
+        {
+            try
+            {
+                var response = await _httpClient.PostAsync($"v1/broker/publish", new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json"));
+
+                if (response.IsSuccessStatusCode)
+                    return JsonSerializer.Deserialize<BaseResponseDTO<MessageResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                else
+                {
+                    if (response.StatusCode == HttpStatusCode.BadRequest)
+                        return JsonSerializer.Deserialize<BaseResponseDTO<MessageResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
                     else
                     {
                         return new BaseResponseDTO<MessageResponseDTO>()
