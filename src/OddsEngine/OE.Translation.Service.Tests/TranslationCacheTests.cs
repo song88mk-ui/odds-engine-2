@@ -127,6 +127,58 @@ namespace OE.Translation.Service.Tests
             Assert.Null(cache.GetTranslations("Co:100", "Player X Renamed"));
         }
 
+        // 2026-07-09 fix: Co:{CompId} is shared by every selection tied to one competitor, but a
+        // competitor-fused market (e.g. a tennis set-score prop) appends a volatile score onto the
+        // same stable name another selection already cached here — the incoming text is a rename
+        // by exact-match standards, but it's really "the cached name plus a tail," so the cached
+        // translation should be reused with the tail appended, not discarded.
+        [Fact]
+        public void GetTranslations_RenameIsKnownNamePlusScoreTail_SplicesTranslatedNamePlusTail()
+        {
+            var cache = Cache(nameof(GetTranslations_RenameIsKnownNamePlusScoreTail_SplicesTranslatedNamePlusTail),
+                Row("Co:1372197", zh: "罗杰斯, 安娜", sourceText: "Rogers, Anna"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:1372197", "Rogers, Anna 7-5");
+
+            Assert.NotNull(translated);
+            Assert.Equal("罗杰斯, 安娜 7-5", translated!.Single().Tx);
+        }
+
+        // Winning Margin family (AR-14): the tail contains letters ("by 2"), which the generic
+        // no-letters guard alone would reject — the narrow " by N"/" by N+" allowance covers it
+        // without opening the door to arbitrary letter-bearing tails.
+        [Theory]
+        [InlineData("Fluminense FC by 2", "弗鲁米嫩塞 by 2")]
+        [InlineData("Fluminense FC by 2+", "弗鲁米嫩塞 by 2+")]
+        [InlineData("Fluminense FC BY 3", "弗鲁米嫩塞 BY 3")]
+        public void GetTranslations_RenameIsKnownNamePlusWinningMarginTail_SplicesTranslatedNamePlusTail(string currentText, string expected)
+        {
+            var cache = Cache(nameof(GetTranslations_RenameIsKnownNamePlusWinningMarginTail_SplicesTranslatedNamePlusTail) + currentText,
+                Row("Co:96870", zh: "弗鲁米嫩塞", sourceText: "Fluminense FC"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:96870", currentText);
+
+            Assert.NotNull(translated);
+            Assert.Equal(expected, translated!.Single().Tx);
+        }
+
+        // A tail with letters that ISN'T the Winning Margin shape must still be treated as a
+        // genuine rename, not spliced — otherwise the guard is meaningless.
+        [Fact]
+        public void GetTranslations_RenameWithNonMarginLetterTail_StillFallsBackInsteadOfSplicing()
+        {
+            var cache = Cache(nameof(GetTranslations_RenameWithNonMarginLetterTail_StillFallsBackInsteadOfSplicing),
+                Row("Co:100", zh: "球员X", sourceText: "Player X"));
+
+            cache.Preload();
+
+            Assert.Null(cache.GetTranslations("Co:100", "Player X United"));
+        }
+
         // 2026-07-09 fix: market/coverage-derived OnMarketChangeMessage/OnFixtureChangeMessage
         // payloads never carry team/league names (see
         // BG.Receiver.Service.OddsFeedRepository.ProcessMarkets/ProcessCoverage — only the

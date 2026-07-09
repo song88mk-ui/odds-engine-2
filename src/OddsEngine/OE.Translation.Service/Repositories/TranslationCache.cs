@@ -5,6 +5,7 @@ using OE.Shared.Data.Translation;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingSportsbookMessages;
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 
 namespace OE.Translation.Service.Repositories
 {
@@ -38,6 +39,12 @@ namespace OE.Translation.Service.Repositories
         private const string LANGUAGE_ZH = "ZH";
         private const string LANGUAGE_ES = "ES";
         private const string LANGUAGE_FR = "FR";
+
+        // Winning Margin family tail shape (e.g. " by 2", " by 2+") — the one letter-bearing
+        // volatile tail known to be safe to splice onto a cached name; see
+        // docs/ArchitectureRisks.md AR-14. Anchored and narrow enough that a genuine rename could
+        // not plausibly produce a matching tail by coincidence.
+        private static readonly Regex WinningMarginTailPattern = new(@"^\s+by\s+\d+\+?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         #endregion
 
@@ -107,6 +114,23 @@ namespace OE.Translation.Service.Repositories
                 // is "no information to compare," not a rename — trust the cached row as-is.
                 if (string.IsNullOrEmpty(currentText) || !_sourceTextByStringId.TryGetValue(stringId, out var cachedText) || cachedText == currentText)
                     return translations;
+
+                // Co:{CompId} is shared by every selection tied to one competitor, but a
+                // competitor-fused market (e.g. a set/game score prop: "Rogers, Anna 7-5", or a
+                // Winning Margin market: "Fluminense FC by 2") appends a volatile, untranslatable
+                // tail onto the same stable name another selection already cached here ("Rogers,
+                // Anna", "Fluminense FC"). Reuse the translation when the incoming text is
+                // exactly that cached name plus a literal tail — guarded to tails with no letters
+                // (a pure score/margin digit), or the narrow Winning Margin " by N"/" by N+" shape,
+                // so a genuine rename to an unrelated name that coincidentally shares a prefix
+                // still falls through to the rename path below instead of being spliced.
+                if (!string.IsNullOrEmpty(cachedText) && currentText.StartsWith(cachedText, StringComparison.Ordinal))
+                {
+                    var suffix = currentText.Substring(cachedText.Length);
+
+                    if (!suffix.Any(char.IsLetter) || WinningMarginTailPattern.IsMatch(suffix))
+                        return translations.Select(t => new TranslationMessage { LaCo = t.LaCo, Tx = t.Tx + suffix }).ToList();
+                }
             }
 
             // STRING_ID miss, or the row's cached SOURCE_TEXT no longer matches (a rename) — fall
