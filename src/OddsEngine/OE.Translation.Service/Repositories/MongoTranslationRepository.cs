@@ -142,12 +142,14 @@ namespace OE.Translation.Service.Repositories
                     if (selection == null)
                         continue;
 
-                    // Co:/SeTe: are mutually exclusive, matching the seeding branch in
-                    // OnProcessMarketSetUpdate — the resulting translations still land in the same
-                    // SeNaTr field (the display-name translation, whichever source it came from).
-                    var seNaTr = selection.CompId != null
-                        ? _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa)
-                        : _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+                    // Which TranslationCache2 key backs SeNaTr — see
+                    // OE.Shared.Utilities.SelectionTranslationKeyResolver (shared with
+                    // OE.Adapter.Service.Repositories.TradingRepository's live enrichment).
+                    var key = SelectionTranslationKeyResolver.Resolve(
+                        selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, market.MaTeId, market.IsHa,
+                        message.HoId, message.HoNa, message.AwId, message.AwNa);
+
+                    var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
 
                     if (seNaTr != null)
                     {
@@ -366,18 +368,45 @@ namespace OE.Translation.Service.Repositories
                 Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
 
             var selections = _selectionCollection.Find(activeSelectionFilter).ToList();
+            var candidates = selections.Where(s => IsMissing(s.SeNaTr)).ToList();
+
+            if (candidates.Count == 0)
+                return 0;
+
+            // SelectionTranslationKeyResolver needs the fixture's HoId/HoNa/AwId/AwNa (the
+            // CompId-null positional-template exception and the IsHa+CompId==HoId/AwId exception)
+            // and the market's IsHa flag — neither lives on the Selection document itself.
+            var fiIds = candidates.Select(s => s.FiId).Distinct().ToList();
+            var fixturesById = _fixtureCollection
+                .Find(Builders<Fixture>.Filter.In(f => f.FiId, fiIds))
+                .Project(f => new { f.FiId, f.HoId, f.HoNa, f.AwId, f.AwNa })
+                .ToList()
+                .ToDictionary(f => f.FiId);
+
+            var maIds = candidates.Select(s => s.MaId).Distinct().ToList();
+            var isHaByMaId = _marketCollection
+                .Find(Builders<Market>.Filter.In(m => m.MaId, maIds))
+                .Project(m => new { m.MaId, m.IsHa })
+                .ToList()
+                .ToDictionary(m => m.MaId, m => m.IsHa);
+
             var writes = new List<WriteModel<Selection>>();
 
-            foreach (var selection in selections)
+            foreach (var selection in candidates)
             {
-                if (!IsMissing(selection.SeNaTr))
-                    continue;
+                if (!fixturesById.TryGetValue(selection.FiId, out var fixture))
+                    continue; // no fixture found — nothing to resolve Te:/positional keys against
 
-                // Co:/SeTe: are mutually exclusive, matching the seeding/enrichment branches
-                // elsewhere — a selection's CompId decides which key backs its SeNaTr.
-                var seNaTr = selection.CompId != null
-                    ? _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa)
-                    : _translationCache.GetTranslations($"SeTe:{selection.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+                var isHa = isHaByMaId.TryGetValue(selection.MaId, out var marketIsHa) && marketIsHa;
+
+                // Which TranslationCache2 key backs SeNaTr — see
+                // OE.Shared.Utilities.SelectionTranslationKeyResolver (shared with
+                // OE.Adapter.Service.Repositories.TradingRepository's live enrichment).
+                var key = SelectionTranslationKeyResolver.Resolve(
+                    selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, selection.MaTeId, isHa,
+                    fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
+
+                var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
 
                 if (seNaTr != null)
                 {

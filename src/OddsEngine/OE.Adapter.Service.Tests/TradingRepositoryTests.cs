@@ -295,6 +295,110 @@ namespace OE.Adapter.Service.Tests
             Assert.Null(selection.SeNaTr); // Co:116180 was never seeded — miss, falls back to English
         }
 
+        // 2026-07-09 fix: the vendor never attaches a CompId to individual-sport head-to-head
+        // markets (tennis/darts/snooker Match Winner, Set/Game Handicap, Frame Winner, ...) — SeNa
+        // still carries the real per-fixture name ("Yamalapalli, S(-1.50)"), but SeTeNa is the
+        // generic positional template ("Player 1"). Reuses Te:{HoId}/{AwId} instead of the
+        // (per-competitor-shared, untranslatable-since-the-vendor-gives-no-CompId) SeTe: key.
+        [Fact]
+        public void MarketChange_GenericPositionalSelection_Player1ReusesHoTr()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:H1", LaCo = "ZH", Tx = "阿森纳" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 1,
+                SegId = 2,
+                LeId = 3,
+                HoId = "H1",
+                AwId = "A1",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M6",
+                        MaTeId = "8660",
+                        IsHa = true,
+                        Li = "-1.5",
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                PrFiId = PROVIDER_FIXTURE_ID,
+                                PrMaId = "M6",
+                                PrSeId = "S7",
+                                MaTeId = "8660",
+                                SeTeId = "25",
+                                SeTeNa = "Player 1",
+                                SeNa = "Yamalapalli, S(-1.50)"
+                            }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selection = message.Ma.Single().Se.Single();
+            Assert.NotNull(selection.SeNaTr);
+            Assert.Equal("阿森纳", selection.SeNaTr!.Single().Tx);
+        }
+
+        [Fact]
+        public void MarketChange_GenericPositionalSelection_Player2ReusesAwTr()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:A1", LaCo = "ZH", Tx = "切尔西" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 1,
+                SegId = 2,
+                LeId = 3,
+                HoId = "H1",
+                AwId = "A1",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M7",
+                        MaTeId = "6505",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                PrFiId = PROVIDER_FIXTURE_ID,
+                                PrMaId = "M7",
+                                PrSeId = "S8",
+                                MaTeId = "6505",
+                                SeTeId = "26",
+                                SeTeNa = "Player 2",
+                                SeNa = "Rogers, Anna"
+                            }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selection = message.Ma.Single().Se.Single();
+            Assert.NotNull(selection.SeNaTr);
+            Assert.Equal("切尔西", selection.SeNaTr!.Single().Tx);
+        }
+
         // Cache-apply only (2026-07 translation-flow redesign): persistence + notification are
         // OE.Translation.Service's job — the adapter must NOT forward the message anywhere.
         [Fact]
