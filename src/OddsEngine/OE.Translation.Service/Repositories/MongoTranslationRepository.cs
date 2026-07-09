@@ -21,6 +21,18 @@ namespace OE.Translation.Service.Repositories
         private readonly IMongoCollection<Fixture> _fixtureCollection;
         private readonly IMongoCollection<Market> _marketCollection;
         private readonly IMongoCollection<Selection> _selectionCollection;
+        private readonly IMongoCollection<MarketLookup> _marketLookupCollection;
+
+        // "Active" per docs/BusinessGlossary.md — excludes fixtures that have concluded one way or
+        // another; used by ReadActiveSnapshot (SeedActiveSnapshot migration), distinct from
+        // _openFixtureStatusIds above (which is scoped to "still shown to players").
+        private static readonly List<int> _terminalFixtureStatusIds = new()
+        {
+            (int)FixtureStatus.Ended,
+            (int)FixtureStatus.Closed,
+            (int)FixtureStatus.Cancelled,
+            (int)FixtureStatus.Abandoned
+        };
 
         // Fixtures still shown to players — the only ones worth a translation-triggered odds
         // update (persistence itself is unscoped).
@@ -50,6 +62,7 @@ namespace OE.Translation.Service.Repositories
             _fixtureCollection = db.GetCollection<Fixture>("Fixture");
             _marketCollection = db.GetCollection<Market>("Market");
             _selectionCollection = db.GetCollection<Selection>("Selection");
+            _marketLookupCollection = db.GetCollection<MarketLookup>("MarketLookup");
         }
 
         #endregion
@@ -151,6 +164,79 @@ namespace OE.Translation.Service.Repositories
 
             if (selectionWrites.Count > 0)
                 _selectionCollection.BulkWrite(selectionWrites, new BulkWriteOptions { IsOrdered = false });
+        }
+
+        #endregion
+
+        #region One-time migration — active snapshot for SeedActiveSnapshot
+
+        // Every currently-active sport/segment/league/team/market-template/selection-template name,
+        // deduped by STRING_ID (first value wins — these are recurring entities, so any active
+        // document carries the same name). Read-only; TranslationRepository.SeedActiveSnapshotAsync
+        // decides what (if anything) gets written to TranslationCache2.
+        public List<(string Id, string Text)> ReadActiveSnapshot()
+        {
+            var result = new Dictionary<string, string>();
+
+            void AddIfNew(string id, string text)
+            {
+                if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(text) && !result.ContainsKey(id))
+                    result[id] = text;
+            }
+
+            var activeFixtureFilter = Builders<Fixture>.Filter.Nin(f => f.FiStId, _terminalFixtureStatusIds);
+
+            var fixtures = _fixtureCollection
+                .Find(activeFixtureFilter)
+                .Project(f => new { f.SpId, f.SpNa, f.SegId, f.SegNa, f.LeId, f.LeNa, f.HoId, f.HoNa, f.AwId, f.AwNa })
+                .ToList();
+
+            foreach (var f in fixtures)
+            {
+                AddIfNew($"SpId:{f.SpId}", f.SpNa);
+                AddIfNew($"SegId:{f.SegId}", f.SegNa);
+                AddIfNew($"LeId:{f.LeId}", f.LeNa);
+                AddIfNew($"Te:{f.HoId}", f.HoNa);
+                AddIfNew($"Te:{f.AwId}", f.AwNa);
+            }
+
+            var activeMaTeIds = _marketCollection
+                .Find(Builders<Market>.Filter.And(
+                    Builders<Market>.Filter.Eq(m => m.MaStId, (int)MarketStatus.Active),
+                    Builders<Market>.Filter.Nin(m => m.FiStId, _terminalFixtureStatusIds)))
+                .Project(m => m.MaTeId)
+                .ToList()
+                .Distinct()
+                .ToList();
+
+            var marketTemplates = _marketLookupCollection
+                .Find(Builders<MarketLookup>.Filter.In(ml => ml.MaTeId, activeMaTeIds))
+                .Project(ml => new { ml.MaTeId, ml.MaTeNa })
+                .ToList();
+
+            foreach (var mt in marketTemplates)
+                AddIfNew($"MaTe:{mt.MaTeId}", mt.MaTeNa);
+
+            var selections = _selectionCollection
+                .Find(Builders<Selection>.Filter.And(
+                    Builders<Selection>.Filter.Eq(s => s.IsAc, true),
+                    Builders<Selection>.Filter.Eq(s => s.MaStId, (int)MarketStatus.Active),
+                    Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds)))
+                .Project(s => new { s.MaTeId, s.SeTeId, s.SeTeNa, s.CompId, s.SeNa })
+                .ToList();
+
+            // Co:/SeTe: are mutually exclusive per selection (matches TranslationRepository's live
+            // seeding branch) — a competitor-specific selection keys by CompId with the as-is SeNa;
+            // everything else keys by the market/selection template pair with SeTeNa.
+            foreach (var s in selections)
+            {
+                if (s.CompId != null)
+                    AddIfNew($"Co:{s.CompId}", s.SeNa);
+                else
+                    AddIfNew($"SeTe:{s.MaTeId}:{s.SeTeId}", s.SeTeNa);
+            }
+
+            return result.Select(kv => (kv.Key, kv.Value)).ToList();
         }
 
         #endregion

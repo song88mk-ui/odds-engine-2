@@ -175,6 +175,59 @@ namespace OE.Translation.Service.Repositories
             }
         }
 
+        // One-time migration (Custom:Translation:SeedActiveSnapshot): insert-only — filters out
+        // any id that already has a TranslationCache2 row (regardless of whether its SOURCE_TEXT
+        // matches) before calling BulkSeed, so this never resets PROCESSED/clears targets on an
+        // existing row. That's a deliberate scope decision: fixing already-seeded-but-stale rows
+        // (e.g. a wording change) is the message-driven path's job, not this startup sweep's.
+        public async Task SeedActiveSnapshotAsync(List<(string id, string value)> items)
+        {
+            if (items == null || items.Count == 0)
+                return;
+
+            var distinctItems = items
+                .GroupBy(x => x.id)
+                .Select(g => g.Last())
+                .ToList();
+
+            using var scope = _scopeFactory.CreateScope();
+
+            var context = scope.ServiceProvider
+                .GetRequiredService<TranslationContext>();
+
+            var ids = distinctItems
+                .Select(x => x.id)
+                .ToList();
+
+            var existingIds = new HashSet<string>();
+
+            foreach (var chunk in ids.Chunk(1000))
+            {
+                var chunkIds = chunk.ToList();
+
+                var found = await context.TranslationCache2
+                    .Where(x => chunkIds.Contains(x.StringId))
+                    .Select(x => x.StringId)
+                    .ToListAsync();
+
+                foreach (var id in found)
+                    existingIds.Add(id);
+            }
+
+            var missingOnly = distinctItems
+                .Where(x => !existingIds.Contains(x.id))
+                .ToList();
+
+            _logger.LogInformation(
+                "SeedActiveSnapshot: {MissingCount} of {TotalCount} active entities have no TranslationCache2 row yet",
+                missingOnly.Count, distinctItems.Count);
+
+            if (missingOnly.Count == 0)
+                return;
+
+            await BulkSeed(missingOnly);
+        }
+
         #endregion
 
         #region Utilities

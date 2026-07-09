@@ -11,5 +11,12 @@ namespace OE.Translation.Service.Repositories
         Task OnProcessFixtureSetUpdate(OnFixtureChangeMessage message);
 
         Task OnProcessMarketSetUpdate(OnMarketChangeMessage message);
+
+        // One-time migration (Custom:Translation:SeedActiveSnapshot): insert-only seeding for
+        // entities from IMongoTranslationRepository.ReadActiveSnapshot that have no TranslationCache2
+        // row at all yet. Never touches a row that already exists, even if its SOURCE_TEXT differs
+        // from the live value — that update-on-change path belongs to the message-driven seeding
+        // above, not this startup sweep.
+        Task SeedActiveSnapshotAsync(List<(string id, string value)> items);
     }
 }

@@ -18,5 +18,11 @@ namespace OE.Translation.Service.Repositories
         void WriteMarketTranslations(OnMarketChangeMessage message);
 
         void ProcessTranslationChange(IMessageBroker messageBroker, OnTranslationChangeMessage message, string correlationId);
+
+        // One-time migration support (Custom:Translation:SeedActiveSnapshot): every currently-active
+        // sport/segment/league/team/market-template/selection-template name, keyed exactly like the
+        // live seeding path (SpId:/SegId:/LeId:/Te:/MaTe:/SeTe:), for entities the message-driven
+        // seeding never saw (e.g. CacheSeed was off when they last changed).
+        List<(string Id, string Text)> ReadActiveSnapshot();
     }
 }

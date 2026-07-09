@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OE.Shared.Constants;
@@ -30,6 +31,7 @@ namespace OE.Translation.Service
         private readonly ITranslationCache _translationCache;
         private readonly ITranslationRepository _translationRepository;
         private readonly IMongoTranslationRepository _mongoTranslationRepository;
+        private readonly IConfiguration _configuration;
 
         private readonly ActivitySource _activitySource;
         private readonly Counter<long> _processedMessagesCounter;
@@ -45,6 +47,7 @@ namespace OE.Translation.Service
             ITranslationCache translationCache,
             ITranslationRepository translationRepository,
             IMongoTranslationRepository mongoTranslationRepository,
+            IConfiguration configuration,
             Instrumentation instrumentation)
         {
             _logger = logger;
@@ -52,6 +55,7 @@ namespace OE.Translation.Service
             _translationCache = translationCache;
             _translationRepository = translationRepository;
             _mongoTranslationRepository = mongoTranslationRepository;
+            _configuration = configuration;
             _processedMessagesCounter = instrumentation.ProcessedMessagesCounter;
             _activitySource = instrumentation.ActivitySource;
         }
@@ -90,6 +94,22 @@ namespace OE.Translation.Service
                 {
                     _logger.LogWarning($"Translation cache preload attempt {attempt}/{PRELOAD_RETRY_ATTEMPTS} failed: {ex.Message}");
                     await Task.Delay(TimeSpan.FromSeconds(PRELOAD_RETRY_DELAY_SECONDS), stoppingToken);
+                }
+            }
+
+            if (_configuration.GetValue("Custom:Translation:SeedActiveSnapshot", false))
+            {
+                try
+                {
+                    _logger.LogInformation("SeedActiveSnapshot: reading active fixture/market/selection snapshot from Mongo");
+                    var snapshot = _mongoTranslationRepository.ReadActiveSnapshot();
+                    await _translationRepository.SeedActiveSnapshotAsync(snapshot);
+                }
+                catch (Exception ex)
+                {
+                    // Non-fatal: this is a startup enhancement, not core functionality — a failure
+                    // here must not block the service from starting to process the live queue.
+                    _logger.LogError(ex, "SeedActiveSnapshot failed, continuing startup without it: {Message}", ex.Message);
                 }
             }
 
