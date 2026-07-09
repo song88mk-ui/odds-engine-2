@@ -66,23 +66,23 @@ namespace OE.Translation.Service.Repositories
 
             UpdateDefinition<Fixture>? update = null;
 
-            var spTr = _translationCache.GetTranslations($"SpId:{message.SpId}");
+            var spTr = _translationCache.GetTranslations($"SpId:{message.SpId}", message.SpNa);
             if (spTr != null)
                 update = Combine(update, Builders<Fixture>.Update.Set(f => f.SpNaTr, spTr.Select(t => new SportTranslationMDB { LaCo = t.LaCo, SpNa = t.Tx }).ToList()));
 
-            var segTr = _translationCache.GetTranslations($"SegId:{message.SegId}");
+            var segTr = _translationCache.GetTranslations($"SegId:{message.SegId}", message.SegNa);
             if (segTr != null)
                 update = Combine(update, Builders<Fixture>.Update.Set(f => f.SegNaTr, segTr.Select(t => new SegmentTranslationMDB { LaCo = t.LaCo, SegNa = t.Tx }).ToList()));
 
-            var leTr = _translationCache.GetTranslations($"LeId:{message.LeId}");
+            var leTr = _translationCache.GetTranslations($"LeId:{message.LeId}", message.LeNa);
             if (leTr != null)
                 update = Combine(update, Builders<Fixture>.Update.Set(f => f.LeNaTr, leTr.Select(t => new LeagueTranslationMDB { LaCo = t.LaCo, LeNa = t.Tx }).ToList()));
 
-            var hoTr = _translationCache.GetTranslations($"Te:{message.HoId}");
+            var hoTr = _translationCache.GetTranslations($"Te:{message.HoId}", message.HoNa);
             if (hoTr != null)
                 update = Combine(update, Builders<Fixture>.Update.Set(f => f.HoNaTr, hoTr.Select(t => new TeamTranslationMDB { LaCo = t.LaCo, TeNa = t.Tx }).ToList()));
 
-            var awTr = _translationCache.GetTranslations($"Te:{message.AwId}");
+            var awTr = _translationCache.GetTranslations($"Te:{message.AwId}", message.AwNa);
             if (awTr != null)
                 update = Combine(update, Builders<Fixture>.Update.Set(f => f.AwNaTr, awTr.Select(t => new TeamTranslationMDB { LaCo = t.LaCo, TeNa = t.Tx }).ToList()));
 
@@ -111,7 +111,7 @@ namespace OE.Translation.Service.Repositories
                 if (market == null)
                     continue;
 
-                var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}");
+                var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaTeNa);
 
                 if (maTeTr != null)
                 {
@@ -129,13 +129,18 @@ namespace OE.Translation.Service.Repositories
                     if (selection == null)
                         continue;
 
-                    var seTeTr = _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}");
+                    // Co:/SeTe: are mutually exclusive, matching the seeding branch in
+                    // OnProcessMarketSetUpdate — the resulting translations still land in the same
+                    // SeNaTr field (the display-name translation, whichever source it came from).
+                    var seNaTr = selection.CompId != null
+                        ? _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa)
+                        : _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
 
-                    if (seTeTr != null)
+                    if (seNaTr != null)
                     {
                         selectionWrites.Add(new UpdateOneModel<Selection>(
                             Builders<Selection>.Filter.Eq("Id", selection.Id),
-                            Builders<Selection>.Update.Set(s => s.SeNaTr, seTeTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList()))
+                            Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList()))
                         { IsUpsert = false });
                     }
                 }
@@ -185,6 +190,7 @@ namespace OE.Translation.Service.Repositories
             var teamDeltas = new Dictionary<string, List<TranslationMessage>>();
             var marketTemplateDeltas = new Dictionary<string, List<TranslationMessage>>();
             var selectionTemplateDeltas = new Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>>();
+            var competitorDeltas = new Dictionary<int, List<TranslationMessage>>();
 
             foreach (var entry in deltasByKey)
             {
@@ -219,6 +225,12 @@ namespace OE.Translation.Service.Repositories
                         marketTemplateDeltas[id] = entry.Value;
                         UpdateTranslationArray(_marketCollection, Builders<Market>.Filter.Eq(m => m.MaTeId, id), "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
                         break;
+                    case "Co" when int.TryParse(id, out var compId):
+                        // Competitor-specific selection name (as-is, not a template) — mutually
+                        // exclusive with SeTe: below, see docs/BusinessRules.md.
+                        competitorDeltas[compId] = entry.Value;
+                        UpdateTranslationArray(_selectionCollection, Builders<Selection>.Filter.Eq(s => s.CompId, compId), "SeNaTr", entry.Value, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
+                        break;
                     case "SeTe":
                         // "SeTe:{MaTeId}:{SeTeId}" — SeTeId is the segment after the LAST colon.
                         var lastSeparator = id.LastIndexOf(':');
@@ -244,7 +256,7 @@ namespace OE.Translation.Service.Repositories
             }
 
             PublishTranslationOnlyOddsChanges(messageBroker, correlationId,
-                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas);
+                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas);
         }
 
         #endregion
@@ -281,7 +293,8 @@ namespace OE.Translation.Service.Repositories
             Dictionary<int, List<TranslationMessage>> leagueDeltas,
             Dictionary<string, List<TranslationMessage>> teamDeltas,
             Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
-            Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas)
+            Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
+            Dictionary<int, List<TranslationMessage>> competitorDeltas)
         {
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
             var fixtureFilters = new List<FilterDefinition<Fixture>>();
@@ -335,6 +348,21 @@ namespace OE.Translation.Service.Repositories
                     fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.FiId, fixtureIds));
             }
 
+            if (competitorDeltas.Count > 0)
+            {
+                var compIds = competitorDeltas.Keys.ToList();
+
+                var fixtureIds = _selectionCollection
+                    .Find(s => s.CompId != null && compIds.Contains(s.CompId.Value))
+                    .Project(s => s.FiId)
+                    .ToList()
+                    .Distinct()
+                    .ToList();
+
+                if (fixtureIds.Count > 0)
+                    fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.FiId, fixtureIds));
+            }
+
             if (fixtureFilters.Count == 0)
                 return;
 
@@ -356,7 +384,7 @@ namespace OE.Translation.Service.Repositories
 
                 var payload = PrepareTranslationOddsChangeMessage(fixture, markets, selections, correlationId);
 
-                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas);
+                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas);
 
                 messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
             }
@@ -374,8 +402,11 @@ namespace OE.Translation.Service.Repositories
             Dictionary<int, List<TranslationMessage>> leagueDeltas,
             Dictionary<string, List<TranslationMessage>> teamDeltas,
             Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
-            Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas)
+            Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
+            Dictionary<int, List<TranslationMessage>> competitorDeltas = null)
         {
+            competitorDeltas ??= new Dictionary<int, List<TranslationMessage>>();
+
             payload.SpTr = sportDeltas.TryGetValue(fixture.SpId, out var spTr) ? spTr : null;
             payload.SegTr = segmentDeltas.TryGetValue(fixture.SegId, out var segTr) ? segTr : null;
             payload.LeTr = leagueDeltas.TryGetValue(fixture.LeId, out var leTr) ? leTr : null;
@@ -388,8 +419,13 @@ namespace OE.Translation.Service.Repositories
 
                 foreach (var selection in market.Se)
                 {
-                    selection.SeTeTr = selection.MaTeId != null && selection.SeTeId != null
-                        && selectionTemplateDeltas.TryGetValue((selection.MaTeId, selection.SeTeId), out var seTeTr) ? seTeTr : null;
+                    // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result,
+                    // matching the seeding/enrichment branches elsewhere — a selection's CompId
+                    // decides which delta dictionary applies.
+                    selection.SeNaTr = selection.CompId != null
+                        ? (competitorDeltas.TryGetValue(selection.CompId.Value, out var coTr) ? coTr : null)
+                        : (selection.MaTeId != null && selection.SeTeId != null
+                            && selectionTemplateDeltas.TryGetValue((selection.MaTeId, selection.SeTeId), out var seTeTr) ? seTeTr : null);
                 }
             }
         }
@@ -434,6 +470,7 @@ namespace OE.Translation.Service.Repositories
                         SeNa = selection.SeNa,
                         SoOr = selection.SeSoOr,
                         SeStId = selection.SeStId,
+                        CompId = selection.CompId,
                     });
                 }
 

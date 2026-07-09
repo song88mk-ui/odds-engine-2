@@ -469,7 +469,9 @@ namespace OE.Sportsbook.Service.Repositories
            };
         }
 
-        private Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelectionChange(OnMarketChangeMessage message, string correlationId)
+        // Internal (not private) so OE.Sportsbook.Service.Tests can verify the CompId/SeNaTr
+        // mapping without a live Mongo connection — same rationale as GateTranslations below.
+        internal Tuple<WriteModel<Market>[], WriteModel<Selection>[]> ToMarketAndSelectionChange(OnMarketChangeMessage message, string correlationId)
         {
             var markets = new List<WriteModel<Market>>();
             var selections = new List<WriteModel<Selection>>();
@@ -523,6 +525,7 @@ namespace OE.Sportsbook.Service.Repositories
                             .Set(s => s.SeTeId, selection.SeTeId)
                             .Set(s => s.SeTeNa, selection.SeTeNa)
                             .Set(s => s.SeNa, selection.SeNa)
+                            .Set(s => s.CompId, selection.CompId)
                             .Set(s => s.Od, selection.Od)
                             .Set(s => s.IsAc, selection.IsAc)
                             .Set(s => s.SeSoOr, selection.SoOr)
@@ -603,7 +606,9 @@ namespace OE.Sportsbook.Service.Repositories
             }
         }
 
-        private OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnMarketChangeMessage message, string correlationId)
+        // Internal (not private) so OE.Sportsbook.Service.Tests can verify the CompId/SeNaTr
+        // mapping without a live Mongo connection — same rationale as GateTranslations below.
+        internal OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnMarketChangeMessage message, string correlationId)
         {
             //var fixtureGeneration = GetFixtureId(message.FixtureSpecifier);            
             var markets = new List<InternalMarketMessage>();
@@ -635,10 +640,11 @@ namespace OE.Sportsbook.Service.Repositories
                         SeNa = selection.SeNa,
                         SoOr = selection.SoOr,
                         ClOd = selection.ClOd,
+                        CompId = selection.CompId,
                         // Deliberately not gated: unlike fixture names, late-joining clients have no
                         // REST fallback to correct a stale English selection name (e.g. reopening
                         // cricket next-ball Over/Under lines).
-                        SeTeTr = selection.SeTeTr,
+                        SeNaTr = selection.SeNaTr,
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -692,7 +698,7 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
-                    // Deliberately not gated — see SeTeTr above.
+                    // Deliberately not gated — see SeNaTr above.
                     MaTeTr = market.MaTeTr,
                     Se = selections
                 });
@@ -753,7 +759,9 @@ namespace OE.Sportsbook.Service.Repositories
                 AwTr = GateTranslations($"{message.Id}:Aw", message.AwTr)
             };
         }
-        private OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnFixtureChangeMessage message, List<Market> filteredMarkets, List<Selection> filteredSelections, string correlationId)
+        // Internal (not private) so OE.Sportsbook.Service.Tests can verify the CompId/SeNaTr
+        // mapping without a live Mongo connection — same rationale as GateTranslations below.
+        internal OnInternalOddsChangeMessage PrepareInternalOddsChangeMessage(OnFixtureChangeMessage message, List<Market> filteredMarkets, List<Selection> filteredSelections, string correlationId)
         {
             var markets = new List<InternalMarketMessage>();
 
@@ -786,6 +794,11 @@ namespace OE.Sportsbook.Service.Repositories
                         SoOr = selection.SeSoOr,
                         SeStId = selection.SeStId,
                         //ClOd = selection.ClOd,
+                        CompId = selection.CompId,
+                        // Deliberately not gated — see SeNaTr in the OnMarketChangeMessage overload.
+                        // The persisted Mongo SeNaTr is already the correctly-sourced translation
+                        // (Co:/SeTe:) regardless of CompId — no branch needed here.
+                        SeNaTr = selection.SeNaTr?.Select(t => new TranslationMessage { LaCo = t.LaCo, Tx = t.SeNa }).ToList(),
                     });
 
                     //activity?.SetTag($"selection.id.{selectionGeneration.Item1}", selection.Odds);
@@ -809,6 +822,8 @@ namespace OE.Sportsbook.Service.Repositories
                     CaStNa = market.CaStNa,
                     PrMaId = market.PrMaId,
                     InPl = market.InPl,
+                    // Deliberately not gated — see MaTeTr in the OnMarketChangeMessage overload.
+                    MaTeTr = market.MaNaTr?.Select(t => new TranslationMessage { LaCo = t.LaCo, Tx = t.MaNa }).ToList(),
                     Se = selections
                 });
             }

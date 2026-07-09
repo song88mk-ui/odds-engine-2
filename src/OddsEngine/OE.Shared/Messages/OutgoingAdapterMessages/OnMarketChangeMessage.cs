@@ -45,9 +45,13 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public string MaTeId { get; set; }
         public string SeTeId { get; set; }
         public string SeTeNa { get; set; } // Selection template name — source text for translation lookup
-        // Selection template translations (TranslationCache2 key "SeTe:{MaTeId}:{SeTeId}");
-        // null/empty -> fall back to SeTeNa. See OnFixtureChangeMessage translation lists.
-        public List<TranslationMessage> SeTeTr { get; set; }
+        // Vendor competitor id for competitor-specific selections (e.g. a named player/team
+        // outcome). Null for generic templated outcomes (Over/Under, Home/Draw/Away).
+        public int? CompId { get; set; }
+        // Translation of SeNa (the display name), regardless of source: looked up via
+        // "Co:{CompId}" when CompId is not null, else "SeTe:{MaTeId}:{SeTeId}" (mutually
+        // exclusive). null/empty -> fall back to SeNa. See OnFixtureChangeMessage translation lists.
+        public List<TranslationMessage> SeNaTr { get; set; }
         public string MaSp { get; set; }
         public long SeId { get; set; }
         public decimal Od { get; set; }

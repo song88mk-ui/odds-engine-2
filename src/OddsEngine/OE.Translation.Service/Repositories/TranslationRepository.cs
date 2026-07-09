@@ -144,9 +144,21 @@ namespace OE.Translation.Service.Repositories
                         if (selection == null)
                             continue;
 
-                        // Selection template (deduped, namespaced by market template to avoid
-                        // cross-market outcome-id / numerator collisions): SeTe:{MaTeId}:{SeTeId}.
-                        AddIfValid(items, $"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+                        if (selection.CompId != null)
+                        {
+                            // Competitor-specific selection (e.g. a named player/team outcome):
+                            // the literal name is reused across every selection tied to this
+                            // competitor, so it's keyed by CompId alone — not namespaced by
+                            // market/selection template, and NOT also seeded under SeTe: (the two
+                            // keys are mutually exclusive; see docs/BusinessRules.md).
+                            AddIfValid(items, $"Co:{selection.CompId}", selection.SeNa);
+                        }
+                        else
+                        {
+                            // Selection template (deduped, namespaced by market template to avoid
+                            // cross-market outcome-id / numerator collisions): SeTe:{MaTeId}:{SeTeId}.
+                            AddIfValid(items, $"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+                        }
                     }
                 }
 
@@ -186,13 +198,12 @@ namespace OE.Translation.Service.Repositories
             list.Add((key, value));
         }
 
-        // Seeds the source side of TranslationCache2: insert-if-missing with empty TARGET_TEXT_*
-        // columns and PROCESSED = 0 (the pipeline's worklist flag); on a genuine source-name
-        // change update SOURCE_TEXT, clear the now-stale targets and reset PROCESSED so the
-        // external pipeline re-translates; otherwise a liveness touch bumps UPDATED_AT so
-        // OE.Translation.Job's retention sweep never reaps a row the feed still emits.
-        // The TARGET_TEXT_* columns are otherwise owned by the external translation pipeline —
-        // clearing on source change is invalidation, not translation.
+        // Seeds the source side of TranslationCache2: insert-if-missing and on a genuine
+        // source-name change, first check for another row that already carries this exact
+        // SOURCE_TEXT with real translations — if found, adopt its TARGET_TEXT_* immediately
+        // (PROCESSED = 1, no external pipeline round-trip); otherwise fall back to empty
+        // TARGET_TEXT_* and PROCESSED = 0 as before. Otherwise a liveness touch bumps UPDATED_AT
+        // so OE.Translation.Job's retention sweep never reaps a row the feed still emits.
         private async Task BulkSeed(List<(string id, string value)> items)
         {
             var distinctItems = items
@@ -215,27 +226,42 @@ namespace OE.Translation.Service.Repositories
 
             var dict = existing.ToDictionary(x => x.StringId);
 
+            // Defensive: SOURCE_TEXT is NVARCHAR(250) NOT NULL — truncate before using it as both
+            // the column value and the content-index lookup key.
+            var sourceTextByItemId = distinctItems.ToDictionary(
+                x => x.id,
+                x => x.value.Length <= 250 ? x.value : x.value.Substring(0, 250));
+
+            // Content-addressed reuse index: any OTHER row (any STRING_ID) that already carries
+            // one of this batch's SOURCE_TEXT values with a real translation. Only consulted for
+            // rows that are new or genuinely renamed below.
+            var candidateTexts = sourceTextByItemId.Values.Distinct().ToList();
+
+            var contentMatches = await context.TranslationCache2
+                .AsNoTracking()
+                .Where(x => candidateTexts.Contains(x.SourceText)
+                    && (x.TargetTextZh != "" || x.TargetTextEs != "" || x.TargetTextFr != ""))
+                .ToListAsync();
+
+            var contentIndex = contentMatches
+                .GroupBy(x => x.SourceText)
+                .ToDictionary(g => g.Key, g => g.First());
+
             var savedEntities = new List<TranslationCache2>();
 
             foreach (var item in distinctItems)
             {
-                // Defensive: SOURCE_TEXT is NVARCHAR(250) NOT NULL.
-                var sourceText = item.value.Length <= 250
-                    ? item.value
-                    : item.value.Substring(0, 250);
+                var sourceText = sourceTextByItemId[item.id];
 
                 if (dict.TryGetValue(item.id, out var entity))
                 {
                     if (entity.SourceText != sourceText)
                     {
-                        // Genuine name change: stale targets are cleared and the row goes back
-                        // on the pipeline's worklist (PROCESSED = 0) so every configured
-                        // language is re-translated from the new SOURCE_TEXT.
+                        // Genuine name change: reuse an existing translation for this exact text
+                        // if one exists elsewhere, otherwise the row goes back on the pipeline's
+                        // worklist (PROCESSED = 0) so every configured language is re-translated.
                         entity.SourceText = sourceText;
-                        entity.TargetTextZh = string.Empty;
-                        entity.TargetTextEs = string.Empty;
-                        entity.TargetTextFr = string.Empty;
-                        entity.Processed = false;
+                        ApplyContentMatchOrReset(entity, contentIndex);
                     }
 
                     // Liveness touch (throttled to ~once per cache TTL because cached keys never
@@ -249,13 +275,11 @@ namespace OE.Translation.Service.Repositories
                         StringId = item.id,
                         SourceLanguage = "EN",
                         SourceText = sourceText,
-                        TargetTextZh = string.Empty,
-                        TargetTextEs = string.Empty,
-                        TargetTextFr = string.Empty,
                         HasBetPlacement = false,
-                        Processed = false,
                         CreatedAt = DateTime.UtcNow
                     };
+
+                    ApplyContentMatchOrReset(entity, contentIndex);
 
                     context.TranslationCache2.Add(entity);
                 }
@@ -272,6 +296,27 @@ namespace OE.Translation.Service.Repositories
 
             if (_cacheBackfill)
                 await BackfillTranslationCache2(context, savedEntities);
+        }
+
+        // Adopts an existing translation for identical SOURCE_TEXT elsewhere (PROCESSED = 1, no
+        // external pipeline round-trip needed), or falls back to empty TARGET_TEXT_* /
+        // PROCESSED = 0 so the row goes on the pipeline's worklist as before.
+        private static void ApplyContentMatchOrReset(TranslationCache2 entity, Dictionary<string, TranslationCache2> contentIndex)
+        {
+            if (contentIndex.TryGetValue(entity.SourceText, out var match))
+            {
+                entity.TargetTextZh = match.TargetTextZh;
+                entity.TargetTextEs = match.TargetTextEs;
+                entity.TargetTextFr = match.TargetTextFr;
+                entity.Processed = true;
+            }
+            else
+            {
+                entity.TargetTextZh = string.Empty;
+                entity.TargetTextEs = string.Empty;
+                entity.TargetTextFr = string.Empty;
+                entity.Processed = false;
+            }
         }
 
         // TEMPORARY bridge (ported from the removed BG.Translation.Service, adapted to the flat

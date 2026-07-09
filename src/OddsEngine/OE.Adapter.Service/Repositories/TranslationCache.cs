@@ -19,6 +19,19 @@ namespace OE.Adapter.Service.Repositories
         // place) so readers on the message path can hand them to outgoing messages without locking.
         private readonly ConcurrentDictionary<string, List<TranslationMessage>> _translations = new();
 
+        // STRING_ID -> the SOURCE_TEXT it was cached with at preload, used to detect a rename
+        // (the feed now sends different English text for the same STRING_ID) so GetTranslations
+        // can fall back to the content index below instead of serving a stale translation.
+        private readonly ConcurrentDictionary<string, string> _sourceTextByStringId = new();
+
+        // SOURCE_TEXT -> translation list, built once at preload from the same rows as
+        // _translations. Content-addressed fallback for a STRING_ID miss or rename: reuses an
+        // existing translation for identical English text under a different STRING_ID rather than
+        // waiting on the external pipeline to re-translate from scratch. Not kept in sync by
+        // Apply() — a delta only changes target-language text, never the source text a row was
+        // preloaded under, so the content index stays valid for the process lifetime.
+        private readonly ConcurrentDictionary<string, List<TranslationMessage>> _translationsByText = new();
+
         // Fixed language set of the flat TranslationCache2 schema (TARGET_TEXT_ZH/_ES/_FR).
         // Adding a language is a schema change + code change here.
         private const string LANGUAGE_ZH = "ZH";
@@ -50,6 +63,7 @@ namespace OE.Adapter.Service.Repositories
                 .Select(x => new
                 {
                     x.StringId,
+                    x.SourceText,
                     x.TargetTextZh,
                     x.TargetTextEs,
                     x.TargetTextFr
@@ -65,20 +79,39 @@ namespace OE.Adapter.Service.Repositories
                     continue; // nothing translated yet — cache only rows that add value
 
                 _translations[row.StringId] = translations;
+                _sourceTextByStringId[row.StringId] = row.SourceText;
+
+                if (!string.IsNullOrEmpty(row.SourceText))
+                    _translationsByText[row.SourceText] = translations;
+
                 loaded++;
             }
 
             _logger.LogInformation($"Translation cache preloaded: {loaded} translated entries");
         }
 
-        public List<TranslationMessage> GetTranslations(string stringId)
+        public List<TranslationMessage> GetTranslations(string stringId, string currentText)
         {
             if (string.IsNullOrEmpty(stringId))
                 return null;
 
-            return _translations.TryGetValue(stringId, out var translations)
-                ? translations
-                : null;
+            if (_translations.TryGetValue(stringId, out var translations))
+            {
+                // Only rows seen at preload have a tracked SOURCE_TEXT to compare against; rows
+                // seeded purely via ON_TRANSLATION_CHANGE deltas after startup have none and are
+                // trusted as-is (unchanged from pre-fallback behavior). A tracked mismatch means
+                // the feed renamed this entity — fall through to the content match below instead.
+                if (!_sourceTextByStringId.TryGetValue(stringId, out var cachedText) || cachedText == currentText)
+                    return translations;
+            }
+
+            // STRING_ID miss, or the row's cached SOURCE_TEXT no longer matches (a rename) — fall
+            // back to a content match so identical English text elsewhere isn't re-translated from
+            // scratch.
+            if (!string.IsNullOrEmpty(currentText) && _translationsByText.TryGetValue(currentText, out var byText))
+                return byText;
+
+            return null;
         }
 
         public void Apply(List<TranslationChangeItem> items)
@@ -118,6 +151,16 @@ namespace OE.Adapter.Service.Repositories
                 // Drop keys whose last language entry was cleared so lookups return null, not [].
                 if (_translations.TryGetValue(item.StId, out var result) && result.Count == 0)
                     _translations.TryRemove(item.StId, out _);
+
+                // Keep the content index in sync for rows whose SOURCE_TEXT we know (preloaded
+                // rows) so a subsequent content-fallback lookup doesn't serve a stale list.
+                if (_sourceTextByStringId.TryGetValue(item.StId, out var sourceText) && !string.IsNullOrEmpty(sourceText))
+                {
+                    if (_translations.TryGetValue(item.StId, out var refreshed))
+                        _translationsByText[sourceText] = refreshed;
+                    else
+                        _translationsByText.TryRemove(sourceText, out _);
+                }
             }
         }
 

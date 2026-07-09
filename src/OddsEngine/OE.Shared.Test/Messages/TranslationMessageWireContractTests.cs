@@ -56,7 +56,7 @@ namespace OE.Shared.Test.Messages
                                 PrFiId = "1234567890",
                                 PrMaId = "M1",
                                 PrSeId = "S1",
-                                SeTeTr = new List<TranslationMessage> { new() { LaCo = "ZH", Tx = "主队" } }
+                                SeNaTr = new List<TranslationMessage> { new() { LaCo = "ZH", Tx = "主队" } }
                             }
                         }
                     }
@@ -69,7 +69,7 @@ namespace OE.Shared.Test.Messages
             Assert.Equal("足球", roundTripped!.SpTr!.Single().Tx);
             Assert.Equal("独赢", roundTripped.Ma.Single().MaTeTr!.Single().Tx);
             Assert.True(roundTripped.Ma.Single().IsHa);
-            Assert.Equal("主队", roundTripped.Ma.Single().Se.Single().SeTeTr!.Single().Tx);
+            Assert.Equal("主队", roundTripped.Ma.Single().Se.Single().SeNaTr!.Single().Tx);
         }
 
         [Fact]

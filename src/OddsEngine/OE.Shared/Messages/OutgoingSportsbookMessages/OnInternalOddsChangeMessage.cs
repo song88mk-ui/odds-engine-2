@@ -101,8 +101,10 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public int SoOr { get; set; }
         public int SeStId { get; set; }
         public List<ClientOddsMessage> ClOd { get; set; }
-        // See OnInternalOddsChangeMessage translation lists — name matches SelectionMessage.SeTeTr.
-        public List<TranslationMessage> SeTeTr { get; set; }
+        // Vendor competitor id for competitor-specific selections — see SelectionMessage.CompId.
+        public int? CompId { get; set; }
+        // Translation of SeNa — see SelectionMessage.SeNaTr.
+        public List<TranslationMessage> SeNaTr { get; set; }
     }
 
 }

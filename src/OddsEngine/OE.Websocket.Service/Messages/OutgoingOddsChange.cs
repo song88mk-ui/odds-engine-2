@@ -85,7 +85,7 @@
         public bool IsAc { get; set; }
         public int SoOr { get; set; }
         // See OddsChangeFixture translation deltas.
-        public List<OutgoingTranslation> SeTeTr { get; set; }
+        public List<OutgoingTranslation> SeNaTr { get; set; }
     }
     public class OutgoingTranslation
     {

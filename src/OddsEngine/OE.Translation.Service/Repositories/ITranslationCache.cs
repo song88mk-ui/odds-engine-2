@@ -10,7 +10,11 @@ namespace OE.Translation.Service.Repositories
     {
         void Preload();
 
-        List<TranslationMessage>? GetTranslations(string stringId);
+        // currentText is the freshly-arrived English source for stringId: when it doesn't match
+        // what was cached at preload (a rename, or the STRING_ID was never cached at all), this
+        // falls back to a content-addressed lookup by currentText itself, reusing an existing
+        // translation for identical text under a different STRING_ID instead of returning null.
+        List<TranslationMessage>? GetTranslations(string stringId, string currentText);
 
         void Apply(List<TranslationChangeItem> items);
     }

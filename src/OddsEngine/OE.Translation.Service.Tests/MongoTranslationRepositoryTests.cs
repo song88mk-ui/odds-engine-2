@@ -162,7 +162,44 @@ namespace OE.Translation.Service.Tests
                 marketTemplateDeltas: new(),
                 selectionTemplateDeltas: selectionTemplateDeltas);
 
-            Assert.Same(selectionTemplateDeltas[("MT1", "ST1")], payload.Ma[0].Se[0].SeTeTr);
+            Assert.Same(selectionTemplateDeltas[("MT1", "ST1")], payload.Ma[0].Se[0].SeNaTr);
+        }
+
+        // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result (2026-07-09):
+        // a competitor-specific selection (CompId != null) resolves against competitorDeltas,
+        // never selectionTemplateDeltas.
+        [Fact]
+        public void ApplyTranslationDeltas_CompetitorDelta_SetsSeNaTrFromCompetitorDeltas()
+        {
+            var fixture = MakeFixture();
+            var payload = MakePayload();
+            payload.Ma[0].Se[0].CompId = 810068;
+            var competitorDeltas = new Dictionary<int, List<TranslationMessage>> { [810068] = Delta("沙瓦兹曼") };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                competitorDeltas: competitorDeltas);
+
+            Assert.Same(competitorDeltas[810068], payload.Ma[0].Se[0].SeNaTr);
+        }
+
+        [Fact]
+        public void ApplyTranslationDeltas_NonCompetitorSelection_IgnoresCompetitorDeltasAndUsesSeTe()
+        {
+            var fixture = MakeFixture();
+            var payload = MakePayload(); // Se[0].CompId is null
+            var competitorDeltas = new Dictionary<int, List<TranslationMessage>> { [999] = Delta("Unrelated") };
+            var selectionTemplateDeltas = new Dictionary<(string, string), List<TranslationMessage>> { [("MT1", "ST1")] = Delta("大于") };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: selectionTemplateDeltas,
+                competitorDeltas: competitorDeltas);
+
+            Assert.Same(selectionTemplateDeltas[("MT1", "ST1")], payload.Ma[0].Se[0].SeNaTr);
         }
 
         [Fact]
@@ -182,7 +219,7 @@ namespace OE.Translation.Service.Tests
             Assert.Null(payload.HoTr);
             Assert.Null(payload.AwTr);
             Assert.Null(payload.Ma[0].MaTeTr);
-            Assert.Null(payload.Ma[0].Se[0].SeTeTr);
+            Assert.Null(payload.Ma[0].Se[0].SeNaTr);
         }
 
         #endregion

@@ -131,11 +131,61 @@ namespace OE.Adapter.Service.Tests
             var market = message.Ma.Single();
             Assert.Equal("赛果", market.MaTeTr!.Single().Tx);
 
-            Assert.Equal("主胜", market.Se[0].SeTeTr!.Single().Tx); // SeTe:16:1
-            Assert.Null(market.Se[1].SeTeTr);                        // SeTe:16:404 — miss
+            Assert.Equal("主胜", market.Se[0].SeNaTr!.Single().Tx); // SeTe:16:1
+            Assert.Null(market.Se[1].SeNaTr);                        // SeTe:16:404 — miss
 
             var published = Assert.Single(_broker.Published);
             Assert.Equal($"r.oe.adapter.onmarketchange.{_instanceName}", published.RoutingKey);
+        }
+
+        // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result (2026-07-09):
+        // a competitor-specific selection (CompId != null) is enriched via Co:{CompId}.
+        [Fact]
+        public void MarketChange_CompetitorSelection_EnrichesSeNaTrViaCoKey()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Co:810068", LaCo = "ZH", Tx = "沙瓦兹曼" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 1,
+                SegId = 2,
+                LeId = 3,
+                HoId = "H1",
+                AwId = "A1",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M2",
+                        MaTeId = "16",
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                PrFiId = PROVIDER_FIXTURE_ID,
+                                PrMaId = "M2",
+                                PrSeId = "S3",
+                                MaTeId = "16",
+                                SeTeId = "1",
+                                CompId = 810068,
+                                SeNa = "Schwartzman, DS"
+                            }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selection = message.Ma.Single().Se.Single();
+            Assert.NotNull(selection.SeNaTr);
+            Assert.Equal("沙瓦兹曼", selection.SeNaTr!.Single().Tx);
         }
 
         // Cache-apply only (2026-07 translation-flow redesign): persistence + notification are
@@ -153,7 +203,7 @@ namespace OE.Adapter.Service.Tests
 
             _repository.ProcessOnTranslationChangeMessage(_broker, message, "cid");
 
-            Assert.Equal("足球赛", _cache.GetTranslations("SpId:1")!.Single(t => t.LaCo == "ZH").Tx);
+            Assert.Equal("足球赛", _cache.GetTranslations("SpId:1", null)!.Single(t => t.LaCo == "ZH").Tx);
             Assert.Empty(_broker.Published);
         }
 

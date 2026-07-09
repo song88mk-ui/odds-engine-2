@@ -23,6 +23,10 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public string SeTeId { get; set; }
         public string SeTeNa { get; set; } // Selection template name — source text for translation lookup
         public string SeNa { get; set; }
+        // Vendor competitor id for competitor-specific selections (e.g. a named player/team
+        // outcome); null for generic templated outcomes. Drives whether the sportsbook UI shows
+        // SeNa as-is or the SeTeNa template.
+        public int? CompId { get; set; }
         public decimal Od { get; set; }
         public bool IsAc { get; set; }
         public int SeSoOr { get; set; }

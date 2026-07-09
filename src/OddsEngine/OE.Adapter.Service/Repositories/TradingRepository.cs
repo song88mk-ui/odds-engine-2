@@ -116,11 +116,11 @@ namespace OE.Adapter.Service.Repositories
         // the *Tr property null — downstream consumers fall back to the English *Na source.
         private void EnrichFixtureTranslations(OnFixtureChangeMessage message)
         {
-            message.SpTr = _translationCache.GetTranslations($"SpId:{message.SpId}");
-            message.SegTr = _translationCache.GetTranslations($"SegId:{message.SegId}");
-            message.LeTr = _translationCache.GetTranslations($"LeId:{message.LeId}");
-            message.HoTr = _translationCache.GetTranslations($"Te:{message.HoId}");
-            message.AwTr = _translationCache.GetTranslations($"Te:{message.AwId}");
+            message.SpTr = _translationCache.GetTranslations($"SpId:{message.SpId}", message.SpNa);
+            message.SegTr = _translationCache.GetTranslations($"SegId:{message.SegId}", message.SegNa);
+            message.LeTr = _translationCache.GetTranslations($"LeId:{message.LeId}", message.LeNa);
+            message.HoTr = _translationCache.GetTranslations($"Te:{message.HoId}", message.HoNa);
+            message.AwTr = _translationCache.GetTranslations($"Te:{message.AwId}", message.AwNa);
         }
 
         private void EnrichMarketTranslations(OnMarketChangeMessage message)
@@ -133,7 +133,7 @@ namespace OE.Adapter.Service.Repositories
                 if (market == null)
                     continue;
 
-                market.MaTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}");
+                market.MaTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaTeNa);
 
                 if (market.Se == null)
                     continue;
@@ -143,7 +143,11 @@ namespace OE.Adapter.Service.Repositories
                     if (selection == null)
                         continue;
 
-                    selection.SeTeTr = _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}");
+                    // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result,
+                    // matching the seeding branch in OE.Translation.Service.OnProcessMarketSetUpdate.
+                    selection.SeNaTr = selection.CompId != null
+                        ? _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa)
+                        : _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
                 }
             }
         }

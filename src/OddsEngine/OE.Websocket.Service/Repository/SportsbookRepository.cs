@@ -1489,7 +1489,7 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
-                        SeTeTr = ToOutgoingTranslations(selection.SeTeTr),
+                        SeNaTr = ToOutgoingTranslations(selection.SeNaTr),
                     });
                 }
 
@@ -1627,7 +1627,7 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
-                            SeTeTr = ToOutgoingTranslations(s.SeTeTr),
+                            SeNaTr = ToOutgoingTranslations(s.SeNaTr),
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1708,7 +1708,7 @@ namespace OE.WebSocket.Service.Repository
                             InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
-                            SeTeTr = ToOutgoingTranslations(s.SeTeTr),
+                            SeNaTr = ToOutgoingTranslations(s.SeNaTr),
                         }).OrderBy(o => o.SoOr).ToList()
                     }).OrderBy(o => o.SoOr).ToList()
                 }
@@ -1781,7 +1781,7 @@ namespace OE.WebSocket.Service.Repository
                         InOd = odds.IndonesianOdds.ToString("0.00"),
                         IsAc = selection.IsAc,
                         SoOr = selection.SoOr,
-                        SeTeTr = ToOutgoingTranslations(selection.SeTeTr),
+                        SeNaTr = ToOutgoingTranslations(selection.SeNaTr),
                     });
                 }
 

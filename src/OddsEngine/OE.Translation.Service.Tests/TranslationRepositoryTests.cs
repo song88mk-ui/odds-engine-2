@@ -68,7 +68,7 @@ namespace OE.Translation.Service.Tests
             };
         }
 
-        private static OnMarketChangeMessage MarketMessage()
+        private static OnMarketChangeMessage MarketMessage(int? compId = null, string seNa = "Arsenal")
         {
             return new OnMarketChangeMessage
             {
@@ -95,7 +95,8 @@ namespace OE.Translation.Service.Tests
                                 MaTeId = "16",
                                 SeTeId = "1",
                                 SeTeNa = "Home",
-                                SeNa = "Arsenal"
+                                SeNa = seNa,
+                                CompId = compId
                             }
                         }
                     }
@@ -194,6 +195,123 @@ namespace OE.Translation.Service.Tests
             Assert.Equal("Home", rows["SeTe:16:1"].SourceText);
         }
 
+        // Co:/SeTe: are mutually exclusive per selection (2026-07-09) — a competitor-specific
+        // selection (CompId != null) seeds Co:{CompId} with the as-is SeNa and never SeTe:.
+        [Fact]
+        public async Task MarketUpdate_CompetitorSelection_SeedsCoKeyNotSeTe()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_CompetitorSelection_SeedsCoKeyNotSeTe));
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 810068, seNa: "Schwartzman, DS"));
+
+            using var context = GetContext(provider);
+            var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.Equal(2, rows.Count);
+            Assert.Equal("Match Result", rows["MaTe:16"].SourceText);
+            Assert.True(rows.ContainsKey("Co:810068"));
+            Assert.Equal("Schwartzman, DS", rows["Co:810068"].SourceText);
+            Assert.False(rows.ContainsKey("SeTe:16:1"));
+        }
+
+        [Fact]
+        public async Task MarketUpdate_NonCompetitorSelection_SeedsSeTeKeyNotCo()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NonCompetitorSelection_SeedsSeTeKeyNotCo));
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: null));
+
+            using var context = GetContext(provider);
+            var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.True(rows.ContainsKey("SeTe:16:1"));
+            Assert.DoesNotContain(rows.Keys, k => k.StartsWith("Co:"));
+        }
+
+        // Content-reuse-on-rename (2026-07-09): a genuine SOURCE_TEXT change adopts an existing
+        // translation for identical text elsewhere instead of always clearing targets and waiting
+        // on the external pipeline.
+        [Fact]
+        public async Task MarketUpdate_RenameToTextWithExistingTranslation_AdoptsTargetsImmediately()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_RenameToTextWithExistingTranslation_AdoptsTargetsImmediately));
+
+            // Seed a second competitor whose name is already fully translated.
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 200, seNa: "Player Y"));
+
+            using (var context = GetContext(provider))
+            {
+                var row = context.TranslationCache2.Single(r => r.StringId == "Co:200");
+                row.TargetTextZh = "球员Y";
+                row.Processed = true;
+                context.SaveChanges();
+            }
+
+            // Seed the first competitor under a different name...
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 100, seNa: "Player X"));
+
+            // ...then rename it to the SAME text as the already-translated competitor.
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 100, seNa: "Player Y"));
+
+            using var verify = GetContext(provider);
+            var renamed = verify.TranslationCache2.Single(r => r.StringId == "Co:100");
+
+            Assert.Equal("Player Y", renamed.SourceText);
+            Assert.Equal("球员Y", renamed.TargetTextZh); // adopted, not cleared
+            Assert.True(renamed.Processed); // no external pipeline round-trip needed
+        }
+
+        [Fact]
+        public async Task MarketUpdate_NewKeyMatchingExistingTranslatedText_AdoptsTargetsImmediately()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NewKeyMatchingExistingTranslatedText_AdoptsTargetsImmediately));
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 200, seNa: "Player Y"));
+
+            using (var context = GetContext(provider))
+            {
+                var row = context.TranslationCache2.Single(r => r.StringId == "Co:200");
+                row.TargetTextZh = "球员Y";
+                row.Processed = true;
+                context.SaveChanges();
+            }
+
+            // A brand-new competitor id whose literal name already matches an existing
+            // translation — should adopt it on insert rather than starting untranslated.
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 300, seNa: "Player Y"));
+
+            using var verify = GetContext(provider);
+            var inserted = verify.TranslationCache2.Single(r => r.StringId == "Co:300");
+
+            Assert.Equal("球员Y", inserted.TargetTextZh);
+            Assert.True(inserted.Processed);
+        }
+
+        [Fact]
+        public async Task MarketUpdate_RenameToTextWithNoExistingTranslation_ClearsTargetsAsBefore()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_RenameToTextWithNoExistingTranslation_ClearsTargetsAsBefore));
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 100, seNa: "Player X"));
+
+            using (var context = GetContext(provider))
+            {
+                var row = context.TranslationCache2.Single(r => r.StringId == "Co:100");
+                row.TargetTextZh = "球员X";
+                row.Processed = true;
+                context.SaveChanges();
+            }
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 100, seNa: "Player X Renamed"));
+
+            using var verify = GetContext(provider);
+            var renamed = verify.TranslationCache2.Single(r => r.StringId == "Co:100");
+
+            Assert.Equal("Player X Renamed", renamed.SourceText);
+            Assert.Equal(string.Empty, renamed.TargetTextZh); // no content match — stale target invalidated
+            Assert.False(renamed.Processed);
+        }
+
         [Fact]
         public async Task CacheSeedDisabled_WritesNothing()
         {
@@ -217,6 +335,109 @@ namespace OE.Translation.Service.Tests
             var row = context.TranslationCache2.Single(r => r.StringId == "LeId:3");
 
             Assert.Equal(250, row.SourceText.Length);
+        }
+
+        // SeedActiveSnapshot (Custom:Translation:SeedActiveSnapshot, the one-time startup migration
+        // for entities the message-driven path never saw) is deliberately insert-only: it must never
+        // touch a row that already exists, even if the live Mongo text has since drifted from it —
+        // that reconciliation belongs to the message-driven path (see the rename tests above), not
+        // this startup sweep.
+        [Fact]
+        public async Task SeedActiveSnapshot_NeverTouchesAnExistingRow_EvenOnTextMismatch()
+        {
+            var (repository, provider) = CreateRepository(nameof(SeedActiveSnapshot_NeverTouchesAnExistingRow_EvenOnTextMismatch));
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage()); // seeds LeId:3 = "Premier League"
+
+            using (var context = GetContext(provider))
+            {
+                var league = context.TranslationCache2.Single(r => r.StringId == "LeId:3");
+                league.TargetTextZh = "英超联赛";
+                league.Processed = true;
+                context.SaveChanges();
+            }
+
+            var snapshot = new List<(string id, string value)>
+            {
+                ("LeId:3", "Premier League (current Mongo wording)"), // exists, text now differs
+                ("Te:NEW1", "Newly Promoted FC") // does not exist yet
+            };
+
+            await repository.SeedActiveSnapshotAsync(snapshot);
+
+            using var verify = GetContext(provider);
+            var rows = verify.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.Equal(6, rows.Count); // the original 5 + one new insert
+
+            var league2 = rows["LeId:3"];
+            Assert.Equal("Premier League", league2.SourceText); // untouched
+            Assert.Equal("英超联赛", league2.TargetTextZh); // untouched
+            Assert.True(league2.Processed); // untouched
+
+            var inserted = rows["Te:NEW1"];
+            Assert.Equal("Newly Promoted FC", inserted.SourceText);
+            Assert.Equal(string.Empty, inserted.TargetTextZh);
+            Assert.False(inserted.Processed); // fresh row, on the pipeline's worklist
+        }
+
+        [Fact]
+        public async Task SeedActiveSnapshot_NothingMissing_WritesNothing()
+        {
+            var (repository, provider) = CreateRepository(nameof(SeedActiveSnapshot_NothingMissing_WritesNothing));
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using (var context = GetContext(provider))
+                Assert.Equal(5, context.TranslationCache2.Count());
+
+            // Every id here was already seeded by the live path above — nothing new to insert.
+            await repository.SeedActiveSnapshotAsync(new List<(string id, string value)>
+            {
+                ("SpId:1", "Soccer"),
+                ("Te:H1", "Arsenal")
+            });
+
+            using var verify = GetContext(provider);
+            Assert.Equal(5, verify.TranslationCache2.Count());
+        }
+
+        // Explicit coverage for Co: (competitor-specific selection) keys specifically — the
+        // existence check must treat them like any other STRING_ID, not just SpId:/SegId:/Te:.
+        [Fact]
+        public async Task SeedActiveSnapshot_TreatsCompetitorKeysLikeAnyOtherKey()
+        {
+            var (repository, provider) = CreateRepository(nameof(SeedActiveSnapshot_TreatsCompetitorKeysLikeAnyOtherKey));
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage(compId: 810068, seNa: "Schwartzman, DS")); // seeds Co:810068
+
+            var snapshot = new List<(string id, string value)>
+            {
+                ("Co:810068", "Schwartzman, D."), // exists already, text now differs
+                ("Co:999999", "Newcomer, N.")      // does not exist yet
+            };
+
+            await repository.SeedActiveSnapshotAsync(snapshot);
+
+            using var verify = GetContext(provider);
+            var rows = verify.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.Equal(3, rows.Count); // MaTe:16 + the original Co:810068 + the new Co:999999
+            Assert.Equal("Schwartzman, DS", rows["Co:810068"].SourceText); // untouched, not overwritten
+            Assert.Equal("Newcomer, N.", rows["Co:999999"].SourceText); // inserted
+            Assert.False(rows["Co:999999"].Processed);
+        }
+
+        [Fact]
+        public async Task SeedActiveSnapshot_EmptyOrNullSnapshot_NoOp()
+        {
+            var (repository, provider) = CreateRepository(nameof(SeedActiveSnapshot_EmptyOrNullSnapshot_NoOp));
+
+            await repository.SeedActiveSnapshotAsync(new List<(string id, string value)>());
+            await repository.SeedActiveSnapshotAsync(null);
+
+            using var context = GetContext(provider);
+            Assert.Empty(context.TranslationCache2);
         }
     }
 }

@@ -14,8 +14,12 @@ namespace OE.Adapter.Service.Repositories
         void Preload();
 
         // Returns the translations for a STRING_ID, or null when none exist — callers assign the
-        // result directly to the message *Tr properties (null means "no translation").
-        List<TranslationMessage> GetTranslations(string stringId);
+        // result directly to the message *Tr properties (null means "no translation"). currentText
+        // is the freshly-arrived English source for this STRING_ID: when it doesn't match what was
+        // cached at preload (a rename, or the STRING_ID was never cached at all), this falls back to
+        // looking up currentText itself in the content-addressed index, reusing an existing
+        // translation for identical text under a different STRING_ID instead of returning null.
+        List<TranslationMessage> GetTranslations(string stringId, string currentText);
 
         // Applies an ON_TRANSLATION_CHANGE payload on top of the preloaded snapshot. An empty
         // translated text removes that language entry.
