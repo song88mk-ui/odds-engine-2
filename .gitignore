@@ -17,3 +17,11 @@
 
 **/appsettings.Development.json
 **/appsettings.Local.json
+
+################################################################################
+# Claude / AI agent assets (local tooling, not part of the build)
+################################################################################
+/.claude/
+/AGENTS.md
+/CLAUDE.md
+/docs/
