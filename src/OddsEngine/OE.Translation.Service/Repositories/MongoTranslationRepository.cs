@@ -23,6 +23,14 @@ namespace OE.Translation.Service.Repositories
         private readonly IMongoCollection<Selection> _selectionCollection;
         private readonly IMongoCollection<MarketLookup> _marketLookupCollection;
 
+        // Bounded retry for the update-only *NaTr stamp (see WriteFixtureTranslations/
+        // WriteMarketTranslations remarks): a brand-new document may not exist yet when this
+        // write runs, racing OE.Sportsbook.Service's own upsert for the same message. 5 attempts
+        // x 200ms bounds the wait to ~800ms worst case instead of depending on an unrelated
+        // future message to heal it.
+        private const int TR_WRITE_RETRY_ATTEMPTS = 5;
+        private static readonly TimeSpan TR_WRITE_RETRY_DELAY = TimeSpan.FromMilliseconds(200);
+
         // "Active" per docs/BusinessGlossary.md — excludes fixtures that have concluded one way or
         // another; used by ReadActiveSnapshot (SeedActiveSnapshot migration), distinct from
         // _openFixtureStatusIds above (which is scoped to "still shown to players").
@@ -70,8 +78,10 @@ namespace OE.Translation.Service.Repositories
         #region Live path — stamp *NaTr onto documents as the raw feed flows
 
         // Update-only by design: OE.Sportsbook.Service's upsert creates the documents. If this
-        // message beats the upsert for a brand-new document, the write matches nothing and the
-        // next message for the entity heals it (accepted trade-off of the ownership split).
+        // message beats the upsert for a brand-new document, the write matches nothing —
+        // UpdateOneWithRetry below retries briefly (~800ms worst case), and a message that still
+        // finds nothing after that falls back to the next message for the entity healing it
+        // (accepted trade-off of the ownership split; never upserts here — see UpdateOneWithRetry).
         public void WriteFixtureTranslations(OnFixtureChangeMessage message)
         {
             if (message == null)
@@ -102,10 +112,7 @@ namespace OE.Translation.Service.Repositories
             if (update == null)
                 return; // nothing translated for this fixture's keys — no write at all
 
-            _fixtureCollection.UpdateOne(
-                Builders<Fixture>.Filter.Eq(f => f.Id, message.Id),
-                update,
-                new UpdateOptions { IsUpsert = false });
+            UpdateOneWithRetry(_fixtureCollection, Builders<Fixture>.Filter.Eq(f => f.Id, message.Id), update, $"Fixture {message.Id}");
         }
 
         public void WriteMarketTranslations(OnMarketChangeMessage message)
@@ -116,9 +123,6 @@ namespace OE.Translation.Service.Repositories
             // Fixture-level keys ride the market message too (same taxonomy fields).
             WriteFixtureTranslations(message);
 
-            var marketWrites = new List<WriteModel<Market>>();
-            var selectionWrites = new List<WriteModel<Selection>>();
-
             foreach (var market in message.Ma)
             {
                 if (market == null)
@@ -128,10 +132,8 @@ namespace OE.Translation.Service.Repositories
 
                 if (maTeTr != null)
                 {
-                    marketWrites.Add(new UpdateOneModel<Market>(
-                        Builders<Market>.Filter.Eq("Id", market.Id),
-                        Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
-                    { IsUpsert = false });
+                    var update = Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList());
+                    UpdateOneWithRetry(_marketCollection, Builders<Market>.Filter.Eq("Id", market.Id), update, $"Market {market.Id}");
                 }
 
                 if (market.Se == null)
@@ -153,19 +155,53 @@ namespace OE.Translation.Service.Repositories
 
                     if (seNaTr != null)
                     {
-                        selectionWrites.Add(new UpdateOneModel<Selection>(
-                            Builders<Selection>.Filter.Eq("Id", selection.Id),
-                            Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList()))
-                        { IsUpsert = false });
+                        var update = Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList());
+                        UpdateOneWithRetry(_selectionCollection, Builders<Selection>.Filter.Eq("Id", selection.Id), update, $"Selection {selection.Id}");
                     }
                 }
             }
+        }
 
-            if (marketWrites.Count > 0)
-                _marketCollection.BulkWrite(marketWrites, new BulkWriteOptions { IsOrdered = false });
+        // Writes the update-only *NaTr stamp, retrying briefly on a zero-match result instead of
+        // relying solely on an unrelated future message to heal a lost race against
+        // OE.Sportsbook.Service's own upsert for a brand-new document (see class remarks above).
+        // Still never upserts — a permanently-unmatched write just falls back to today's
+        // heal-on-next-message behavior, so this can only shrink the untranslated window, never
+        // create a malformed document.
+        private bool UpdateOneWithRetry<TDoc>(IMongoCollection<TDoc> collection, FilterDefinition<TDoc> filter, UpdateDefinition<TDoc> update, string entityDescription)
+        {
+            var matched = RetryUntilMatched(
+                attempt: () => collection.UpdateOne(filter, update, new UpdateOptions { IsUpsert = false }).MatchedCount > 0,
+                delay: d => Task.Delay(d).GetAwaiter().GetResult(),
+                TR_WRITE_RETRY_ATTEMPTS,
+                TR_WRITE_RETRY_DELAY);
 
-            if (selectionWrites.Count > 0)
-                _selectionCollection.BulkWrite(selectionWrites, new BulkWriteOptions { IsOrdered = false });
+            if (!matched)
+            {
+                _logger.LogWarning(
+                    "Translation stamp for {Entity} found no matching document after {Attempts} retries — will heal on the next message for this entity",
+                    entityDescription, TR_WRITE_RETRY_ATTEMPTS);
+            }
+
+            return matched;
+        }
+
+        // Pure retry loop, decoupled from Mongo so it's unit-testable without a live collection
+        // (this class otherwise constructs its own MongoClient in the ctor — not DI-friendly).
+        // Calls attempt() up to maxAttempts times, invoking delay() between tries, stopping as
+        // soon as attempt() reports a match; never delays after the final attempt.
+        internal static bool RetryUntilMatched(Func<bool> attempt, Action<TimeSpan> delay, int maxAttempts, TimeSpan delayBetweenAttempts)
+        {
+            for (var i = 1; i <= maxAttempts; i++)
+            {
+                if (attempt())
+                    return true;
+
+                if (i < maxAttempts)
+                    delay(delayBetweenAttempts);
+            }
+
+            return false;
         }
 
         #endregion

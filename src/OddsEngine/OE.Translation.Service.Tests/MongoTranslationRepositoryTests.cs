@@ -223,5 +223,81 @@ namespace OE.Translation.Service.Tests
         }
 
         #endregion
+
+        #region RetryUntilMatched
+
+        // Covers the 2026-07-09 fix for the update-only write race against OE.Sportsbook.Service's
+        // own upsert (see MongoTranslationRepository.UpdateOneWithRetry / docs/TranslationFlowArchitecture.md
+        // §2.1): these test the pure retry loop directly, since the class otherwise talks to a live
+        // Mongo collection via a ctor-constructed MongoClient.
+
+        [Fact]
+        public void RetryUntilMatched_SucceedsFirstAttempt_ReturnsTrueWithoutDelaying()
+        {
+            var attempts = 0;
+            var delays = 0;
+
+            var result = MongoTranslationRepository.RetryUntilMatched(
+                attempt: () => { attempts++; return true; },
+                delay: _ => delays++,
+                maxAttempts: 5,
+                delayBetweenAttempts: TimeSpan.FromMilliseconds(200));
+
+            Assert.True(result);
+            Assert.Equal(1, attempts);
+            Assert.Equal(0, delays);
+        }
+
+        [Fact]
+        public void RetryUntilMatched_SucceedsOnThirdAttempt_StopsRetryingAfterTwoDelays()
+        {
+            var attempts = 0;
+            var delays = 0;
+
+            var result = MongoTranslationRepository.RetryUntilMatched(
+                attempt: () => { attempts++; return attempts == 3; },
+                delay: _ => delays++,
+                maxAttempts: 5,
+                delayBetweenAttempts: TimeSpan.FromMilliseconds(200));
+
+            Assert.True(result);
+            Assert.Equal(3, attempts);
+            Assert.Equal(2, delays);
+        }
+
+        [Fact]
+        public void RetryUntilMatched_NeverMatches_ExhaustsAllAttemptsAndReturnsFalse()
+        {
+            var attempts = 0;
+            var delays = 0;
+
+            var result = MongoTranslationRepository.RetryUntilMatched(
+                attempt: () => { attempts++; return false; },
+                delay: _ => delays++,
+                maxAttempts: 5,
+                delayBetweenAttempts: TimeSpan.FromMilliseconds(200));
+
+            Assert.False(result);
+            Assert.Equal(5, attempts);
+            Assert.Equal(4, delays); // no delay is spent after the final, still-failing attempt
+        }
+
+        [Fact]
+        public void RetryUntilMatched_PassesTheConfiguredDelaySpanToEachDelayCall()
+        {
+            var seenDelays = new List<TimeSpan>();
+            var configuredDelay = TimeSpan.FromMilliseconds(200);
+
+            MongoTranslationRepository.RetryUntilMatched(
+                attempt: () => false,
+                delay: seenDelays.Add,
+                maxAttempts: 3,
+                delayBetweenAttempts: configuredDelay);
+
+            Assert.Equal(2, seenDelays.Count);
+            Assert.All(seenDelays, d => Assert.Equal(configuredDelay, d));
+        }
+
+        #endregion
     }
 }
