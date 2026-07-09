@@ -241,6 +241,163 @@ namespace OE.Translation.Service.Repositories
 
         #endregion
 
+        #region One-time migration — Mongo backfill for BackfillActiveSnapshot
+
+        // Insert-missing-only, same scope decision as SeedActiveSnapshotAsync: only stamps a *NaTr
+        // that's currently null/empty. Fixing an already-stamped-but-stale value (e.g. a wording
+        // change) is the live ON_TRANSLATION_CHANGE path's job, not this startup sweep's.
+        public void BackfillActiveSnapshot()
+        {
+            var fixturesStamped = BackfillFixtures();
+            var marketsStamped = BackfillMarkets();
+            var selectionsStamped = BackfillSelections();
+
+            _logger.LogInformation(
+                "BackfillActiveSnapshot: stamped {FixtureCount} fixtures, {MarketCount} markets, {SelectionCount} selections",
+                fixturesStamped, marketsStamped, selectionsStamped);
+        }
+
+        private int BackfillFixtures()
+        {
+            var activeFixtureFilter = Builders<Fixture>.Filter.Nin(f => f.FiStId, _terminalFixtureStatusIds);
+            var fixtures = _fixtureCollection.Find(activeFixtureFilter).ToList();
+
+            var writes = new List<WriteModel<Fixture>>();
+
+            foreach (var fixture in fixtures)
+            {
+                UpdateDefinition<Fixture>? update = null;
+
+                if (IsMissing(fixture.SpNaTr))
+                {
+                    var spTr = _translationCache.GetTranslations($"SpId:{fixture.SpId}", fixture.SpNa);
+                    if (spTr != null)
+                        update = Combine(update, Builders<Fixture>.Update.Set(f => f.SpNaTr, spTr.Select(t => new SportTranslationMDB { LaCo = t.LaCo, SpNa = t.Tx }).ToList()));
+                }
+
+                if (IsMissing(fixture.SegNaTr))
+                {
+                    var segTr = _translationCache.GetTranslations($"SegId:{fixture.SegId}", fixture.SegNa);
+                    if (segTr != null)
+                        update = Combine(update, Builders<Fixture>.Update.Set(f => f.SegNaTr, segTr.Select(t => new SegmentTranslationMDB { LaCo = t.LaCo, SegNa = t.Tx }).ToList()));
+                }
+
+                if (IsMissing(fixture.LeNaTr))
+                {
+                    var leTr = _translationCache.GetTranslations($"LeId:{fixture.LeId}", fixture.LeNa);
+                    if (leTr != null)
+                        update = Combine(update, Builders<Fixture>.Update.Set(f => f.LeNaTr, leTr.Select(t => new LeagueTranslationMDB { LaCo = t.LaCo, LeNa = t.Tx }).ToList()));
+                }
+
+                if (IsMissing(fixture.HoNaTr))
+                {
+                    var hoTr = _translationCache.GetTranslations($"Te:{fixture.HoId}", fixture.HoNa);
+                    if (hoTr != null)
+                        update = Combine(update, Builders<Fixture>.Update.Set(f => f.HoNaTr, hoTr.Select(t => new TeamTranslationMDB { LaCo = t.LaCo, TeNa = t.Tx }).ToList()));
+                }
+
+                if (IsMissing(fixture.AwNaTr))
+                {
+                    var awTr = _translationCache.GetTranslations($"Te:{fixture.AwId}", fixture.AwNa);
+                    if (awTr != null)
+                        update = Combine(update, Builders<Fixture>.Update.Set(f => f.AwNaTr, awTr.Select(t => new TeamTranslationMDB { LaCo = t.LaCo, TeNa = t.Tx }).ToList()));
+                }
+
+                if (update != null)
+                    writes.Add(new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq(f => f.Id, fixture.Id), update) { IsUpsert = false });
+            }
+
+            if (writes.Count > 0)
+                _fixtureCollection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+
+            return writes.Count;
+        }
+
+        private int BackfillMarkets()
+        {
+            var activeMarketFilter = Builders<Market>.Filter.And(
+                Builders<Market>.Filter.Eq(m => m.MaStId, (int)MarketStatus.Active),
+                Builders<Market>.Filter.Nin(m => m.FiStId, _terminalFixtureStatusIds));
+
+            var markets = _marketCollection.Find(activeMarketFilter).ToList();
+            var candidates = markets.Where(m => IsMissing(m.MaNaTr)).ToList();
+
+            if (candidates.Count == 0)
+                return 0;
+
+            // MaTeNa (the template's EN source text) lives on MarketLookup, not on the Market
+            // document itself (Market.MaNa is the already-resolved display name) — same source
+            // ReadActiveSnapshot uses for the seeding side.
+            var maTeIds = candidates.Select(m => m.MaTeId).Distinct().ToList();
+            var templateNames = _marketLookupCollection
+                .Find(Builders<MarketLookup>.Filter.In(ml => ml.MaTeId, maTeIds))
+                .Project(ml => new { ml.MaTeId, ml.MaTeNa })
+                .ToList()
+                .GroupBy(t => t.MaTeId)
+                .ToDictionary(g => g.Key, g => g.First().MaTeNa);
+
+            var writes = new List<WriteModel<Market>>();
+
+            foreach (var market in candidates)
+            {
+                var currentText = templateNames.TryGetValue(market.MaTeId, out var maTeNa) ? maTeNa : null;
+                var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", currentText);
+
+                if (maTeTr != null)
+                {
+                    writes.Add(new UpdateOneModel<Market>(
+                        Builders<Market>.Filter.Eq(m => m.Id, market.Id),
+                        Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
+                    { IsUpsert = false });
+                }
+            }
+
+            if (writes.Count > 0)
+                _marketCollection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+
+            return writes.Count;
+        }
+
+        private int BackfillSelections()
+        {
+            var activeSelectionFilter = Builders<Selection>.Filter.And(
+                Builders<Selection>.Filter.Eq(s => s.IsAc, true),
+                Builders<Selection>.Filter.Eq(s => s.MaStId, (int)MarketStatus.Active),
+                Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
+
+            var selections = _selectionCollection.Find(activeSelectionFilter).ToList();
+            var writes = new List<WriteModel<Selection>>();
+
+            foreach (var selection in selections)
+            {
+                if (!IsMissing(selection.SeNaTr))
+                    continue;
+
+                // Co:/SeTe: are mutually exclusive, matching the seeding/enrichment branches
+                // elsewhere — a selection's CompId decides which key backs its SeNaTr.
+                var seNaTr = selection.CompId != null
+                    ? _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa)
+                    : _translationCache.GetTranslations($"SeTe:{selection.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+
+                if (seNaTr != null)
+                {
+                    writes.Add(new UpdateOneModel<Selection>(
+                        Builders<Selection>.Filter.Eq(s => s.Id, selection.Id),
+                        Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList()))
+                    { IsUpsert = false });
+                }
+            }
+
+            if (writes.Count > 0)
+                _selectionCollection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+
+            return writes.Count;
+        }
+
+        private static bool IsMissing<T>(List<T>? translations) => translations == null || translations.Count == 0;
+
+        #endregion
+
         #region Change path — ON_TRANSLATION_CHANGE (moved from OE.Sportsbook.Service)
 
         // Persists the changed translations into the Mongo documents, then emits a translation-only

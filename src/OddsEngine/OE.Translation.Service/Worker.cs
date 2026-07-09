@@ -113,6 +113,20 @@ namespace OE.Translation.Service
                 }
             }
 
+            if (_configuration.GetValue("Custom:Translation:BackfillActiveSnapshot", true))
+            {
+                try
+                {
+                    _logger.LogInformation("BackfillActiveSnapshot: stamping *NaTr onto active Mongo documents from the preloaded cache");
+                    _mongoTranslationRepository.BackfillActiveSnapshot();
+                }
+                catch (Exception ex)
+                {
+                    // Non-fatal, same reasoning as SeedActiveSnapshot above.
+                    _logger.LogError(ex, "BackfillActiveSnapshot failed, continuing startup without it: {Message}", ex.Message);
+                }
+            }
+
             try
             {
                 _logger.LogInformation("Connecting to RabbitMQ Server");

@@ -24,5 +24,14 @@ namespace OE.Translation.Service.Repositories
         // live seeding path (SpId:/SegId:/LeId:/Te:/MaTe:/SeTe:), for entities the message-driven
         // seeding never saw (e.g. CacheSeed was off when they last changed).
         List<(string Id, string Text)> ReadActiveSnapshot();
+
+        // Mongo-directed counterpart to ReadActiveSnapshot/SeedActiveSnapshotAsync
+        // (Custom:Translation:BackfillActiveSnapshot): the live path only stamps *NaTr when a
+        // message happens to arrive for that specific entity (WriteFixtureTranslations/
+        // WriteMarketTranslations), so an entity whose TranslationCache2 row was translated while
+        // it was quiet (no message since) can sit un-backfilled indefinitely. Scans every
+        // currently-active Fixture/Market/Selection once at startup and fills in only the *NaTr
+        // fields still missing that the preloaded cache already has a translation for.
+        void BackfillActiveSnapshot();
     }
 }
