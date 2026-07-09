@@ -146,6 +146,19 @@ namespace OE.Translation.Service.Repositories
 
                         if (selection.CompId != null)
                         {
+                            var compIdText = selection.CompId.Value.ToString();
+
+                            // A handicap-market selection whose CompId is one of the fixture's own
+                            // two participants is already covered by Te:{HoId}/Te:{AwId}, seeded
+                            // from OnProcessFixtureSetUpdate's HoNa/AwNa (the plain team name).
+                            // Skip it here: SeNa has the handicap line baked in (e.g.
+                            // "Karpaty Lviv(-0.25)"), which is not the stable source text Te:
+                            // already holds, and would just re-seed a redundant, cache-defeating
+                            // row (see the mirrored read-side fix in
+                            // OE.Adapter.Service.TradingRepository.GetSelectionTranslations).
+                            if (market.IsHa && (compIdText == message.HoId || compIdText == message.AwId))
+                                continue;
+
                             // Competitor-specific selection (e.g. a named player/team outcome):
                             // the literal name is reused across every selection tied to this
                             // competitor, so it's keyed by CompId alone — not namespaced by

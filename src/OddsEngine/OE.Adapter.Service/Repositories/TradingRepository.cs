@@ -143,13 +143,44 @@ namespace OE.Adapter.Service.Repositories
                     if (selection == null)
                         continue;
 
-                    // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result,
-                    // matching the seeding branch in OE.Translation.Service.OnProcessMarketSetUpdate.
-                    selection.SeNaTr = selection.CompId != null
-                        ? _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa)
-                        : _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+                    selection.SeNaTr = GetSelectionTranslations(message, market, selection);
                 }
             }
+        }
+
+        // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result, matching the
+        // seeding branch in OE.Translation.Service.OnProcessMarketSetUpdate.
+        //
+        // A handicap-market selection whose CompId is one of the fixture's own two participants
+        // (e.g. Asian Handicap by team) reuses the Home/Away team-name translation already seeded
+        // under Te:{HoId}/Te:{AwId} (EnrichFixtureTranslations, above) instead of a separate
+        // Co:{CompId} lookup keyed off SeNa. SeNa for these selections has the handicap line baked
+        // in (e.g. "Karpaty Lviv(-0.25)") -- caching that whole string under Co: defeated the cache
+        // on every line change, since GetTranslations treats any text change as a rename. Te:'s
+        // source text is just the team name, which is stable, and downstream (SelectionNameComposer)
+        // already recomposes the line from Market.Li/IsHa on top of the translated name.
+        //
+        // Any other CompId (non-handicap markets such as Correct Score, where SeNa/SeTeNa fuse the
+        // name with a volatile per-selection outcome like "Karpaty Lviv 1-0", or a named individual
+        // competitor that isn't a fixture participant) is left on the original Co:{CompId} lookup,
+        // unchanged -- there's no verified stable source text to key off yet for those cases.
+        private List<TranslationMessage> GetSelectionTranslations(OnFixtureChangeMessage message, MarketMessage market, SelectionMessage selection)
+        {
+            if (selection.CompId == null)
+                return _translationCache.GetTranslations($"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
+
+            if (market.IsHa)
+            {
+                var compIdText = selection.CompId.Value.ToString();
+
+                if (compIdText == message.HoId)
+                    return message.HoTr;
+
+                if (compIdText == message.AwId)
+                    return message.AwTr;
+            }
+
+            return _translationCache.GetTranslations($"Co:{selection.CompId}", selection.SeNa);
         }
 
         private FixtureStatus GetFixtureStatus(int fixtureStatusId)

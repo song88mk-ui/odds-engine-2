@@ -188,6 +188,113 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal("沙瓦兹曼", selection.SeNaTr!.Single().Tx);
         }
 
+        // 2026-07-09 fix: a handicap-market selection whose CompId is one of the fixture's own two
+        // participants reuses the Te:{HoId}/Te:{AwId} team-name translation instead of a separate
+        // Co:{CompId} lookup keyed off SeNa (which has the handicap line baked in, e.g.
+        // "Karpaty Lviv(-0.25)" — defeating the cache on every line change, and colliding with the
+        // same CompId's other markets). The stale/wrong Co:116180 entry proves it's not consulted.
+        [Fact]
+        public void MarketChange_HandicapSelectionMatchingHomeTeam_ReusesHoTr()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:116180", LaCo = "ZH", Tx = "利沃夫卡尔帕蒂" },
+                new TranslationChangeItem { StId = "Co:116180", LaCo = "ZH", Tx = "WRONG" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 1,
+                SegId = 2,
+                LeId = 3,
+                HoId = "116180",
+                AwId = "129527",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M4",
+                        MaTeId = "82",
+                        IsHa = true,
+                        Li = "0.25",
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                PrFiId = PROVIDER_FIXTURE_ID,
+                                PrMaId = "M4",
+                                PrSeId = "S5",
+                                MaTeId = "82",
+                                SeTeId = "1",
+                                CompId = 116180,
+                                SeNa = "Karpaty Lviv(-0.25)"
+                            }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selection = message.Ma.Single().Se.Single();
+            Assert.NotNull(selection.SeNaTr);
+            Assert.Equal("利沃夫卡尔帕蒂", selection.SeNaTr!.Single().Tx);
+        }
+
+        // Same CompId-matches-HoId shape, but a non-handicap market (e.g. Correct Score, where
+        // SeNa fuses the team name with a volatile per-selection score): left on the original
+        // Co:{CompId} lookup, unchanged, since there's no verified stable source text yet.
+        [Fact]
+        public void MarketChange_NonHandicapSelectionMatchingHomeTeam_StillUsesCoKey()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:116180", LaCo = "ZH", Tx = "利沃夫卡尔帕蒂" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 1,
+                SegId = 2,
+                LeId = 3,
+                HoId = "116180",
+                AwId = "129527",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M5",
+                        MaTeId = "91",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                PrFiId = PROVIDER_FIXTURE_ID,
+                                PrMaId = "M5",
+                                PrSeId = "S6",
+                                MaTeId = "91",
+                                SeTeId = "99",
+                                CompId = 116180,
+                                SeNa = "Karpaty Lviv 1-0"
+                            }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selection = message.Ma.Single().Se.Single();
+            Assert.Null(selection.SeNaTr); // Co:116180 was never seeded — miss, falls back to English
+        }
+
         // Cache-apply only (2026-07 translation-flow redesign): persistence + notification are
         // OE.Translation.Service's job — the adapter must NOT forward the message anywhere.
         [Fact]

@@ -228,6 +228,113 @@ namespace OE.Translation.Service.Tests
             Assert.DoesNotContain(rows.Keys, k => k.StartsWith("Co:"));
         }
 
+        // 2026-07-09 fix: a handicap-market selection whose CompId is one of the fixture's own two
+        // participants is skipped here — it's already covered by Te:{HoId}/Te:{AwId} (seeded from
+        // OnProcessFixtureSetUpdate's HoNa/AwNa). Seeding Co:{CompId} from SeNa would re-seed a
+        // redundant row keyed off text with the handicap line baked in (e.g. "Karpaty Lviv(-0.25)").
+        [Fact]
+        public async Task MarketUpdate_HandicapSelectionMatchingHomeTeam_SkipsCoKeySeeding()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_HandicapSelectionMatchingHomeTeam_SkipsCoKeySeeding));
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = "1234567890",
+                HoId = "116180",
+                AwId = "129527",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        ChTyId = 0,
+                        PrFiId = "1234567890",
+                        PrMaId = "M4",
+                        MaTeId = "82",
+                        MaTeNa = "Asian Handicap",
+                        MaNa = "Asian Handicap",
+                        IsHa = true,
+                        Li = "0.25",
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                ChTyId = 0,
+                                PrFiId = "1234567890",
+                                PrMaId = "M4",
+                                PrSeId = "S5",
+                                MaTeId = "82",
+                                SeTeId = "1",
+                                SeTeNa = "Home",
+                                SeNa = "Karpaty Lviv(-0.25)",
+                                CompId = 116180
+                            }
+                        }
+                    }
+                }
+            };
+
+            await repository.OnProcessMarketSetUpdate(message);
+
+            using var context = GetContext(provider);
+            var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.Equal(new[] { "MaTe:82" }, rows.Keys.OrderBy(k => k).ToArray()); // no Co:116180, no SeTe:82:1
+        }
+
+        // Same CompId-matches-HoId shape, but a non-handicap market (e.g. Correct Score, where
+        // SeNa fuses the team name with a volatile per-selection score): still seeds Co:{CompId}
+        // as before, unchanged — no verified stable source text yet for that case.
+        [Fact]
+        public async Task MarketUpdate_NonHandicapSelectionMatchingHomeTeam_StillSeedsCoKey()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NonHandicapSelectionMatchingHomeTeam_StillSeedsCoKey));
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = "1234567890",
+                HoId = "116180",
+                AwId = "129527",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        ChTyId = 0,
+                        PrFiId = "1234567890",
+                        PrMaId = "M5",
+                        MaTeId = "91",
+                        MaTeNa = "Correct Score",
+                        MaNa = "Correct Score",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                ChTyId = 0,
+                                PrFiId = "1234567890",
+                                PrMaId = "M5",
+                                PrSeId = "S6",
+                                MaTeId = "91",
+                                SeTeId = "99",
+                                SeTeNa = "Karpaty Lviv 1-0",
+                                SeNa = "Karpaty Lviv 1-0",
+                                CompId = 116180
+                            }
+                        }
+                    }
+                }
+            };
+
+            await repository.OnProcessMarketSetUpdate(message);
+
+            using var context = GetContext(provider);
+            var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.True(rows.ContainsKey("Co:116180"));
+            Assert.Equal("Karpaty Lviv 1-0", rows["Co:116180"].SourceText);
+        }
+
         // Content-reuse-on-rename (2026-07-09): a genuine SOURCE_TEXT change adopts an existing
         // translation for identical text elsewhere instead of always clearing targets and waiting
         // on the external pipeline.
