@@ -1,8 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OE.Adapter.Service.Repositories;
 using OE.Adapter.Service.Telemetry;
 using OE.Shared.Constants;
+using OE.Shared.Data.Translation;
+using OE.Shared.Data.Translation.Entities;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingSportsbookMessages;
 using OE.Shared.Utilities;
@@ -244,11 +247,18 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal("利沃夫卡尔帕蒂", selection.SeNaTr!.Single().Tx);
         }
 
-        // Same CompId-matches-HoId shape, but a non-handicap market (e.g. Correct Score, where
-        // SeNa fuses the team name with a volatile per-selection score): left on the original
-        // Co:{CompId} lookup, unchanged, since there's no verified stable source text yet.
+        // 2026-07-10 fix: same CompId-matches-HoId shape, but a non-handicap market (e.g. Correct
+        // Score, where SeNa fuses the team name with a volatile per-selection score) is now ALSO
+        // redirected to Te:{HoId} — reversing the prior "still uses Co:{CompId}" behavior, which let
+        // Co:{CompId}'s cached SOURCE_TEXT get overwritten by whichever single scoreline was seeded
+        // last, corrupting every sibling scoreline sharing that CompId (verified against live
+        // production data). Note this test seeds the cache via Apply() only (no Preload), so
+        // GetTranslations has no tracked SOURCE_TEXT to splice a suffix against and trusts the
+        // cached row as-is — see
+        // NonHandicapSelectionMatchingHomeTeam_UsesTeKeyAndSplicesScoreSuffix below for the
+        // realistic, Preload-backed path where the score IS correctly appended.
         [Fact]
-        public void MarketChange_NonHandicapSelectionMatchingHomeTeam_StillUsesCoKey()
+        public void MarketChange_NonHandicapSelectionMatchingHomeTeam_UsesTeKey()
         {
             _cache.Apply(new List<TranslationChangeItem>
             {
@@ -292,7 +302,80 @@ namespace OE.Adapter.Service.Tests
             _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
 
             var selection = message.Ma.Single().Se.Single();
-            Assert.Null(selection.SeNaTr); // Co:116180 was never seeded — miss, falls back to English
+            Assert.Equal("利沃夫卡尔帕蒂", selection.SeNaTr!.Single().Tx); // Te:116180 hit, no tracked source to splice against
+        }
+
+        // Realistic end-to-end path: Te:116180 preloaded from a SQL-backed row (SOURCE_TEXT tracked,
+        // unlike the Apply()-only test above), so GetTranslations' existing splice logic reunites
+        // the team's stable translation with the selection's own volatile score suffix — exactly
+        // the mechanism that fixes the production bug (a Correct Score selection's translated name
+        // was rendering as an unrelated fixture's club instead of "<translated team> <own score>").
+        [Fact]
+        public void NonHandicapSelectionMatchingHomeTeam_UsesTeKeyAndSplicesScoreSuffix()
+        {
+            var services = new ServiceCollection();
+            services.AddDbContext<TranslationContext>(options =>
+                options.UseInMemoryDatabase(nameof(NonHandicapSelectionMatchingHomeTeam_UsesTeKeyAndSplicesScoreSuffix)));
+            var provider = services.BuildServiceProvider();
+
+            using (var scope = provider.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<TranslationContext>();
+                context.TranslationCache2.Add(new TranslationCache2
+                {
+                    StringId = "Te:10032",
+                    SourceLanguage = "EN",
+                    SourceText = "AS Roma",
+                    TargetTextZh = "罗马",
+                    TargetTextEs = "",
+                    TargetTextFr = ""
+                });
+                context.SaveChanges();
+            }
+
+            var cache = new TranslationCache(NullLogger<TranslationCache>.Instance, provider.GetRequiredService<IServiceScopeFactory>());
+            cache.Preload();
+
+            var repository = new TradingRepository(new Helper(), NullLogger<TradingRepository>.Instance, cache, new Instrumentation());
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 1,
+                SegId = 2,
+                LeId = 3,
+                HoId = "10032",
+                AwId = "10170",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M5",
+                        MaTeId = "91",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                PrFiId = PROVIDER_FIXTURE_ID,
+                                PrMaId = "M5",
+                                PrSeId = "S6",
+                                MaTeId = "91",
+                                SeTeId = "11",
+                                CompId = 10032,
+                                SeNa = "AS Roma 1-0"
+                            }
+                        }
+                    }
+                }
+            };
+
+            repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selection = message.Ma.Single().Se.Single();
+            Assert.Equal("罗马 1-0", selection.SeNaTr!.Single().Tx);
         }
 
         // 2026-07-09 fix: the vendor never attaches a CompId to individual-sport head-to-head

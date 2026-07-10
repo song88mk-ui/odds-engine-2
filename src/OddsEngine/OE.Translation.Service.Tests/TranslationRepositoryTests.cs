@@ -282,13 +282,20 @@ namespace OE.Translation.Service.Tests
             Assert.Equal(new[] { "MaTe:82" }, rows.Keys.OrderBy(k => k).ToArray()); // no Co:116180, no SeTe:82:1
         }
 
-        // Same CompId-matches-HoId shape, but a non-handicap market (e.g. Correct Score, where
-        // SeNa fuses the team name with a volatile per-selection score): still seeds Co:{CompId}
-        // as before, unchanged — no verified stable source text yet for that case.
+        // 2026-07-10 fix: same CompId-matches-HoId shape, but a non-handicap market (e.g. Correct
+        // Score, where SeNa fuses the team name with a volatile per-selection score) is now ALSO
+        // skipped here, not just handicap markets — reversing the prior "still seeds Co:{CompId}"
+        // behavior. Verified against live production data: Co:{CompId}'s cached SOURCE_TEXT can
+        // only ever hold ONE selection's fused text at a time, but Correct Score has many selections
+        // sharing one CompId (one per scoreline) — so seeding it here just let whichever scoreline
+        // was processed last permanently overwrite the row, corrupting every sibling scoreline (and,
+        // across fixtures, colliding with unrelated matches sharing the same CompId/SeTeId). The
+        // read side (SelectionTranslationKeyResolver) now redirects this shape to Te:{HoId}/{AwId}
+        // instead, so no Co:{CompId} row is needed or wanted for it.
         [Fact]
-        public async Task MarketUpdate_NonHandicapSelectionMatchingHomeTeam_StillSeedsCoKey()
+        public async Task MarketUpdate_NonHandicapSelectionMatchingHomeTeam_SkipsCoKeySeeding()
         {
-            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NonHandicapSelectionMatchingHomeTeam_StillSeedsCoKey));
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NonHandicapSelectionMatchingHomeTeam_SkipsCoKeySeeding));
 
             var message = new OnMarketChangeMessage
             {
@@ -331,8 +338,67 @@ namespace OE.Translation.Service.Tests
             using var context = GetContext(provider);
             var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
 
-            Assert.True(rows.ContainsKey("Co:116180"));
-            Assert.Equal("Karpaty Lviv 1-0", rows["Co:116180"].SourceText);
+            Assert.Equal(new[] { "MaTe:91" }, rows.Keys.OrderBy(k => k).ToArray()); // no Co:116180, no SeTe:91:99
+        }
+
+        // 2026-07-10 fix: a CompId-null selection whose SeTeNa is actually this fixture's own team
+        // name fused with a volatile score (the vendor didn't attach a CompId for this specific
+        // Correct Score outcome) is also skipped from SeTe: seeding — already covered by
+        // Te:{HoId}/Te:{AwId}. Verified against live SQL data that Correct Score's SeTeId numbering
+        // isn't stable across fixtures, so seeding this here let a later, unrelated fixture landing
+        // on the same MaTeId/SeTeId inherit this fixture's own club name.
+        [Fact]
+        public async Task MarketUpdate_NonHandicapCompIdNullSeTeNaMatchesHomeTeam_SkipsSeTeKeySeeding()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_NonHandicapCompIdNullSeTeNaMatchesHomeTeam_SkipsSeTeKeySeeding));
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = "1234567890",
+                HoId = "116180",
+                AwId = "129527",
+                HoNa = "Karpaty Lviv",
+                AwNa = "CFR Cluj",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        ChTyId = 0,
+                        PrFiId = "1234567890",
+                        PrMaId = "M5",
+                        MaTeId = "91",
+                        MaTeNa = "Correct Score",
+                        MaNa = "Correct Score",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                ChTyId = 0,
+                                PrFiId = "1234567890",
+                                PrMaId = "M5",
+                                PrSeId = "S6",
+                                MaTeId = "91",
+                                SeTeId = "173",
+                                SeTeNa = "Karpaty Lviv 1-0",
+                                SeNa = "Karpaty Lviv 1-0",
+                                CompId = null
+                            }
+                        }
+                    }
+                }
+            };
+
+            await repository.OnProcessMarketSetUpdate(message);
+
+            using var context = GetContext(provider);
+            var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
+
+            // HoNa/AwNa are seeded as Te:{HoId}/Te:{AwId} via the fixture-level fields on the base
+            // OnFixtureChangeMessage — but this test only calls OnProcessMarketSetUpdate, so only
+            // MaTe:91 should appear; the point is that no SeTe:91:173 row was seeded.
+            Assert.Equal(new[] { "MaTe:91" }, rows.Keys.OrderBy(k => k).ToArray()); // no SeTe:91:173
         }
 
         // Regression guard (2026-07-09): a content-reuse-on-rename shortcut was tried and reverted

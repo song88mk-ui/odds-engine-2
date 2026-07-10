@@ -133,5 +133,93 @@ namespace OE.Shared.Test.Utilities
             Assert.Equal("SeTe:91:29", key.StringId);
             Assert.Equal(string.Empty, key.SourceText);
         }
+
+        // 2026-07-10 fix: a CompId-null selection whose SeTeNa is actually the fixture's own team
+        // name fused with a volatile score (the vendor didn't attach a CompId for this specific
+        // Correct Score outcome) must not be cached under the generic SeTe: bucket — verified
+        // against live SQL data that the same SeTeId can mean "Draw 1-1" in one fixture and a
+        // specific team's own scoreline in another, so a different fixture landing on the same slot
+        // would otherwise inherit THIS fixture's club name.
+        [Fact]
+        public void CompIdNullSeTeNaStartsWithHomeTeamName_UsesTeKeyedOffFullSeTeNa()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Standard de Liège 2-0", seTeNa: "Standard de Liège 2-0", seTeId: "173", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.Equal("Te:H1", key.StringId);
+            Assert.Equal("Standard de Liège 2-0", key.SourceText);
+        }
+
+        [Fact]
+        public void CompIdNullSeTeNaStartsWithAwayTeamName_UsesTeKeyedOffFullSeTeNa()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Club Brugge 1-0", seTeNa: "Club Brugge 1-0", seTeId: "51", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.Equal("Te:A1", key.StringId);
+            Assert.Equal("Club Brugge 1-0", key.SourceText);
+        }
+
+        // A generic template phrase that merely shares a leading word with a team name must not be
+        // misdetected — "Draw" never equals a real team name, so this stays on SeTe: as before.
+        [Fact]
+        public void CompIdNullSeTeNaDoesNotStartWithEitherTeamName_FallsBackToSeTeKey()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Draw 1-1", seTeNa: "Draw 1-1", seTeId: "11", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.Equal("SeTe:91:11", key.StringId);
+            Assert.Equal("Draw 1-1", key.SourceText);
+        }
+
+        // 2026-07-10 fix: a non-handicap market whose selection CompId matches the fixture's own
+        // home participant (e.g. Correct Score's "this team leads 1-0") is redirected to Te:{HoId}
+        // the same way the handicap case already was — but keyed off the FULL fused SeNa (not the
+        // bare team name), since there's no market-level Li field for Compose to append the score
+        // separately (Compose is a no-op for non-handicap markets). This lets TranslationCache's
+        // splice reunite the team's stable translation with its own volatile score suffix. Verified
+        // against live production data: Co:{CompId}'s cached SOURCE_TEXT can only ever hold one
+        // scoreline at a time (one CompId, many sibling selections), so every other scoreline either
+        // missed or — worse — collided with an unrelated fixture sharing the same CompId/SeTeId and
+        // spliced on THAT fixture's cached name instead.
+        [Fact]
+        public void NonHandicapSelection_CompIdMatchesHomeParticipant_UsesTeKeyedOffFullSeNa()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 10032, seNa: "AS Roma 1-0", seTeNa: "AS Roma 1-0", seTeId: "11", maTeId: "91", isHa: false,
+                hoId: "10032", hoNa: "AS Roma", awId: "10170", awNa: "Fiorentina");
+
+            Assert.Equal("Te:10032", key.StringId);
+            Assert.Equal("AS Roma 1-0", key.SourceText); // full fused text, NOT bare "AS Roma"
+        }
+
+        [Fact]
+        public void NonHandicapSelection_CompIdMatchesAwayParticipant_UsesTeKeyedOffFullSeNa()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 10170, seNa: "Fiorentina 2-1", seTeNa: "Fiorentina 2-1", seTeId: "29", maTeId: "91", isHa: false,
+                hoId: "10032", hoNa: "AS Roma", awId: "10170", awNa: "Fiorentina");
+
+            Assert.Equal("Te:10170", key.StringId);
+            Assert.Equal("Fiorentina 2-1", key.SourceText);
+        }
+
+        // A competitor-specific, non-handicap selection whose CompId matches NEITHER fixture
+        // participant (e.g. an outright market referencing a third party) stays on Co: — unchanged
+        // from CompetitorSelection_NonHandicap_UsesCoKeyedOffSeNa above; this pins the boundary
+        // explicitly against the new Te: redirect so the two don't get confused.
+        [Fact]
+        public void NonHandicapSelection_CompIdMatchesNeitherParticipant_FallsBackToCoKey()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 999999, seNa: "Some Other Entity 1-0", seTeNa: "Some Other Entity 1-0", seTeId: "11", maTeId: "91", isHa: false,
+                hoId: "10032", hoNa: "AS Roma", awId: "10170", awNa: "Fiorentina");
+
+            Assert.Equal("Co:999999", key.StringId);
+            Assert.Equal("Some Other Entity 1-0", key.SourceText);
+        }
     }
 }
