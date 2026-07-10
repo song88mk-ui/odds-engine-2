@@ -226,7 +226,7 @@ namespace OE.Translation.Service.Repositories
 
             var fixtures = _fixtureCollection
                 .Find(activeFixtureFilter)
-                .Project(f => new { f.SpId, f.SpNa, f.SegId, f.SegNa, f.LeId, f.LeNa, f.HoId, f.HoNa, f.AwId, f.AwNa })
+                .Project(f => new { f.FiId, f.SpId, f.SpNa, f.SegId, f.SegNa, f.LeId, f.LeNa, f.HoId, f.HoNa, f.AwId, f.AwNa })
                 .ToList();
 
             foreach (var f in fixtures)
@@ -237,6 +237,11 @@ namespace OE.Translation.Service.Repositories
                 AddIfNew($"Te:{f.HoId}", f.HoNa);
                 AddIfNew($"Te:{f.AwId}", f.AwNa);
             }
+
+            // SelectionTranslationKeyResolver needs the fixture's HoId/HoNa/AwId/AwNa (same reason
+            // as BackfillSelections below) — build the lookup from the fixtures already fetched
+            // above instead of a second query.
+            var fixturesById = fixtures.ToDictionary(f => f.FiId);
 
             var activeMaTeIds = _marketCollection
                 .Find(Builders<Market>.Filter.And(
@@ -260,18 +265,36 @@ namespace OE.Translation.Service.Repositories
                     Builders<Selection>.Filter.Eq(s => s.IsAc, true),
                     Builders<Selection>.Filter.Eq(s => s.MaStId, (int)MarketStatus.Active),
                     Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds)))
-                .Project(s => new { s.MaTeId, s.SeTeId, s.SeTeNa, s.CompId, s.SeNa })
+                .Project(s => new { s.FiId, s.MaId, s.MaTeId, s.SeTeId, s.SeTeNa, s.CompId, s.SeNa })
                 .ToList();
 
-            // Co:/SeTe: are mutually exclusive per selection (matches TranslationRepository's live
-            // seeding branch) — a competitor-specific selection keys by CompId with the as-is SeNa;
-            // everything else keys by the market/selection template pair with SeTeNa.
+            var selectionMaIds = selections.Select(s => s.MaId).Distinct().ToList();
+            var isHaByMaId = _marketCollection
+                .Find(Builders<Market>.Filter.In(m => m.MaId, selectionMaIds))
+                .Project(m => new { m.MaId, m.IsHa })
+                .ToList()
+                .ToDictionary(m => m.MaId, m => m.IsHa);
+
+            // Which TranslationCache2 key backs each selection — see
+            // OE.Shared.Utilities.SelectionTranslationKeyResolver (shared with
+            // OnProcessMarketSetUpdate's live seeding and TradingRepository's live enrichment). This
+            // used to be a hand-duplicated "CompId != null -> Co: else SeTe:" branch here that never
+            // went through the shared resolver, so it never got the CompId-matches-participant /
+            // SeTeNa-starts-with-team-name redirects — a real production bug (this startup sweep
+            // re-seeded Co:{CompId} rows with fixture-specific fused "team + score" text on every
+            // service restart, undoing the live-path fix).
             foreach (var s in selections)
             {
-                if (s.CompId != null)
-                    AddIfNew($"Co:{s.CompId}", s.SeNa);
-                else
-                    AddIfNew($"SeTe:{s.MaTeId}:{s.SeTeId}", s.SeTeNa);
+                if (!fixturesById.TryGetValue(s.FiId, out var fixture))
+                    continue; // no active fixture found — nothing to resolve Te:/positional keys against
+
+                var isHa = isHaByMaId.TryGetValue(s.MaId, out var marketIsHa) && marketIsHa;
+
+                var key = SelectionTranslationKeyResolver.Resolve(
+                    s.CompId, s.SeNa, s.SeTeNa, s.SeTeId, s.MaTeId, isHa,
+                    fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
+
+                AddIfNew(key.StringId, key.SourceText);
             }
 
             return result.Select(kv => (kv.Key, kv.Value)).ToList();
