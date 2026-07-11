@@ -495,9 +495,12 @@ namespace OE.Translation.Service.Repositories
             if (!int.TryParse(teamId, out var compId))
                 return 0;
 
+            // Active + Suspended, matching PublishTranslationOnlyOddsChanges below — a suspended
+            // market is still shown to players (just not bettable), so its selection name should
+            // stay correct too, not just Active ones.
             var affectedSelectionFilter = Builders<Selection>.Filter.And(
                 Builders<Selection>.Filter.Eq(s => s.CompId, compId),
-                Builders<Selection>.Filter.Eq(s => s.MaStId, (int)MarketStatus.Active),
+                Builders<Selection>.Filter.In(s => s.MaStId, new[] { (int)MarketStatus.Active, (int)MarketStatus.Suspended }),
                 Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
 
             var selections = _selectionCollection.Find(affectedSelectionFilter).ToList();
