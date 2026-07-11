@@ -94,18 +94,28 @@ namespace OE.Shared.Utilities
                 if (!string.IsNullOrEmpty(awNa) && seTeNa != null && seTeNa.StartsWith(awNa, StringComparison.Ordinal))
                     return new SelectionTranslationKey($"Te:{awId}", seTeNa);
 
-                // A generic template label is only worth caching/translating if it's real
-                // descriptive text. Some vendor market templates (e.g. Correct Score outcomes
-                // with no CompId) fall back to a bare numeric outcome code in SeTeNa when the
-                // vendor never supplied a proper name. That code round-trips through translation
-                // unchanged (digits need no translating), gets cached as if it were a genuine
-                // translation, and permanently masks the correctly-composed English SeNa. Return
-                // an empty key so the caller's existing "no StringId" fallback (SeNa as-is)
-                // applies for every language instead. An EMPTY SeTeNa is a different, already
-                // -handled case (no information on this message — GetTranslations trusts the
-                // existing cached row per its own "no info to compare" rule) and must fall
-                // through to the normal SeTe: key untouched.
-                if (!string.IsNullOrEmpty(seTeNa) && !seTeNa.Any(char.IsLetter))
+                // A digit-only SeTeNa is only a problem when it's a MEANINGLESS internal outcome
+                // code standing in for text the vendor failed to supply — detected by SeTeNa not
+                // matching the actual composed SeNa (e.g. Correct Score's SeNa "Evans, L 4-1" vs.
+                // SeTeNa "41": verified live, these come from the same market template and the same
+                // CompId-null shape, but "41" bears no relation to the real selection). That code
+                // round-trips through translation unchanged (digits need no translating), gets
+                // cached as if it were a genuine translation, and permanently masks the
+                // correctly-composed English SeNa. Return an empty key so the caller's existing "no
+                // StringId" fallback (SeNa as-is) applies for every language instead.
+                //
+                // A digit-only SeTeNa that MATCHES SeNa exactly is a different, legitimate case:
+                // markets like Total Corners ("12+"), Total Goals Bands ("2-3"), or Next Goal Time
+                // ("81-90") use a numeric range as their actual, complete, fixture-independent
+                // selection text — verified live, SeNa == SeTeNa for these, the same way it does
+                // for genuine generic templates like "Draw 0-0". There's nothing "meaningless" to
+                // guard against here, and blocking it would wrongly prevent these otherwise-stable
+                // templates from ever being cached/translated.
+                //
+                // An EMPTY SeTeNa is a third, already-handled case (no information on this message
+                // — GetTranslations trusts the existing cached row per its own "no info to compare"
+                // rule) and must fall through to the normal SeTe: key untouched.
+                if (!string.IsNullOrEmpty(seTeNa) && !seTeNa.Any(char.IsLetter) && seTeNa != seNa)
                     return new SelectionTranslationKey(string.Empty, string.Empty);
 
                 return new SelectionTranslationKey($"SeTe:{maTeId}:{seTeId}", seTeNa);

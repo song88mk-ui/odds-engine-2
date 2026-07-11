@@ -134,6 +134,24 @@ namespace OE.Shared.Test.Utilities
             Assert.Equal(string.Empty, key.SourceText);
         }
 
+        // 2026-07-10 fix: a digit-only SeTeNa that MATCHES SeNa exactly is a different, legitimate
+        // case from the non-descriptive-code guard above — markets like Total Corners ("12+"),
+        // Total Goals Bands ("2-3"), and Next Goal Time ("81-90") use a numeric range as their
+        // actual, complete, fixture-independent selection text (verified live: SeNa == SeTeNa for
+        // these, the same way it does for a genuine generic template like "Draw 0-0"). This must
+        // still resolve to the normal SeTe: key so these otherwise-stable templates keep getting
+        // cached/translated instead of being wrongly swept up by the meaningless-code guard.
+        [Fact]
+        public void CompIdNullDigitOnlySeTeNaMatchingSeNa_StillFallsBackToSeTeKey()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "81-90", seTeNa: "81-90", seTeId: "113", maTeId: "8683", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.Equal("SeTe:8683:113", key.StringId);
+            Assert.Equal("81-90", key.SourceText);
+        }
+
         // 2026-07-10 fix: a CompId-null selection whose SeTeNa is actually the fixture's own team
         // name fused with a volatile score (the vendor didn't attach a CompId for this specific
         // Correct Score outcome) must not be cached under the generic SeTe: bucket — verified
