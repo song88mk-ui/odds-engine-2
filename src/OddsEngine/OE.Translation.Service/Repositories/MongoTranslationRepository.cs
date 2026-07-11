@@ -484,6 +484,71 @@ namespace OE.Translation.Service.Repositories
 
         private static bool IsMissing<T>(List<T>? translations) => translations == null || translations.Count == 0;
 
+        // A team-name edit (Te:{teamId}) only ever touched Fixture.HoNaTr/AwNaTr — competitor-name
+        // selections (e.g. a Match Winner market whose selections literally are the two teams)
+        // resolve to this SAME Te: key per SelectionTranslationKeyResolver (CompId matches one of
+        // the fixture's own participants), but their Selection.SeNaTr was never recomputed, so it
+        // sat stale until the next unrelated odds/market update happened to rebuild it. Mirrors
+        // BackfillSelections' resolver+cache pattern, scoped to just this team instead of a sweep.
+        private int CascadeTeamTranslationToSelections(string teamId)
+        {
+            if (!int.TryParse(teamId, out var compId))
+                return 0;
+
+            var affectedSelectionFilter = Builders<Selection>.Filter.And(
+                Builders<Selection>.Filter.Eq(s => s.CompId, compId),
+                Builders<Selection>.Filter.Eq(s => s.MaStId, (int)MarketStatus.Active),
+                Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
+
+            var selections = _selectionCollection.Find(affectedSelectionFilter).ToList();
+
+            if (selections.Count == 0)
+                return 0;
+
+            var fiIds = selections.Select(s => s.FiId).Distinct().ToList();
+            var fixturesById = _fixtureCollection
+                .Find(Builders<Fixture>.Filter.In(f => f.FiId, fiIds))
+                .Project(f => new { f.FiId, f.HoId, f.HoNa, f.AwId, f.AwNa })
+                .ToList()
+                .ToDictionary(f => f.FiId);
+
+            var maIds = selections.Select(s => s.MaId).Distinct().ToList();
+            var isHaByMaId = _marketCollection
+                .Find(Builders<Market>.Filter.In(m => m.MaId, maIds))
+                .Project(m => new { m.MaId, m.IsHa })
+                .ToList()
+                .ToDictionary(m => m.MaId, m => m.IsHa);
+
+            var writes = new List<WriteModel<Selection>>();
+
+            foreach (var selection in selections)
+            {
+                if (!fixturesById.TryGetValue(selection.FiId, out var fixture))
+                    continue; // no fixture found — nothing to resolve Te: against
+
+                var isHa = isHaByMaId.TryGetValue(selection.MaId, out var marketIsHa) && marketIsHa;
+
+                var key = SelectionTranslationKeyResolver.Resolve(
+                    selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, selection.MaTeId, isHa,
+                    fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
+
+                var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
+
+                if (seNaTr != null)
+                {
+                    writes.Add(new UpdateOneModel<Selection>(
+                        Builders<Selection>.Filter.Eq(s => s.Id, selection.Id),
+                        Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList()))
+                    { IsUpsert = false });
+                }
+            }
+
+            if (writes.Count > 0)
+                _selectionCollection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+
+            return writes.Count;
+        }
+
         #endregion
 
         #region Change path — ON_TRANSLATION_CHANGE (moved from OE.Sportsbook.Service)
@@ -551,6 +616,7 @@ namespace OE.Translation.Service.Repositories
                         teamDeltas[id] = entry.Value;
                         UpdateTranslationArray(_fixtureCollection, Builders<Fixture>.Filter.Eq(f => f.HoId, id), "HoNaTr", entry.Value, t => new TeamTranslationMDB { LaCo = t.LaCo, TeNa = t.Tx });
                         UpdateTranslationArray(_fixtureCollection, Builders<Fixture>.Filter.Eq(f => f.AwId, id), "AwNaTr", entry.Value, t => new TeamTranslationMDB { LaCo = t.LaCo, TeNa = t.Tx });
+                        CascadeTeamTranslationToSelections(id);
                         break;
                     case "MaTe":
                         marketTemplateDeltas[id] = entry.Value;
@@ -715,7 +781,7 @@ namespace OE.Translation.Service.Repositories
 
                 var payload = PrepareTranslationOddsChangeMessage(fixture, markets, selections, correlationId);
 
-                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas);
+                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache);
 
                 messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
             }
@@ -734,7 +800,8 @@ namespace OE.Translation.Service.Repositories
             Dictionary<string, List<TranslationMessage>> teamDeltas,
             Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
-            Dictionary<int, List<TranslationMessage>> competitorDeltas = null)
+            Dictionary<int, List<TranslationMessage>> competitorDeltas = null,
+            ITranslationCache translationCache = null)
         {
             competitorDeltas ??= new Dictionary<int, List<TranslationMessage>>();
 
@@ -750,6 +817,27 @@ namespace OE.Translation.Service.Repositories
 
                 foreach (var selection in market.Se)
                 {
+                    // A selection whose CompId is one of the fixture's own two participants (e.g. a
+                    // Match Winner market where the selections ARE the two teams) resolves to the
+                    // fixture's own Te:{HoId}/{AwId} key, not Co:/SeTe: — see
+                    // SelectionTranslationKeyResolver. Recompute through the same resolver+cache path
+                    // the persist side (CascadeTeamTranslationToSelections) uses, instead of leaving
+                    // it null just because it isn't in competitorDeltas/selectionTemplateDeltas.
+                    var participantTeamId = selection.CompId == null ? null
+                        : selection.CompId.Value.ToString() == fixture.HoId ? fixture.HoId
+                        : selection.CompId.Value.ToString() == fixture.AwId ? fixture.AwId
+                        : null;
+
+                    if (participantTeamId != null && translationCache != null && teamDeltas.ContainsKey(participantTeamId))
+                    {
+                        var key = SelectionTranslationKeyResolver.Resolve(
+                            selection.CompId, selection.SeNa, seTeNa: null, selection.SeTeId, market.MaTeId, market.IsHa,
+                            fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
+
+                        selection.SeNaTr = translationCache.GetTranslations(key.StringId, key.SourceText);
+                        continue;
+                    }
+
                     // Co:/SeTe: are mutually exclusive lookup keys for the same SeNaTr result,
                     // matching the seeding/enrichment branches elsewhere — a selection's CompId
                     // decides which delta dictionary applies.

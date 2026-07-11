@@ -73,6 +73,18 @@ namespace OE.Translation.Service.Tests
         private static List<TranslationMessage> Delta(string text) =>
             new List<TranslationMessage> { new TranslationMessage { LaCo = "ZH", Tx = text } };
 
+        // Minimal ITranslationCache stub — keyed lookup only, no preload/Apply behavior needed
+        // for these pure ApplyTranslationDeltas tests.
+        private class StubTranslationCache : ITranslationCache
+        {
+            private readonly Dictionary<string, List<TranslationMessage>> _byKey;
+            public StubTranslationCache(Dictionary<string, List<TranslationMessage>> byKey) => _byKey = byKey;
+            public void Preload() { }
+            public List<TranslationMessage>? GetTranslations(string stringId, string currentText) =>
+                _byKey.TryGetValue(stringId, out var v) ? v : null;
+            public void Apply(List<TranslationChangeItem> items) { }
+        }
+
         [Fact]
         public void ApplyTranslationDeltas_HomeOnlyDelta_SetsHoTrAndLeavesAwTrNull()
         {
@@ -200,6 +212,84 @@ namespace OE.Translation.Service.Tests
                 competitorDeltas: competitorDeltas);
 
             Assert.Same(selectionTemplateDeltas[("MT1", "ST1")], payload.Ma[0].Se[0].SeNaTr);
+        }
+
+        // A competitor-name selection (e.g. Match Winner, where the selections ARE the two teams)
+        // has CompId == the fixture's own HoId/AwId, which SelectionTranslationKeyResolver redirects
+        // to Te:{HoId}/{AwId} instead of Co:{CompId} — this was the gap that left the selection's
+        // displayed name stale after a BO team-name edit even though Fixture.HoNaTr/AwNaTr updated.
+        [Fact]
+        public void ApplyTranslationDeltas_CompIdMatchesHomeParticipant_ResolvesViaTeKeyInsteadOfCompetitorDeltas()
+        {
+            var fixture = MakeFixture(hoId: "12345", awId: "999");
+            fixture.HoNa = "Werewolves CC";
+            var payload = MakePayload();
+            payload.Ma[0].Se[0].CompId = 12345;
+            payload.Ma[0].Se[0].SeNa = "Werewolves CC";
+            var teamDeltas = new Dictionary<string, List<TranslationMessage>> { ["12345"] = Delta("主队改名") };
+            var competitorDeltas = new Dictionary<int, List<TranslationMessage>> { [12345] = Delta("WRONG — should not be used") };
+            var translationCache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Te:12345"] = Delta("狼人 CC")
+            });
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(),
+                teamDeltas: teamDeltas,
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                competitorDeltas: competitorDeltas,
+                translationCache: translationCache);
+
+            Assert.Same(translationCache.GetTranslations("Te:12345", "Werewolves CC"), payload.Ma[0].Se[0].SeNaTr);
+        }
+
+        // If this specific push isn't about the participant's team (teamDeltas has no entry for it),
+        // the selection must fall back to the ordinary Co:/SeTe: path rather than attempting a Te:
+        // resolution — avoids resolving/looking up a key that has no delta on this message.
+        [Fact]
+        public void ApplyTranslationDeltas_CompIdMatchesParticipantButNoTeamDelta_FallsBackToCompetitorDeltas()
+        {
+            var fixture = MakeFixture(hoId: "12345", awId: "999");
+            var payload = MakePayload();
+            payload.Ma[0].Se[0].CompId = 12345;
+            var competitorDeltas = new Dictionary<int, List<TranslationMessage>> { [12345] = Delta("沙瓦兹曼") };
+            var translationCache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Te:12345"] = Delta("should not be reached")
+            });
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(),
+                teamDeltas: new(), // no entry for "12345" — this push isn't a team-name change
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                competitorDeltas: competitorDeltas,
+                translationCache: translationCache);
+
+            Assert.Same(competitorDeltas[12345], payload.Ma[0].Se[0].SeNaTr);
+        }
+
+        // Backward compatibility: callers that don't supply a translationCache (the default null)
+        // must keep the pre-existing Co:/SeTe: behavior instead of throwing or silently no-op'ing.
+        [Fact]
+        public void ApplyTranslationDeltas_NoTranslationCacheSupplied_FallsBackToCompetitorDeltas()
+        {
+            var fixture = MakeFixture(hoId: "12345", awId: "999");
+            var payload = MakePayload();
+            payload.Ma[0].Se[0].CompId = 12345;
+            var teamDeltas = new Dictionary<string, List<TranslationMessage>> { ["12345"] = Delta("主队改名") };
+            var competitorDeltas = new Dictionary<int, List<TranslationMessage>> { [12345] = Delta("沙瓦兹曼") };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(),
+                teamDeltas: teamDeltas,
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                competitorDeltas: competitorDeltas);
+            // translationCache omitted entirely — defaults to null
+
+            Assert.Same(competitorDeltas[12345], payload.Ma[0].Se[0].SeNaTr);
         }
 
         [Fact]
