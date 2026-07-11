@@ -144,57 +144,34 @@ namespace OE.Translation.Service.Repositories
                         if (selection == null)
                             continue;
 
-                        if (selection.CompId != null)
-                        {
-                            var compIdText = selection.CompId.Value.ToString();
+                        // Which TranslationCache2 key backs this selection's translation — see
+                        // OE.Shared.Utilities.SelectionTranslationKeyResolver, the single shared
+                        // implementation also used by the read side (MongoTranslationRepository,
+                        // TradingRepository). This used to be a hand-duplicated "CompId != null ->
+                        // Co: else SeTe:" branch here with its own copies of the participant-match
+                        // and team-name-fused skip guards, but no digit-only guard at all — it
+                        // silently drifted out of sync and kept seeding bare numeric SeTeNa codes
+                        // (e.g. "29") into SeTe: rows even after the shared resolver was fixed to
+                        // reject them (the exact same class of bug ReadActiveSnapshot had). Routing
+                        // through the shared resolver here too means the seeding and read sides can
+                        // never diverge again.
+                        var key = SelectionTranslationKeyResolver.Resolve(
+                            selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, market.MaTeId, market.IsHa,
+                            message.HoId, message.HoNa, message.AwId, message.AwNa);
 
-                            // A selection whose CompId is one of the fixture's own two participants
-                            // is already covered by Te:{HoId}/Te:{AwId}, seeded from
-                            // OnProcessFixtureSetUpdate's HoNa/AwNa (the plain team name). Skip it
-                            // here regardless of market type: SeNa fuses the team name with a
-                            // volatile per-selection value (a handicap line, or — 2026-07-10 — a
-                            // Correct-Score-style score, which isn't a market-level field the way a
-                            // handicap line is), which is not the stable source text Te: already
-                            // holds, and would just re-seed a redundant, cache-defeating row (see
-                            // the mirrored read-side fix in
-                            // OE.Shared.Utilities.SelectionTranslationKeyResolver). Verified against
-                            // live production data: leaving this handicap-only let Co:{CompId} for
-                            // Correct Score selections get overwritten by whichever single scoreline
-                            // was seeded last, corrupting every sibling scoreline sharing that CompId.
-                            if (compIdText == message.HoId || compIdText == message.AwId)
-                                continue;
+                        // Te:{HoId}/{AwId} is OnProcessFixtureSetUpdate's exclusive responsibility,
+                        // seeded once from the plain HoNa/AwNa. Never seed it here even when Resolve
+                        // redirects a selection to it: for the non-handicap case Resolve's SourceText
+                        // is the FULL fused SeNa (e.g. "Karpaty Lviv 1-0", needed for the read-side
+                        // splice), and if that ever raced ahead of the fixture-level seed for a
+                        // brand-new fixture, BulkSeed's rename handling would treat it as a genuine
+                        // source change and stamp the stable Te: row's SOURCE_TEXT with the fused
+                        // text — the same corruption this whole fix is meant to prevent, just moved
+                        // one key over.
+                        if (key.StringId.StartsWith("Te:", StringComparison.Ordinal))
+                            continue;
 
-                            // Competitor-specific selection (e.g. a named player/team outcome):
-                            // the literal name is reused across every selection tied to this
-                            // competitor, so it's keyed by CompId alone — not namespaced by
-                            // market/selection template, and NOT also seeded under SeTe: (the two
-                            // keys are mutually exclusive; see docs/BusinessRules.md).
-                            AddIfValid(items, $"Co:{selection.CompId}", selection.SeNa);
-                        }
-                        else
-                        {
-                            // A CompId-null selection whose SeTeNa is actually this fixture's own
-                            // team name fused with a volatile per-selection value (e.g. Correct
-                            // Score's "Standard de Liège 2-0" when the vendor didn't attach a CompId
-                            // for this specific outcome) must not be seeded under the generic,
-                            // cross-fixture-shared SeTe: bucket either — already covered by
-                            // Te:{HoId}/Te:{AwId} from OnProcessFixtureSetUpdate. Skip it here for
-                            // the same reason as the CompId-matches-participant skip above (mirrors
-                            // the read-side redirect in
-                            // OE.Shared.Utilities.SelectionTranslationKeyResolver). Verified against
-                            // live SQL data: Correct Score's SeTeId numbering isn't stable across
-                            // fixtures (the same SeTeId means "Draw 1-1" in one fixture and a
-                            // specific team's own scoreline in another), so seeding this here let a
-                            // later, unrelated fixture landing on the same MaTeId/SeTeId inherit
-                            // this fixture's club name instead of its own.
-                            if ((!string.IsNullOrEmpty(message.HoNa) && selection.SeTeNa != null && selection.SeTeNa.StartsWith(message.HoNa, StringComparison.Ordinal))
-                                || (!string.IsNullOrEmpty(message.AwNa) && selection.SeTeNa != null && selection.SeTeNa.StartsWith(message.AwNa, StringComparison.Ordinal)))
-                                continue;
-
-                            // Selection template (deduped, namespaced by market template to avoid
-                            // cross-market outcome-id / numerator collisions): SeTe:{MaTeId}:{SeTeId}.
-                            AddIfValid(items, $"SeTe:{market.MaTeId}:{selection.SeTeId}", selection.SeTeNa);
-                        }
+                        AddIfValid(items, key.StringId, key.SourceText);
                     }
                 }
 

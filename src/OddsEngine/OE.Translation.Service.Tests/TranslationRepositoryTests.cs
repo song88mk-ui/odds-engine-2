@@ -401,6 +401,66 @@ namespace OE.Translation.Service.Tests
             Assert.Equal(new[] { "MaTe:91" }, rows.Keys.OrderBy(k => k).ToArray()); // no SeTe:91:173
         }
 
+        // Regression guard (2026-07-10): this method used to have its own hand-duplicated
+        // "CompId != null -> Co: else SeTe:" branch with copies of the participant-match and
+        // team-name-fused skip guards, but NO digit-only guard at all — confirmed live in
+        // production, it kept seeding bare numeric SeTeNa codes (e.g. "29") into SeTe: rows for
+        // hours after the shared resolver had already been fixed to reject them, because this
+        // seeding path never called the resolver. Now that it routes through
+        // SelectionTranslationKeyResolver directly, this must be rejected the same way the
+        // resolver-level test (CompIdNullNonDescriptiveNumericSeTeNa_ReturnsEmptyKey) already
+        // proves — pinning it here too so the seeding and read sides can never diverge again.
+        [Fact]
+        public async Task MarketUpdate_CompIdNullNonDescriptiveNumericSeTeNa_SkipsSeTeKeySeeding()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_CompIdNullNonDescriptiveNumericSeTeNa_SkipsSeTeKeySeeding));
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = "1234567890",
+                HoId = "H1",
+                AwId = "A1",
+                HoNa = "Stade Rennais",
+                AwNa = "SM Caen",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        ChTyId = 0,
+                        PrFiId = "1234567890",
+                        PrMaId = "M6",
+                        MaTeId = "91",
+                        MaTeNa = "Correct Score",
+                        MaNa = "Correct Score",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage
+                            {
+                                ChTyId = 0,
+                                PrFiId = "1234567890",
+                                PrMaId = "M6",
+                                PrSeId = "S7",
+                                MaTeId = "91",
+                                SeTeId = "29",
+                                SeTeNa = "29",
+                                SeNa = "Stade Rennais 4-0",
+                                CompId = null
+                            }
+                        }
+                    }
+                }
+            };
+
+            await repository.OnProcessMarketSetUpdate(message);
+
+            using var context = GetContext(provider);
+            var rows = context.TranslationCache2.ToDictionary(r => r.StringId);
+
+            Assert.Equal(new[] { "MaTe:91" }, rows.Keys.OrderBy(k => k).ToArray()); // no SeTe:91:29
+        }
+
         // Regression guard (2026-07-09): a content-reuse-on-rename shortcut was tried and reverted
         // — TARGET_TEXT_*/PROCESSED are the external pipeline's columns only (see
         // Scripts/TranslationCache2.sql). Even when another row already carries an identical
