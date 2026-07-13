@@ -16,6 +16,7 @@ namespace OE.Job.Cleanup
     {
         private readonly ILogger<Worker> _logger;
         private readonly ISportsbookRepository _sportsbookRepository;
+        private readonly IBetFixtureCache _betFixtureCache;
         private readonly IConfiguration _configuration;
 
         private readonly ActivitySource _activitySource;
@@ -23,11 +24,12 @@ namespace OE.Job.Cleanup
         private readonly Gauge<short> _jobSuccessResult;
         private readonly Counter<long> _jobRunCount;
 
-        public Worker(ILogger<Worker> logger, ISportsbookRepository sportsbookRepository, IConfiguration configuration, Instrumentation instrumentation)
+        public Worker(ILogger<Worker> logger, ISportsbookRepository sportsbookRepository, IBetFixtureCache betFixtureCache, IConfiguration configuration, Instrumentation instrumentation)
         {
             _logger = logger;
             _configuration = configuration;
             _sportsbookRepository = sportsbookRepository;
+            _betFixtureCache = betFixtureCache;
 
             _activitySource = instrumentation.ActivitySource;
             _jobLastExecutionTimestampSeconds = instrumentation.JobLastExecutionTimestampSeconds;
@@ -53,6 +55,14 @@ namespace OE.Job.Cleanup
                     if (!_configuration.GetValue<bool>("Custom:Enabled", false))
                         throw new InvalidOperationException("Work is disabled! Check if the crew is allowed to work.");
 
+                    // fixtures with bet placements are never deleted; the set must be preloaded
+                    // from the Betting SQL database before any cleanup is allowed to run
+                    if (!_betFixtureCache.IsLoaded)
+                    {
+                        _logger.LogInformation("Preloading fixture ids with bet placements");
+                        await _betFixtureCache.Preload(stoppingToken);
+                    }
+
                     var time = DateTime.UtcNow.TimeOfDay;
                     if (time.Hours >= startHour && time.Hours < endHour)
                     {
@@ -60,7 +70,7 @@ namespace OE.Job.Cleanup
                         if (_jobRunCount.Enabled)
                             _jobRunCount.Add(1);
 
-                        await _sportsbookRepository.Cleanup();
+                        await _sportsbookRepository.Cleanup(stoppingToken);
 
                         if (_jobSuccessResult.Enabled)
                             _jobSuccessResult.Record(1);

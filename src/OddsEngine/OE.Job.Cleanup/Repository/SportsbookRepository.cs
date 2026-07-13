@@ -8,6 +8,7 @@ using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using System;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
@@ -18,6 +19,7 @@ namespace OE.Job.Cleanup.Repository
 
         private readonly ILogger<SportsbookRepository> _logger;
         private readonly IConfiguration _configuration;
+        private readonly IBetFixtureCache _betFixtureCache;
 
         private int _sportRetention;
 
@@ -31,10 +33,11 @@ namespace OE.Job.Cleanup.Repository
 
         private readonly Counter<long> _jobRunFixturesDeleted;
 
-        public SportsbookRepository(IConfiguration configuration, ILogger<SportsbookRepository> logger, Instrumentation instrumentation)
+        public SportsbookRepository(IConfiguration configuration, ILogger<SportsbookRepository> logger, IBetFixtureCache betFixtureCache, Instrumentation instrumentation)
         {
             _configuration = configuration;
             _logger = logger;
+            _betFixtureCache = betFixtureCache;
             _jobRunFixturesDeleted = instrumentation.JobRunFixturesDeleted;
 
             _sportRetention = _configuration.GetValue<int>("Custom:SportRetention", -30);
@@ -51,14 +54,24 @@ namespace OE.Job.Cleanup.Repository
             // _selectionMappingCollection
         }
 
-        public async Task Cleanup()
+        public async Task Cleanup(CancellationToken cancellationToken)
         {
+            // fixtures with bet placements must be retained for bet history; without the
+            // preloaded set every fixture would look bet-free and could be deleted
+            if (!_betFixtureCache.IsLoaded)
+                throw new InvalidOperationException("Bet placement preload has not completed; refusing to clean up.");
+
             // all fixtures:
             // type: match
             // status: ended, closed, cancelled, abandoned, unknown, postponed, interrupted etc
             // non virtual sports
             // started 30 days ago (retentionValue)
             var statusToBeDeleted = new[]{ 2,3,4,5,6,7,8,9,10,99}; // > 2 will include MatchABoutToStart, so we exclude it?
+
+            var batchSize = _configuration.GetValue<int>("Custom:BatchSize", 5000);
+            var batchDelayMs = _configuration.GetValue<int>("Custom:BatchDelayMs", 2000);
+            var startHour = _configuration.GetValue<uint>("Custom:UtcWindowHours:Start", 1);
+            var endHour = _configuration.GetValue<uint>("Custom:UtcWindowHours:End", 10);
 
             var fixtureStatusFilter = Builders<Fixture>.Filter.In(f => f.FiStId, statusToBeDeleted);
             var fixtureTypeFilter = Builders<Fixture>.Filter.Eq(f => f.FiTyId, 0);
@@ -76,41 +89,55 @@ namespace OE.Job.Cleanup.Repository
             _logger.LogDebug("Retrieving list of fixtures");
 
             var fixtures = await _fixtureCollection.Find(fixtureFilter)
-                .Project<FixtureProjection>(fixtureProjection).ToListAsync();
+                .Project<FixtureProjection>(fixtureProjection).ToListAsync(cancellationToken);
 
-            var sortedFixtures = fixtures.OrderBy(o => o.FiStDa).ToList();
+            var sortedFixtures = fixtures
+                .Where(f => !_betFixtureCache.Contains(f.FiId))
+                .OrderBy(o => o.FiStDa).ToList();
             var totalCount = sortedFixtures.Count;
 
-            _logger.LogInformation("Got {count} fixture record(s) for deletion", totalCount);
+            _logger.LogInformation("Got {count} fixture record(s) for deletion ({skipped} retained due to bet placements)",
+                    totalCount, fixtures.Count - totalCount);
 
-            foreach (var fixture in sortedFixtures)
+            for (var offset = 0; offset < sortedFixtures.Count; offset += batchSize)
             {
-                _logger.LogDebug("removing markets for fixture id: {id} [{fixtureId}]", fixture.Id, fixture.FiId);
-                var marketCollectionFilter = Builders<Market>.Filter.Where(c => c.FiId == fixture.FiId);
-                await _marketCollection.DeleteManyAsync(marketCollectionFilter);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // stop when the maintenance window closes; the worker re-dispatches in the next window
+                var hour = DateTime.UtcNow.TimeOfDay.Hours;
+                if (hour < startHour || hour >= endHour)
+                {
+                    _logger.LogInformation("UTC window closed, stopping with {remaining} fixture(s) left for the next run",
+                            sortedFixtures.Count - offset);
+                    break;
+                }
+
+                var batch = sortedFixtures.Skip(offset).Take(batchSize).ToList();
+                var fixtureIds = batch.Select(b => b.FiId).ToArray();
+
+                _logger.LogDebug("removing markets for {count} fixture(s)", batch.Count);
+                var marketCollectionFilter = Builders<Market>.Filter.In(c => c.FiId, fixtureIds);
+                var marketResult = await _marketCollection.DeleteManyAsync(marketCollectionFilter, cancellationToken);
 
                 _logger.LogDebug("removing selections");
-                var selectionCollectionFilter = Builders<Selection>.Filter.Where(c => c.FiId == fixture.FiId);
-                await _selectionCollection.DeleteManyAsync(selectionCollectionFilter);
+                var selectionCollectionFilter = Builders<Selection>.Filter.In(c => c.FiId, fixtureIds);
+                var selectionResult = await _selectionCollection.DeleteManyAsync(selectionCollectionFilter, cancellationToken);
 
                 // mappings collections
 
-                // finally remove the fixture
-                var fixtureCollectionFilter = Builders<Fixture>.Filter.Where(c => c.FiId == fixture.FiId);
-                await _fixtureCollection.DeleteOneAsync(fixtureCollectionFilter);
+                // finally remove the fixtures
+                var fixtureCollectionFilter = Builders<Fixture>.Filter.In(c => c.FiId, fixtureIds);
+                var fixtureResult = await _fixtureCollection.DeleteManyAsync(fixtureCollectionFilter, cancellationToken);
 
                 if (_jobRunFixturesDeleted.Enabled)
-                    _jobRunFixturesDeleted.Add(1);
+                    _jobRunFixturesDeleted.Add(fixtureResult.DeletedCount);
 
-                _logger.LogInformation("Removed from Fixture: SportId={sportId} Remaining = {remaining}",
-                        fixture.SpId, totalCount--);
+                _logger.LogInformation("Removed batch: Fixtures={fixtures} Markets={markets} Selections={selections} Remaining={remaining}",
+                        fixtureResult.DeletedCount, marketResult.DeletedCount, selectionResult.DeletedCount,
+                        Math.Max(0, sortedFixtures.Count - offset - batch.Count));
 
-                // delete in batch of 1000s
-                if (totalCount % 1000 == 0)
-                {
-                    _logger.LogInformation("sleeping for 60 seconds before proceeding");
-                    await Task.Delay(60000);
-                }
+                if (offset + batchSize < sortedFixtures.Count)
+                    await Task.Delay(batchDelayMs, cancellationToken);
             }
 
             _logger.LogDebug("cleanup crew completed the job");
