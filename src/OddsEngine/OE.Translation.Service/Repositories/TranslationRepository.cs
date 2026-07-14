@@ -310,7 +310,7 @@ namespace OE.Translation.Service.Repositories
 
                 if (dict.TryGetValue(item.id, out var entity))
                 {
-                    if (entity.SourceText != sourceText)
+                    if (!string.Equals(entity.SourceText, sourceText, StringComparison.OrdinalIgnoreCase))
                     {
                         // Genuine name change: stale targets are cleared and the row goes back
                         // on the pipeline's worklist (PROCESSED = 0) so every configured
@@ -320,6 +320,14 @@ namespace OE.Translation.Service.Repositories
                         entity.TargetTextEs = string.Empty;
                         entity.TargetTextFr = string.Empty;
                         entity.Processed = false;
+                    }
+                    else if (!string.Equals(entity.SourceText, sourceText, StringComparison.Ordinal))
+                    {
+                        // Case-only drift ("Odd or Even Total" -> the feed's "Odd Or Even Total"):
+                        // align SOURCE_TEXT with the live feed WITHOUT discarding the targets —
+                        // translations are case-independent, and clearing them here would wipe
+                        // valid work for a cosmetic difference (2026-07-14 prod incident).
+                        entity.SourceText = sourceText;
                     }
 
                     // Liveness touch (throttled to ~once per cache TTL because cached keys never

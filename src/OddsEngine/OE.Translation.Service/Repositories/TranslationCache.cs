@@ -31,8 +31,15 @@ namespace OE.Translation.Service.Repositories
         // SOURCE_TEXT -> translation list, built once at preload from the same rows as
         // _translations. Content-addressed fallback for a STRING_ID miss or rename: reuses an
         // existing translation for identical English text under a different STRING_ID rather than
-        // waiting on the external pipeline to re-translate from scratch.
-        private readonly ConcurrentDictionary<string, List<TranslationMessage>> _translationsByText = new();
+        // waiting on the external pipeline to re-translate from scratch. Case-insensitive: a
+        // case-only variant is the same text — translations don't depend on English casing.
+        private readonly ConcurrentDictionary<string, List<TranslationMessage>> _translationsByText = new(StringComparer.OrdinalIgnoreCase);
+
+        // Keys whose STRING_ID hit was rejected by the rename guard and served untranslated —
+        // logged once per key per process lifetime so a stale SOURCE_TEXT is visible in logs
+        // instead of silently rendering English (see the 2026-07-14 'Odd Or Even Total' incident:
+        // a seeded SOURCE_TEXT that mismatched the live feed name was invisible for days).
+        private readonly ConcurrentDictionary<string, byte> _rejectedSourceTextLogged = new();
 
         // Fixed language set of the flat TranslationCache2 schema (TARGET_TEXT_ZH/_ES/_FR).
         // Adding a language is a schema change + code change here.
@@ -103,16 +110,21 @@ namespace OE.Translation.Service.Repositories
             if (string.IsNullOrEmpty(stringId))
                 return null;
 
+            string? cachedText = null;
+
             if (_translations.TryGetValue(stringId, out var translations))
             {
                 // Only rows seen at preload have a tracked SOURCE_TEXT to compare against; rows
                 // seeded purely via ON_TRANSLATION_CHANGE deltas after startup have none and are
                 // trusted as-is (unchanged from pre-fallback behavior). A tracked mismatch means
                 // the feed renamed this entity — fall through to the content match below instead.
+                // The comparison is case-insensitive: a case-only variant ("Odd or Even Total" vs
+                // the feed's "Odd Or Even Total") is the same text, not a rename — treating it as
+                // one permanently orphaned valid translations (2026-07-14 prod incident).
                 // An empty currentText (market/coverage-derived messages don't carry team/league
                 // names — see BG.Receiver.Service.OddsFeedRepository.ProcessMarkets/ProcessCoverage)
                 // is "no information to compare," not a rename — trust the cached row as-is.
-                if (string.IsNullOrEmpty(currentText) || !_sourceTextByStringId.TryGetValue(stringId, out var cachedText) || cachedText == currentText)
+                if (string.IsNullOrEmpty(currentText) || !_sourceTextByStringId.TryGetValue(stringId, out cachedText) || string.Equals(cachedText, currentText, StringComparison.OrdinalIgnoreCase))
                     return translations;
 
                 // Co:{CompId} is shared by every selection tied to one competitor, but a
@@ -124,7 +136,7 @@ namespace OE.Translation.Service.Repositories
                 // (a pure score/margin digit), or the narrow Winning Margin " by N"/" by N+" shape,
                 // so a genuine rename to an unrelated name that coincidentally shares a prefix
                 // still falls through to the rename path below instead of being spliced.
-                if (!string.IsNullOrEmpty(cachedText) && currentText.StartsWith(cachedText, StringComparison.Ordinal))
+                if (!string.IsNullOrEmpty(cachedText) && currentText.StartsWith(cachedText, StringComparison.OrdinalIgnoreCase))
                 {
                     var suffix = currentText.Substring(cachedText.Length);
 
@@ -138,6 +150,11 @@ namespace OE.Translation.Service.Repositories
             // scratch.
             if (!string.IsNullOrEmpty(currentText) && _translationsByText.TryGetValue(currentText, out var byText))
                 return byText;
+
+            // A translated row exists for this key but was rejected as renamed and nothing else
+            // matched — the entity renders untranslated until the pipeline re-translates it.
+            if (translations != null && _rejectedSourceTextLogged.TryAdd(stringId, 0))
+                _logger.LogWarning($"Translation for {stringId} not served: cached SOURCE_TEXT '{cachedText}' no longer matches live text '{currentText}' — rendering untranslated until re-translation");
 
             return null;
         }

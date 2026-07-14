@@ -157,6 +157,36 @@ namespace OE.Translation.Service.Tests
             Assert.False(updated.Processed); // back on the pipeline's worklist
         }
 
+        // 2026-07-14 prod incident ("Odd Or Even Total"): TranslationCache2 rows seeded with a
+        // SOURCE_TEXT whose casing differed from the live feed name made every sighting look like
+        // a rename. A case-only variant is the same text — align SOURCE_TEXT with the feed but
+        // never discard the targets for it (the old behavior would have wiped 266 valid ZH
+        // translations the moment CacheSeed was enabled in prod).
+        [Fact]
+        public async Task FixtureUpdate_SourceCaseOnlyChange_AlignsSourceTextWithoutClearingTargets()
+        {
+            var (repository, provider) = CreateRepository(nameof(FixtureUpdate_SourceCaseOnlyChange_AlignsSourceTextWithoutClearingTargets));
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage(homeName: "Arsenal fc"));
+
+            using (var context = GetContext(provider))
+            {
+                var row = context.TranslationCache2.Single(r => r.StringId == "Te:H1");
+                row.TargetTextZh = "阿森纳"; // the external pipeline translated it in the meantime
+                row.Processed = true;
+                context.SaveChanges();
+            }
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage(homeName: "Arsenal FC"));
+
+            using var verify = GetContext(provider);
+            var updated = verify.TranslationCache2.Single(r => r.StringId == "Te:H1");
+
+            Assert.Equal("Arsenal FC", updated.SourceText); // re-cased to match the live feed
+            Assert.Equal("阿森纳", updated.TargetTextZh);   // translation preserved
+            Assert.True(updated.Processed);                 // NOT reopened on the pipeline's worklist
+        }
+
         [Fact]
         public async Task FixtureUpdate_UnchangedSource_LivenessTouchesUpdatedAtWithoutDuplicating()
         {

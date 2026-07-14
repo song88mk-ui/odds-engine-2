@@ -236,6 +236,58 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal(expected, translated!.Single().Tx);
         }
 
+        // 2026-07-14 prod incident: TranslationCache2 held "Odd or Even Total" (lowercase "or",
+        // inherited from the staging export) for MaTe:7354 while the live feed sends
+        // "Odd Or Even Total" — the case-sensitive rename guard rejected the row and the
+        // case-sensitive content fallback missed it, so the market rendered in English forever
+        // despite a valid ZH translation sitting in the table. A case-only variant is the same
+        // text, not a rename.
+        [Fact]
+        public void GetTranslations_CaseOnlySourceTextMismatch_IsNotARename_ServesCachedTranslation()
+        {
+            var cache = Cache(nameof(GetTranslations_CaseOnlySourceTextMismatch_IsNotARename_ServesCachedTranslation),
+                Row("MaTe:7354", zh: "总分奇数或偶数", sourceText: "Odd or Even Total"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("MaTe:7354", "Odd Or Even Total");
+
+            Assert.NotNull(translated);
+            Assert.Equal("总分奇数或偶数", translated.Single().Tx);
+        }
+
+        // The content-addressed fallback must tolerate case drift too: identical English text
+        // under a different STRING_ID is reusable regardless of casing.
+        [Fact]
+        public void GetTranslations_ContentFallbackMatchesCaseInsensitively()
+        {
+            var cache = Cache(nameof(GetTranslations_ContentFallbackMatchesCaseInsensitively),
+                Row("MaTe:7354", zh: "总分奇数或偶数", sourceText: "Odd or Even Total"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("MaTe:7934", "Odd Or Even Total");
+
+            Assert.NotNull(translated);
+            Assert.Equal("总分奇数或偶数", translated.Single().Tx);
+        }
+
+        // The name-plus-tail splice must also tolerate a case-only difference in the name part —
+        // same principle as the rename guard above.
+        [Fact]
+        public void GetTranslations_TailSpliceToleratesCaseOnlyPrefixDifference()
+        {
+            var cache = Cache(nameof(GetTranslations_TailSpliceToleratesCaseOnlyPrefixDifference),
+                Row("Co:96870", zh: "弗鲁米嫩塞", sourceText: "Fluminense Fc"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:96870", "Fluminense FC by 2");
+
+            Assert.NotNull(translated);
+            Assert.Equal("弗鲁米嫩塞 by 2", translated.Single().Tx);
+        }
+
         // A tail with letters that ISN'T the Winning Margin shape must still be treated as a
         // genuine rename, not spliced — otherwise the guard is meaningless.
         [Fact]
