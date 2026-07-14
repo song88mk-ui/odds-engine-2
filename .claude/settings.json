@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"[odds-engine-2] MANDATORY before responding: 1) consult CLAUDE.md + AGENTS.md and follow the 13-step Standard Workflow; 2) trace in the actual code and cite file:line - do NOT answer from memory; 3) label every claim verified/assumption/unknown and never guess; 4) explain the plan and wait for approval before any architectural change, then make the smallest possible change; 5) production is READ-ONLY - no queries, deploys, schema changes, or cache invalidations unless explicitly instructed; 6) if architecture changed, update docs + CLAUDE.md/AGENTS.md and summarize changes, risks, and validation.\"",
+            "statusMessage": "Loading odds-engine-2 workflow rules"
+          }
+        ]
+      }
+    ]
+  }
+}
