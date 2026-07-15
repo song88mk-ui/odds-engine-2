@@ -155,6 +155,12 @@ namespace OE.Translation.Service
             var messageType = ea.BasicProperties.Type;
             var correlationId = ea.BasicProperties.CorrelationId;
 
+            // Elapsed guard: the broker's consumer ack timeout (30 min) fires silently — a message
+            // that is merely SLOW must be visible in logs long before it becomes a redelivery
+            // storm (2026-07-15 prod incident). Complemented by the per-key/per-fixture progress
+            // logs inside ProcessTranslationChange for the one legitimately long message type.
+            var processingTimer = Stopwatch.StartNew();
+
             using (var activity = _activitySource.StartActivity($"{ea.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
                 try
                 {
@@ -187,6 +193,9 @@ namespace OE.Translation.Service
 
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", messageType));
+
+                    if (processingTimer.ElapsedMilliseconds > 5000)
+                        _logger.LogWarning("Slow message: {MessageType} took {ElapsedMs}ms ({PayloadLength} chars)", messageType, processingTimer.ElapsedMilliseconds, payload.Length);
 
                     activity?.SetStatus(ActivityStatusCode.Ok);
                 }

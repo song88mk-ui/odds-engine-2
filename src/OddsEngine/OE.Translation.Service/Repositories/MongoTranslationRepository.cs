@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using System.Diagnostics;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
@@ -25,11 +26,12 @@ namespace OE.Translation.Service.Repositories
         private readonly IMongoCollection<MarketLookup> _marketLookupCollection;
 
         // Bounded retry for the update-only *NaTr stamp (see WriteFixtureTranslations/
-        // WriteMarketTranslations remarks): a brand-new document may not exist yet when this
-        // write runs, racing OE.Sportsbook.Service's own upsert for the same message. 5 attempts
-        // x 200ms bounds the wait to ~800ms worst case instead of depending on an unrelated
-        // future message to heal it.
-        private const int TR_WRITE_RETRY_ATTEMPTS = 5;
+        // BulkWriteWithSingleRetry remarks): a brand-new document may not exist yet when this
+        // write runs, racing OE.Sportsbook.Service's own upsert for the same message. ONE retry
+        // after a short delay — the previous 5 x 200ms per-document loop multiplied across the
+        // selections of every market message and crawled the consumer under backlog
+        // (2026-07-15 prod incident). A message that still misses heals on the next message.
+        private const int TR_WRITE_RETRY_ATTEMPTS = 2;
         private static readonly TimeSpan TR_WRITE_RETRY_DELAY = TimeSpan.FromMilliseconds(200);
 
         // "Active" per docs/BusinessGlossary.md — excludes fixtures that have concluded one way or
@@ -124,6 +126,14 @@ namespace OE.Translation.Service.Repositories
             // Fixture-level keys ride the market message too (same taxonomy fields).
             WriteFixtureTranslations(message);
 
+            // One unordered BulkWrite per collection per MESSAGE, not one round-trip per document:
+            // per-selection UpdateOneWithRetry throttled the consumer to a fraction of the feed's
+            // message rate and starved q.oe.translation (2026-07-15 prod incident) — a market
+            // message can carry hundreds of selections. Same writes, same _id filters (indexed),
+            // same update-only semantics; see BulkWriteWithSingleRetry for the race handling.
+            var marketWrites = new List<WriteModel<Market>>();
+            var selectionWrites = new List<WriteModel<Selection>>();
+
             foreach (var market in message.Ma)
             {
                 if (market == null)
@@ -133,8 +143,10 @@ namespace OE.Translation.Service.Repositories
 
                 if (maTeTr != null)
                 {
-                    var update = Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList());
-                    UpdateOneWithRetry(_marketCollection, Builders<Market>.Filter.Eq("Id", market.Id), update, $"Market {market.Id}");
+                    marketWrites.Add(new UpdateOneModel<Market>(
+                        Builders<Market>.Filter.Eq("Id", market.Id),
+                        Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
+                    { IsUpsert = false });
                 }
 
                 if (market.Se == null)
@@ -151,10 +163,43 @@ namespace OE.Translation.Service.Repositories
 
                     if (seNaTr != null)
                     {
-                        var update = Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList());
-                        UpdateOneWithRetry(_selectionCollection, Builders<Selection>.Filter.Eq("Id", selection.Id), update, $"Selection {selection.Id}");
+                        selectionWrites.Add(new UpdateOneModel<Selection>(
+                            Builders<Selection>.Filter.Eq("Id", selection.Id),
+                            Builders<Selection>.Update.Set(s => s.SeNaTr, seNaTr.Select(t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx }).ToList()))
+                        { IsUpsert = false });
                     }
                 }
+            }
+
+            BulkWriteWithSingleRetry(_marketCollection, marketWrites, $"markets of fixture {message.FiId}");
+            BulkWriteWithSingleRetry(_selectionCollection, selectionWrites, $"selections of fixture {message.FiId}");
+        }
+
+        // Update-only stamp for a whole message: one unordered bulk attempt, and — only when some
+        // documents matched nothing (the brand-new-document race against OE.Sportsbook.Service's
+        // upsert) — ONE short delay and one idempotent re-run of the same bulk. Bounds the race
+        // wait to a single TR_WRITE_RETRY_DELAY per MESSAGE instead of the retired
+        // per-document retry loop (5 x 200ms per selection), which is what crawled under backlog.
+        // A still-unmatched document falls back to the documented heal-on-next-message behavior.
+        private void BulkWriteWithSingleRetry<TDoc>(IMongoCollection<TDoc> collection, List<WriteModel<TDoc>> writes, string description)
+        {
+            if (writes.Count == 0)
+                return;
+
+            var result = collection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+
+            if (result.MatchedCount >= writes.Count)
+                return;
+
+            Task.Delay(TR_WRITE_RETRY_DELAY).GetAwaiter().GetResult();
+
+            result = collection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+
+            if (result.MatchedCount < writes.Count)
+            {
+                _logger.LogWarning(
+                    "Translation stamp for {Description}: {Missing} of {Total} documents not found — will heal on the next message",
+                    description, writes.Count - result.MatchedCount, writes.Count);
             }
         }
 
@@ -530,16 +575,20 @@ namespace OE.Translation.Service.Repositories
 
             // Active + Suspended, matching PublishTranslationOnlyOddsChanges below — a suspended
             // market is still shown to players (just not bettable), so its selection name should
-            // stay correct too, not just Active ones.
+            // stay correct too, not just Active ones. FiId leads the filter so the whole query
+            // rides the (FiId, MaStId, MaTeId) index — an unprefixed CompId equality was a full
+            // collection scan (2026-07-15 incident class). Scope note: this bounds the cascade to
+            // the team's own open fixtures; a competitor selection referencing the team on some
+            // OTHER fixture (e.g. an outright) refreshes on that fixture's next market message
+            // instead.
             var affectedSelectionFilter = Builders<Selection>.Filter.And(
+                Builders<Selection>.Filter.In(s => s.FiId, teamFixtureIds),
+                Builders<Selection>.Filter.In(s => s.MaStId, openMarketStatusIds),
                 Builders<Selection>.Filter.Or(
                     Builders<Selection>.Filter.Eq(s => s.CompId, compId),
                     Builders<Selection>.Filter.And(
-                        Builders<Selection>.Filter.In(s => s.FiId, teamFixtureIds),
                         Builders<Selection>.Filter.Eq(s => s.CompId, null),
-                        Builders<Selection>.Filter.Regex(s => s.SeTeNa, new BsonRegularExpression(SelectionTranslationComposer.PositionalWordPattern, "i")))),
-                Builders<Selection>.Filter.In(s => s.MaStId, openMarketStatusIds),
-                Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
+                        Builders<Selection>.Filter.Regex(s => s.SeTeNa, new BsonRegularExpression(SelectionTranslationComposer.PositionalWordPattern, "i")))));
 
             var selections = _selectionCollection.Find(affectedSelectionFilter).ToList();
 
@@ -619,6 +668,25 @@ namespace OE.Translation.Service.Repositories
             if (deltasByKey.Count == 0)
                 return;
 
+            // Open-fixture scope for every Market/Selection write below, chosen for two reasons:
+            // (1) semantics — names on concluded fixtures stay as they stood at closure (bet
+            // history reads them; same freeze rule the token-template path already applies), and
+            // only Active/Suspended markets are player-visible; (2) performance — prefixing the
+            // Selection/Market filters with FiId IN (open fixtures) + MaStId lets them ride the
+            // existing (FiId, MaStId, MaTeId) index instead of scanning the full multi-million-
+            // document collections, which is what ground a ~100-key change for hours and piled up
+            // q.oe.translation (2026-07-15 prod incident). The Fixture collection itself is small
+            // (cleanup-bounded) and keeps unbounded updates.
+            var openFixtureIds = _fixtureCollection
+                .Find(Builders<Fixture>.Filter.Nin(f => f.FiStId, _terminalFixtureStatusIds))
+                .Project(f => f.FiId)
+                .ToList();
+
+            var openMarketStatusIds = new[] { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
+
+            var stopwatch = Stopwatch.StartNew();
+            _logger.LogInformationEx($"OnTranslationChange: applying {deltasByKey.Count} changed keys across {openFixtureIds.Count} open fixtures");
+
             var sportDeltas = new Dictionary<int, List<TranslationMessage>>();
             var segmentDeltas = new Dictionary<int, List<TranslationMessage>>();
             var leagueDeltas = new Dictionary<int, List<TranslationMessage>>();
@@ -626,6 +694,8 @@ namespace OE.Translation.Service.Repositories
             var marketTemplateDeltas = new Dictionary<string, List<TranslationMessage>>();
             var selectionTemplateDeltas = new Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>>();
             var competitorDeltas = new Dictionary<int, List<TranslationMessage>>();
+
+            var appliedKeys = 0;
 
             foreach (var entry in deltasByKey)
             {
@@ -659,13 +729,25 @@ namespace OE.Translation.Service.Repositories
                         break;
                     case "MaTe":
                         marketTemplateDeltas[id] = entry.Value;
-                        UpdateTranslationArray(_marketCollection, Builders<Market>.Filter.Eq(m => m.MaTeId, id), "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
+                        UpdateTranslationArray(
+                            _marketCollection,
+                            Builders<Market>.Filter.And(
+                                Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                                Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
+                                Builders<Market>.Filter.Eq(m => m.MaTeId, id)),
+                            "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
                         break;
                     case "Co" when int.TryParse(id, out var compId):
                         // Competitor-specific selection name (as-is, not a template) — mutually
                         // exclusive with SeTe: below, see docs/BusinessRules.md.
                         competitorDeltas[compId] = entry.Value;
-                        UpdateTranslationArray(_selectionCollection, Builders<Selection>.Filter.Eq(s => s.CompId, compId), "SeNaTr", entry.Value, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
+                        UpdateTranslationArray(
+                            _selectionCollection,
+                            Builders<Selection>.Filter.And(
+                                Builders<Selection>.Filter.In(s => s.FiId, openFixtureIds),
+                                Builders<Selection>.Filter.In(s => s.MaStId, openMarketStatusIds),
+                                Builders<Selection>.Filter.Eq(s => s.CompId, compId)),
+                            "SeNaTr", entry.Value, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
                         break;
                     case "SeTe":
                         // "SeTe:{MaTeId}:{SeTeId}" — SeTeId is the segment after the LAST colon.
@@ -678,39 +760,49 @@ namespace OE.Translation.Service.Repositories
                         var seTeId = id.Substring(lastSeparator + 1);
 
                         selectionTemplateDeltas[(maTeId, seTeId)] = entry.Value;
-                        UpdateSelectionTemplateTranslations(maTeId, seTeId, entry.Value);
+                        UpdateSelectionTemplateTranslations(maTeId, seTeId, entry.Value, openFixtureIds, openMarketStatusIds);
                         break;
                     default:
                         _logger.LogWarningEx($"OnTranslationChange: unrecognized STRING_ID format '{entry.Key}'");
                         break;
                 }
+
+                appliedKeys++;
+
+                // Progress heartbeat for LARGE changes only (script announces, mass edits) — the
+                // 2026-07-15 grind was invisible precisely because nothing logged between start
+                // and the 30-minute broker timeout.
+                if (deltasByKey.Count > 20 && appliedKeys % 20 == 0)
+                    _logger.LogInformationEx($"OnTranslationChange: {appliedKeys}/{deltasByKey.Count} keys applied ({stopwatch.ElapsedMilliseconds}ms elapsed)");
             }
 
             PublishTranslationOnlyOddsChanges(messageBroker, correlationId,
-                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas);
+                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, openFixtureIds);
+
+            _logger.LogInformationEx($"OnTranslationChange: completed {appliedKeys} keys in {stopwatch.ElapsedMilliseconds}ms");
         }
 
         // A SeTe: row is fixture-independent, but positional token templates ("Home or Draw")
         // stamp a COMPOSED SeNaTr that embeds each fixture's own translated team names (see
         // SelectionTranslationComposer) — one blanket UpdateMany with the raw template text would
-        // stomp every fixture's composed name. Split the population:
+        // stomp every fixture's composed name. Split the population (all of it scoped by the
+        // caller to open fixtures + Active/Suspended markets, which both freezes concluded
+        // fixtures' names for bet history AND rides the (FiId, MaStId, MaTeId) index):
         //  - selections that can't be token-composed (CompId-carrying or non-token SeTeNa) keep
-        //    the pre-existing blanket update: the raw delta text applies to them all identically;
-        //  - token selections on NON-terminal fixtures are recomputed per fixture, composing the
-        //    delta text with each fixture's Te: translations — same rule as the stamping side;
-        //  - token selections on TERMINAL fixtures are deliberately left alone: bet history reads
-        //    their SeNaTr, and keeping the composed name as it stood when the fixture concluded
-        //    beats regressing it to generic template text.
-        private void UpdateSelectionTemplateTranslations(string maTeId, string seTeId, List<TranslationMessage> deltas)
+        //    the blanket update: the raw delta text applies to them all identically;
+        //  - token selections are recomputed per fixture, composing the delta text with each
+        //    fixture's Te: translations — same rule as the stamping side.
+        private void UpdateSelectionTemplateTranslations(string maTeId, string seTeId, List<TranslationMessage> deltas, List<long> openFixtureIds, int[] openMarketStatusIds)
         {
             var templatePair = Builders<Selection>.Filter.And(
+                Builders<Selection>.Filter.In(s => s.FiId, openFixtureIds),
+                Builders<Selection>.Filter.In(s => s.MaStId, openMarketStatusIds),
                 Builders<Selection>.Filter.Eq(s => s.MaTeId, maTeId),
                 Builders<Selection>.Filter.Eq(s => s.SeTeId, seTeId));
 
             var tokenSelectionFilter = Builders<Selection>.Filter.And(
                 Builders<Selection>.Filter.Eq(s => s.CompId, null),
-                Builders<Selection>.Filter.Regex(s => s.SeTeNa, new BsonRegularExpression(SelectionTranslationComposer.PositionalWordPattern, "i")),
-                Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
+                Builders<Selection>.Filter.Regex(s => s.SeTeNa, new BsonRegularExpression(SelectionTranslationComposer.PositionalWordPattern, "i")));
 
             UpdateTranslationArray(
                 _selectionCollection,
@@ -787,7 +879,8 @@ namespace OE.Translation.Service.Repositories
             Dictionary<string, List<TranslationMessage>> teamDeltas,
             Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
-            Dictionary<int, List<TranslationMessage>> competitorDeltas)
+            Dictionary<int, List<TranslationMessage>> competitorDeltas,
+            List<long> openFixtureIds)
         {
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
             var fixtureFilters = new List<FilterDefinition<Fixture>>();
@@ -807,12 +900,19 @@ namespace OE.Translation.Service.Repositories
                 fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.AwId, teamDeltas.Keys));
             }
 
+            // All three discovery queries lead with FiId IN (open fixtures) + MaStId so they ride
+            // the (FiId, MaStId, MaTeId) index — only open fixtures get notified anyway (the
+            // affectedFilter below intersects _openFixtureStatusIds), so nothing is lost by not
+            // discovering concluded ones.
             if (marketTemplateDeltas.Count > 0)
             {
                 var maTeIds = marketTemplateDeltas.Keys.ToList();
 
                 var fixtureIds = _marketCollection
-                    .Find(m => maTeIds.Contains(m.MaTeId) && marketStatusIds.Contains(m.MaStId))
+                    .Find(Builders<Market>.Filter.And(
+                        Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                        Builders<Market>.Filter.In(m => m.MaStId, marketStatusIds),
+                        Builders<Market>.Filter.In(m => m.MaTeId, maTeIds)))
                     .Project(m => m.FiId)
                     .ToList()
                     .Distinct()
@@ -831,7 +931,10 @@ namespace OE.Translation.Service.Repositories
                     .ToList();
 
                 var fixtureIds = _selectionCollection
-                    .Find(Builders<Selection>.Filter.Or(pairFilters))
+                    .Find(Builders<Selection>.Filter.And(
+                        Builders<Selection>.Filter.In(s => s.FiId, openFixtureIds),
+                        Builders<Selection>.Filter.In(s => s.MaStId, marketStatusIds),
+                        Builders<Selection>.Filter.Or(pairFilters)))
                     .Project(s => s.FiId)
                     .ToList()
                     .Distinct()
@@ -843,10 +946,13 @@ namespace OE.Translation.Service.Repositories
 
             if (competitorDeltas.Count > 0)
             {
-                var compIds = competitorDeltas.Keys.ToList();
+                var compIds = competitorDeltas.Keys.Select(c => (int?)c).ToList();
 
                 var fixtureIds = _selectionCollection
-                    .Find(s => s.CompId != null && compIds.Contains(s.CompId.Value))
+                    .Find(Builders<Selection>.Filter.And(
+                        Builders<Selection>.Filter.In(s => s.FiId, openFixtureIds),
+                        Builders<Selection>.Filter.In(s => s.MaStId, marketStatusIds),
+                        Builders<Selection>.Filter.In(s => s.CompId, compIds)))
                     .Project(s => s.FiId)
                     .ToList()
                     .Distinct()
@@ -867,8 +973,17 @@ namespace OE.Translation.Service.Repositories
 
             _logger.LogInformationEx($"OnTranslationChange: notifying {affectedFixtures.Count} open fixtures");
 
+            var notified = 0;
+
             foreach (var fixture in affectedFixtures)
             {
+                notified++;
+
+                // Same rationale as the per-key progress log: a large fan-out (each fixture costs
+                // three Mongo reads + a publish) must be visibly progressing, not silent.
+                if (affectedFixtures.Count > 200 && notified % 200 == 0)
+                    _logger.LogInformationEx($"OnTranslationChange: notified {notified}/{affectedFixtures.Count} fixtures");
+
                 var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == fixture.FiId && marketStatusIds.Contains(c.MaStId));
                 var markets = _marketCollection.Find(marketFilter).ToList();
 
