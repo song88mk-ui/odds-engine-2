@@ -158,7 +158,23 @@ namespace OE.Adapter.Service.Repositories
                 selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, market.MaTeId, market.IsHa,
                 message.HoId, message.HoNa, message.AwId, message.AwNa);
 
-            return _translationCache.GetTranslations(key.StringId, key.SourceText);
+            var translations = _translationCache.GetTranslations(key.StringId, key.SourceText);
+
+            // Positional token templates ("Home or Draw") share one SeTe: row across fixtures, so
+            // the raw translation reads generic (主队胜或平局) while the English SeNa carries the
+            // fixture's own teams — swap the translated tokens for the fixture's translated team
+            // names. Every SeNaTr producer must apply this identically (see
+            // SelectionTranslationComposer) or REST and websocket text diverge.
+            if (translations != null && SelectionTranslationComposer.RequiresTeamTokenComposition(key.StringId, selection.SeTeNa))
+            {
+                translations = SelectionTranslationComposer.ComposeTeamTokens(
+                    translations,
+                    selection.SeTeNa,
+                    _translationCache.GetTranslations($"Te:{message.HoId}", message.HoNa),
+                    _translationCache.GetTranslations($"Te:{message.AwId}", message.AwNa));
+            }
+
+            return translations;
         }
 
         private FixtureStatus GetFixtureStatus(int fixtureStatusId)

@@ -214,6 +214,110 @@ namespace OE.Translation.Service.Tests
             Assert.Same(selectionTemplateDeltas[("MT1", "ST1")], payload.Ma[0].Se[0].SeNaTr);
         }
 
+        // 2026-07-15: positional token selections ("Home or Draw") carry a COMPOSED SeNaTr that
+        // embeds the fixture's translated team names (see SelectionTranslationComposer) — a SeTe:
+        // template edit must therefore compose the delta per fixture, not forward raw template
+        // text. The English SeTeNa comes in via seTeNaByTemplate (the payload doesn't carry it).
+        [Fact]
+        public void ApplyTranslationDeltas_TokenTemplateDelta_ComposesFixtureTeamNamesOverTheDelta()
+        {
+            var fixture = MakeFixture(hoId: "H1", awId: "A1");
+            fixture.HoNa = "Korona Kielce";
+            fixture.AwNa = "Stal Rzeszów";
+            var payload = MakePayload();
+            var selectionTemplateDeltas = new Dictionary<(string, string), List<TranslationMessage>> { [("MT1", "ST1")] = Delta("主队胜或平局") };
+            var translationCache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Te:H1"] = Delta("凯尔采"),
+                ["Te:A1"] = Delta("斯塔尔热舒夫")
+            });
+            var seTeNaByTemplate = new Dictionary<(string MaTeId, string SeTeId), string> { [("MT1", "ST1")] = "Home or Draw" };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: selectionTemplateDeltas,
+                translationCache: translationCache,
+                seTeNaByTemplate: seTeNaByTemplate);
+
+            Assert.Equal("凯尔采胜或平局", payload.Ma[0].Se[0].SeNaTr!.Single().Tx);
+        }
+
+        // A TEAM-name edit must refresh token selections too: the template itself didn't change,
+        // so the template text is re-read from the (already Apply'd) cache and recomposed with
+        // the new team translation.
+        [Fact]
+        public void ApplyTranslationDeltas_TeamDeltaOnly_RecomposesTokenSelectionFromCachedTemplate()
+        {
+            var fixture = MakeFixture(hoId: "H1", awId: "A1");
+            fixture.HoNa = "Korona Kielce";
+            var payload = MakePayload();
+            var teamDeltas = new Dictionary<string, List<TranslationMessage>> { ["H1"] = Delta("新凯尔采") };
+            var translationCache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["SeTe:MT1:ST1"] = Delta("主队胜或平局"),
+                ["Te:H1"] = Delta("新凯尔采")
+            });
+            var seTeNaByTemplate = new Dictionary<(string MaTeId, string SeTeId), string> { [("MT1", "ST1")] = "Home or Draw" };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(),
+                teamDeltas: teamDeltas,
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                translationCache: translationCache,
+                seTeNaByTemplate: seTeNaByTemplate);
+
+            Assert.Equal("新凯尔采胜或平局", payload.Ma[0].Se[0].SeNaTr!.Single().Tx);
+        }
+
+        // A push about neither this template nor this fixture's teams leaves the token selection
+        // null — consumers keep whatever they already display.
+        [Fact]
+        public void ApplyTranslationDeltas_TokenSelectionWithUnrelatedPush_LeavesSeNaTrNull()
+        {
+            var fixture = MakeFixture(hoId: "H1", awId: "A1");
+            var payload = MakePayload();
+            var teamDeltas = new Dictionary<string, List<TranslationMessage>> { ["UNRELATED-TEAM"] = Delta("别队") };
+            var translationCache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["SeTe:MT1:ST1"] = Delta("主队胜或平局")
+            });
+            var seTeNaByTemplate = new Dictionary<(string MaTeId, string SeTeId), string> { [("MT1", "ST1")] = "Home or Draw" };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(),
+                teamDeltas: teamDeltas,
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                translationCache: translationCache,
+                seTeNaByTemplate: seTeNaByTemplate);
+
+            Assert.Null(payload.Ma[0].Se[0].SeNaTr);
+        }
+
+        // Backward compatibility: without seTeNaByTemplate the token trigger can't fire and the
+        // raw selectionTemplateDeltas assignment applies — the pre-compose behavior.
+        [Fact]
+        public void ApplyTranslationDeltas_NoSeTeNaMapSupplied_FallsBackToRawTemplateDelta()
+        {
+            var fixture = MakeFixture(hoId: "H1", awId: "A1");
+            var payload = MakePayload();
+            var selectionTemplateDeltas = new Dictionary<(string, string), List<TranslationMessage>> { [("MT1", "ST1")] = Delta("主队胜或平局") };
+            var translationCache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Te:H1"] = Delta("凯尔采")
+            });
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: selectionTemplateDeltas,
+                translationCache: translationCache);
+
+            Assert.Same(selectionTemplateDeltas[("MT1", "ST1")], payload.Ma[0].Se[0].SeNaTr);
+        }
+
         // A competitor-name selection (e.g. Match Winner, where the selections ARE the two teams)
         // has CompId == the fixture's own HoId/AwId, which SelectionTranslationKeyResolver redirects
         // to Te:{HoId}/{AwId} instead of Co:{CompId} — this was the gap that left the selection's

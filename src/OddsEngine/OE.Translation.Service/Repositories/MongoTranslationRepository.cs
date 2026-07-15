@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
@@ -144,14 +145,9 @@ namespace OE.Translation.Service.Repositories
                     if (selection == null)
                         continue;
 
-                    // Which TranslationCache2 key backs SeNaTr — see
-                    // OE.Shared.Utilities.SelectionTranslationKeyResolver (shared with
-                    // OE.Adapter.Service.Repositories.TradingRepository's live enrichment).
-                    var key = SelectionTranslationKeyResolver.Resolve(
+                    var seNaTr = ResolveSelectionTranslations(
                         selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, market.MaTeId, market.IsHa,
                         message.HoId, message.HoNa, message.AwId, message.AwNa);
-
-                    var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
 
                     if (seNaTr != null)
                     {
@@ -160,6 +156,32 @@ namespace OE.Translation.Service.Repositories
                     }
                 }
             }
+        }
+
+        // Single lookup path for a selection's SeNaTr: which TranslationCache2 key backs it (see
+        // OE.Shared.Utilities.SelectionTranslationKeyResolver), then positional token
+        // personalization — a "Home or Draw"-style template gets this fixture's translated team
+        // names spliced over the shared template text (see SelectionTranslationComposer). Must stay
+        // behaviorally identical to OE.Adapter.Service.TradingRepository.GetSelectionTranslations
+        // (the live message enrichment) or Mongo-served REST text diverges from websocket text.
+        private List<TranslationMessage>? ResolveSelectionTranslations(
+            int? compId, string seNa, string seTeNa, string seTeId, string maTeId, bool isHa,
+            string hoId, string hoNa, string awId, string awNa)
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(compId, seNa, seTeNa, seTeId, maTeId, isHa, hoId, hoNa, awId, awNa);
+
+            var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
+
+            if (seNaTr != null && SelectionTranslationComposer.RequiresTeamTokenComposition(key.StringId, seTeNa))
+            {
+                seNaTr = SelectionTranslationComposer.ComposeTeamTokens(
+                    seNaTr,
+                    seTeNa,
+                    _translationCache.GetTranslations($"Te:{hoId}", hoNa),
+                    _translationCache.GetTranslations($"Te:{awId}", awNa));
+            }
+
+            return seNaTr;
         }
 
         // Writes the update-only *NaTr stamp, retrying briefly on a zero-match result instead of
@@ -458,14 +480,11 @@ namespace OE.Translation.Service.Repositories
 
                 var isHa = isHaByMaId.TryGetValue(selection.MaId, out var marketIsHa) && marketIsHa;
 
-                // Which TranslationCache2 key backs SeNaTr — see
-                // OE.Shared.Utilities.SelectionTranslationKeyResolver (shared with
-                // OE.Adapter.Service.Repositories.TradingRepository's live enrichment).
-                var key = SelectionTranslationKeyResolver.Resolve(
+                // Which TranslationCache2 key backs SeNaTr, plus positional token
+                // personalization — see ResolveSelectionTranslations (shared with the live stamp).
+                var seNaTr = ResolveSelectionTranslations(
                     selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, selection.MaTeId, isHa,
                     fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
-
-                var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
 
                 if (seNaTr != null)
                 {
@@ -490,17 +509,36 @@ namespace OE.Translation.Service.Repositories
         // the fixture's own participants), but their Selection.SeNaTr was never recomputed, so it
         // sat stale until the next unrelated odds/market update happened to rebuild it. Mirrors
         // BackfillSelections' resolver+cache pattern, scoped to just this team instead of a sweep.
+        // Also covers CompId-null positional token selections ("Home or Draw") on this team's
+        // fixtures: their composed SeNaTr embeds the team's translated name (see
+        // SelectionTranslationComposer), so a team edit must recompose them too.
         private int CascadeTeamTranslationToSelections(string teamId)
         {
             if (!int.TryParse(teamId, out var compId))
                 return 0;
 
+            var openMarketStatusIds = new[] { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
+
+            var teamFixtureIds = _fixtureCollection
+                .Find(Builders<Fixture>.Filter.And(
+                    Builders<Fixture>.Filter.Or(
+                        Builders<Fixture>.Filter.Eq(f => f.HoId, teamId),
+                        Builders<Fixture>.Filter.Eq(f => f.AwId, teamId)),
+                    Builders<Fixture>.Filter.Nin(f => f.FiStId, _terminalFixtureStatusIds)))
+                .Project(f => f.FiId)
+                .ToList();
+
             // Active + Suspended, matching PublishTranslationOnlyOddsChanges below — a suspended
             // market is still shown to players (just not bettable), so its selection name should
             // stay correct too, not just Active ones.
             var affectedSelectionFilter = Builders<Selection>.Filter.And(
-                Builders<Selection>.Filter.Eq(s => s.CompId, compId),
-                Builders<Selection>.Filter.In(s => s.MaStId, new[] { (int)MarketStatus.Active, (int)MarketStatus.Suspended }),
+                Builders<Selection>.Filter.Or(
+                    Builders<Selection>.Filter.Eq(s => s.CompId, compId),
+                    Builders<Selection>.Filter.And(
+                        Builders<Selection>.Filter.In(s => s.FiId, teamFixtureIds),
+                        Builders<Selection>.Filter.Eq(s => s.CompId, null),
+                        Builders<Selection>.Filter.Regex(s => s.SeTeNa, new BsonRegularExpression(SelectionTranslationComposer.PositionalWordPattern, "i")))),
+                Builders<Selection>.Filter.In(s => s.MaStId, openMarketStatusIds),
                 Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
 
             var selections = _selectionCollection.Find(affectedSelectionFilter).ToList();
@@ -531,11 +569,9 @@ namespace OE.Translation.Service.Repositories
 
                 var isHa = isHaByMaId.TryGetValue(selection.MaId, out var marketIsHa) && marketIsHa;
 
-                var key = SelectionTranslationKeyResolver.Resolve(
+                var seNaTr = ResolveSelectionTranslations(
                     selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, selection.MaTeId, isHa,
                     fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
-
-                var seNaTr = _translationCache.GetTranslations(key.StringId, key.SourceText);
 
                 if (seNaTr != null)
                 {
@@ -642,12 +678,7 @@ namespace OE.Translation.Service.Repositories
                         var seTeId = id.Substring(lastSeparator + 1);
 
                         selectionTemplateDeltas[(maTeId, seTeId)] = entry.Value;
-                        UpdateTranslationArray(
-                            _selectionCollection,
-                            Builders<Selection>.Filter.And(
-                                Builders<Selection>.Filter.Eq(s => s.MaTeId, maTeId),
-                                Builders<Selection>.Filter.Eq(s => s.SeTeId, seTeId)),
-                            "SeNaTr", entry.Value, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
+                        UpdateSelectionTemplateTranslations(maTeId, seTeId, entry.Value);
                         break;
                     default:
                         _logger.LogWarningEx($"OnTranslationChange: unrecognized STRING_ID format '{entry.Key}'");
@@ -657,6 +688,68 @@ namespace OE.Translation.Service.Repositories
 
             PublishTranslationOnlyOddsChanges(messageBroker, correlationId,
                 sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas);
+        }
+
+        // A SeTe: row is fixture-independent, but positional token templates ("Home or Draw")
+        // stamp a COMPOSED SeNaTr that embeds each fixture's own translated team names (see
+        // SelectionTranslationComposer) — one blanket UpdateMany with the raw template text would
+        // stomp every fixture's composed name. Split the population:
+        //  - selections that can't be token-composed (CompId-carrying or non-token SeTeNa) keep
+        //    the pre-existing blanket update: the raw delta text applies to them all identically;
+        //  - token selections on NON-terminal fixtures are recomputed per fixture, composing the
+        //    delta text with each fixture's Te: translations — same rule as the stamping side;
+        //  - token selections on TERMINAL fixtures are deliberately left alone: bet history reads
+        //    their SeNaTr, and keeping the composed name as it stood when the fixture concluded
+        //    beats regressing it to generic template text.
+        private void UpdateSelectionTemplateTranslations(string maTeId, string seTeId, List<TranslationMessage> deltas)
+        {
+            var templatePair = Builders<Selection>.Filter.And(
+                Builders<Selection>.Filter.Eq(s => s.MaTeId, maTeId),
+                Builders<Selection>.Filter.Eq(s => s.SeTeId, seTeId));
+
+            var tokenSelectionFilter = Builders<Selection>.Filter.And(
+                Builders<Selection>.Filter.Eq(s => s.CompId, null),
+                Builders<Selection>.Filter.Regex(s => s.SeTeNa, new BsonRegularExpression(SelectionTranslationComposer.PositionalWordPattern, "i")),
+                Builders<Selection>.Filter.Nin(s => s.FiStId, _terminalFixtureStatusIds));
+
+            UpdateTranslationArray(
+                _selectionCollection,
+                Builders<Selection>.Filter.And(templatePair, Builders<Selection>.Filter.Not(tokenSelectionFilter)),
+                "SeNaTr", deltas, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
+
+            var tokenSelections = _selectionCollection
+                .Find(Builders<Selection>.Filter.And(templatePair, tokenSelectionFilter))
+                .Project(s => new { s.Id, s.FiId, s.SeTeNa })
+                .ToList();
+
+            if (tokenSelections.Count == 0)
+                return;
+
+            var fiIds = tokenSelections.Select(s => s.FiId).Distinct().ToList();
+            var fixturesById = _fixtureCollection
+                .Find(Builders<Fixture>.Filter.In(f => f.FiId, fiIds))
+                .Project(f => new { f.FiId, f.HoId, f.HoNa, f.AwId, f.AwNa })
+                .ToList()
+                .ToDictionary(f => f.FiId);
+
+            foreach (var selection in tokenSelections)
+            {
+                if (!fixturesById.TryGetValue(selection.FiId, out var fixture))
+                    continue; // no fixture to compose against — heals on the next message
+
+                // Compose over the DELTA (not a cache re-read): an empty Tx entry must survive as
+                // a removal marker so that language is pulled, mirroring the blanket path.
+                var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                    deltas,
+                    selection.SeTeNa,
+                    _translationCache.GetTranslations($"Te:{fixture.HoId}", fixture.HoNa),
+                    _translationCache.GetTranslations($"Te:{fixture.AwId}", fixture.AwNa)) ?? deltas;
+
+                UpdateTranslationArray(
+                    _selectionCollection,
+                    Builders<Selection>.Filter.Eq(s => s.Id, selection.Id),
+                    "SeNaTr", composed, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
+            }
         }
 
         #endregion
@@ -784,7 +877,14 @@ namespace OE.Translation.Service.Repositories
 
                 var payload = PrepareTranslationOddsChangeMessage(fixture, markets, selections, correlationId);
 
-                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache);
+                // English template text per (MaTeId, SeTeId), for the token-composition trigger —
+                // the payload itself doesn't carry SeTeNa (see ApplyTranslationDeltas).
+                var seTeNaByTemplate = selections
+                    .Where(s => !string.IsNullOrEmpty(s.MaTeId) && !string.IsNullOrEmpty(s.SeTeId) && !string.IsNullOrEmpty(s.SeTeNa))
+                    .GroupBy(s => (s.MaTeId, s.SeTeId))
+                    .ToDictionary(g => g.Key, g => g.First().SeTeNa);
+
+                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache, seTeNaByTemplate);
 
                 messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
             }
@@ -804,7 +904,13 @@ namespace OE.Translation.Service.Repositories
             Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
             Dictionary<int, List<TranslationMessage>> competitorDeltas = null,
-            ITranslationCache translationCache = null)
+            ITranslationCache translationCache = null,
+            // English SeTeNa per (MaTeId, SeTeId) pair, read off the fixture's Mongo Selection
+            // docs by the caller — the wire payload deliberately doesn't carry SeTeNa, but the
+            // token-composition trigger needs the English template text (see
+            // SelectionTranslationComposer). Null-safe: without it, token selections simply
+            // fall through to the raw selectionTemplateDeltas assignment (pre-compose behavior).
+            IReadOnlyDictionary<(string MaTeId, string SeTeId), string> seTeNaByTemplate = null)
         {
             competitorDeltas ??= new Dictionary<int, List<TranslationMessage>>();
 
@@ -838,6 +944,47 @@ namespace OE.Translation.Service.Repositories
                             fixture.HoId, fixture.HoNa, fixture.AwId, fixture.AwNa);
 
                         selection.SeNaTr = translationCache.GetTranslations(key.StringId, key.SourceText);
+                        continue;
+                    }
+
+                    // Positional token selections ("Home or Draw"): the stamped SeNaTr embeds the
+                    // fixture's translated team names, so the outgoing delta must carry the same
+                    // COMPOSED text — raw template text would visibly regress connected clients to
+                    // generic names until the next full odds change. Recompute when this push
+                    // changed the template itself or either of the fixture's two team names.
+                    var seTeNa = seTeNaByTemplate != null && selection.MaTeId != null && selection.SeTeId != null
+                        && seTeNaByTemplate.TryGetValue((selection.MaTeId, selection.SeTeId), out var templateName)
+                            ? templateName
+                            : null;
+
+                    if (translationCache != null && selection.CompId == null
+                        && SelectionTranslationComposer.RequiresTeamTokenComposition($"SeTe:{selection.MaTeId}:{selection.SeTeId}", seTeNa))
+                    {
+                        List<TranslationMessage> templateDeltas = null;
+                        var templateChanged = selectionTemplateDeltas.TryGetValue((selection.MaTeId, selection.SeTeId), out templateDeltas);
+                        var teamChanged = (fixture.HoId != null && teamDeltas.ContainsKey(fixture.HoId))
+                            || (fixture.AwId != null && teamDeltas.ContainsKey(fixture.AwId));
+
+                        if (templateChanged || teamChanged)
+                        {
+                            // A template edit composes over the DELTA (preserves empty-Tx removal
+                            // markers); a team-only change re-reads the template from the cache,
+                            // which was Apply'd before this runs (see Worker's ON_TRANSLATION_CHANGE).
+                            var template = templateChanged
+                                ? templateDeltas
+                                : translationCache.GetTranslations($"SeTe:{selection.MaTeId}:{selection.SeTeId}", seTeNa);
+
+                            selection.SeNaTr = SelectionTranslationComposer.ComposeTeamTokens(
+                                template,
+                                seTeNa,
+                                translationCache.GetTranslations($"Te:{fixture.HoId}", fixture.HoNa),
+                                translationCache.GetTranslations($"Te:{fixture.AwId}", fixture.AwNa));
+                        }
+                        else
+                        {
+                            selection.SeNaTr = null; // this push isn't about this selection
+                        }
+
                         continue;
                     }
 

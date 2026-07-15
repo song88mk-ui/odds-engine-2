@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
+using OE.Shared.Messages.OutgoingAdapterMessages;
 
 namespace OE.Shared.Utilities
 {
@@ -138,6 +141,131 @@ namespace OE.Shared.Utilities
             }
 
             return new SelectionTranslationKey($"Co:{compId}", seNa);
+        }
+    }
+
+    // Companion to SelectionTranslationKeyResolver for the SeTe: bucket it can't personalize.
+    //
+    // A positional token template ("Home or Draw", "Home or Away", "Draw or Away", the
+    // "Home or Draw and Yes/No/Over/Under" combos, ...) stays keyed on the fixture-independent
+    // SeTe:{MaTeId}:{SeTeId} row — that sharing is what keeps TranslationCache2 small — but the
+    // English SeNa the vendor composes from it carries the fixture's own team names ("Korona
+    // Kielce or Draw"), so serving the raw translated template made non-EN read generic
+    // (主队胜或平局) where EN read team-specific. This composer swaps the translated positional
+    // tokens (ZH 主队/客队) for the fixture's own translated team names (the Te:{HoId}/Te:{AwId}
+    // rows) AFTER the template lookup, on the translated text:
+    //  - substituting on the ENGLISH side instead would produce a per-fixture source string that
+    //    has no TranslationCache2 row — the exact miss this design avoids;
+    //  - a token per language is only replaced when the English SeTeNa contains the matching
+    //    positional word AND that team's translation exists for that language; anything else
+    //    keeps the generic template text (today's behavior is the floor, never worse);
+    //  - always composes from the cached template translation, never from previously composed
+    //    output, so re-stamping is idempotent;
+    //  - returns NEW lists/items — cache lists are shared copy-on-write snapshots handed to
+    //    in-flight writes (see each service's TranslationCache) and must never be mutated.
+    //
+    // Every producer of a selection's SeNaTr must run this or the surfaces diverge (Mongo REST
+    // reads vs. the ungated websocket *Tr deltas): OE.Adapter.Service.TradingRepository
+    // (enrichment) and OE.Translation.Service.MongoTranslationRepository (live stamp, backfill,
+    // team cascade, ON_TRANSLATION_CHANGE persistence + payload).
+    public static class SelectionTranslationComposer
+    {
+        // Whole-word English trigger, mirrored server-side by PositionalWordPattern in Mongo
+        // filters — keep the two in sync.
+        public const string PositionalWordPattern = @"\b(Home|Away)\b";
+
+        private static readonly Regex PositionalWord = new Regex(PositionalWordPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex HomeWord = new Regex(@"\bHome\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex AwayWord = new Regex(@"\bAway\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // How the pipeline's translations render the positional words, per TARGET_TEXT_* language.
+        // ZH only today — ES/FR are not actively translated (TARGET_TEXT_ES/_FR empty by design),
+        // and an unmapped language passes through untouched. Same hardcoded-language precedent as
+        // the fixed LANGUAGE_ZH/ES/FR set in each service's TranslationCache.
+        private static readonly Dictionary<string, (string HomeToken, string AwayToken)> PositionalTokensByLanguage =
+            new Dictionary<string, (string HomeToken, string AwayToken)>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ZH"] = ("主队", "客队")
+            };
+
+        // One alternation regex per language, single-pass so replacement text is never rescanned
+        // (a team translation that happens to contain the other language token must not cascade).
+        private static readonly Dictionary<string, Regex> TokenPatternByLanguage =
+            new Dictionary<string, Regex>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ZH"] = new Regex("主队|客队", RegexOptions.Compiled)
+            };
+
+        // True when this selection's translation came from the shared SeTe: bucket AND its English
+        // template carries a positional word worth personalizing. CompId-null is implied: the
+        // resolver only ever returns a SeTe: key from its CompId-null branch.
+        public static bool RequiresTeamTokenComposition(string? stringId, string? seTeNa)
+        {
+            return stringId != null
+                && stringId.StartsWith("SeTe:", StringComparison.Ordinal)
+                && !string.IsNullOrEmpty(seTeNa)
+                && PositionalWord.IsMatch(seTeNa);
+        }
+
+        // Swaps each language's positional tokens for that language's translated team names.
+        // homeTranslations/awayTranslations are the Te:{HoId}/Te:{AwId} lookups from the SAME
+        // cache the template came from; pass null when a team has no translations at all.
+        public static List<TranslationMessage>? ComposeTeamTokens(
+            List<TranslationMessage>? templateTranslations,
+            string? seTeNa,
+            List<TranslationMessage>? homeTranslations,
+            List<TranslationMessage>? awayTranslations)
+        {
+            if (templateTranslations == null || templateTranslations.Count == 0 || string.IsNullOrEmpty(seTeNa))
+                return templateTranslations;
+
+            var hasHomeWord = HomeWord.IsMatch(seTeNa);
+            var hasAwayWord = AwayWord.IsMatch(seTeNa);
+
+            if (!hasHomeWord && !hasAwayWord)
+                return templateTranslations;
+
+            var composed = new List<TranslationMessage>(templateTranslations.Count);
+
+            foreach (var template in templateTranslations)
+                composed.Add(new TranslationMessage { LaCo = template.LaCo, Tx = ComposeText(template, hasHomeWord, hasAwayWord, homeTranslations, awayTranslations) });
+
+            return composed;
+        }
+
+        private static string ComposeText(
+            TranslationMessage template,
+            bool hasHomeWord,
+            bool hasAwayWord,
+            List<TranslationMessage>? homeTranslations,
+            List<TranslationMessage>? awayTranslations)
+        {
+            if (string.IsNullOrEmpty(template.Tx)
+                || template.LaCo == null
+                || !PositionalTokensByLanguage.TryGetValue(template.LaCo, out var tokens)
+                || !TokenPatternByLanguage.TryGetValue(template.LaCo, out var tokenPattern))
+                return template.Tx;
+
+            var homeName = hasHomeWord ? FindText(homeTranslations, template.LaCo) : null;
+            var awayName = hasAwayWord ? FindText(awayTranslations, template.LaCo) : null;
+
+            if (homeName == null && awayName == null)
+                return template.Tx;
+
+            return tokenPattern.Replace(template.Tx, match =>
+                match.Value == tokens.HomeToken && homeName != null ? homeName
+                : match.Value == tokens.AwayToken && awayName != null ? awayName
+                : match.Value);
+        }
+
+        private static string? FindText(List<TranslationMessage>? translations, string languageCode)
+        {
+            if (translations == null)
+                return null;
+
+            var text = translations.FirstOrDefault(t => string.Equals(t.LaCo, languageCode, StringComparison.OrdinalIgnoreCase))?.Tx;
+
+            return string.IsNullOrEmpty(text) ? null : text;
         }
     }
 }

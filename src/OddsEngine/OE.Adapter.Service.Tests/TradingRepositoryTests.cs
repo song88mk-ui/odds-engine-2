@@ -482,6 +482,103 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal("切尔西", selection.SeNaTr!.Single().Tx);
         }
 
+        // 2026-07-15 fix (prod fixture 1526096853784064000, "Korona Kielce vs. Stal Rzeszów"):
+        // positional token templates ("Home or Draw"/"Home or Away"/"Draw or Away") stay on the
+        // shared SeTe:{MaTeId}:{SeTeId} row, but the enriched SeNaTr must swap the translated
+        // tokens (主队/客队) for the fixture's own translated team names — EN showed
+        // "Korona Kielce or Draw" while ZH showed the generic 主队胜或平局.
+        [Fact]
+        public void MarketChange_TokenTemplateSelections_ComposeFixtureTeamNamesIntoSeNaTr()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "SeTe:7202:7", LaCo = "ZH", Tx = "主队胜或平局" },
+                new TranslationChangeItem { StId = "SeTe:7202:8", LaCo = "ZH", Tx = "主队或客队" },
+                new TranslationChangeItem { StId = "SeTe:7202:9", LaCo = "ZH", Tx = "平局或客队" },
+                new TranslationChangeItem { StId = "Te:117198", LaCo = "ZH", Tx = "凯尔采" },
+                new TranslationChangeItem { StId = "Te:139963", LaCo = "ZH", Tx = "斯塔尔热舒夫" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 10,
+                SegId = 2,
+                LeId = 682,
+                HoId = "117198",
+                HoNa = "Korona Kielce",
+                AwId = "139963",
+                AwNa = "Stal Rzeszów",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "142497214",
+                        MaTeId = "7202",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage { PrFiId = PROVIDER_FIXTURE_ID, PrMaId = "142497214", PrSeId = "S1", MaTeId = "7202", SeTeId = "7", SeTeNa = "Home or Draw", SeNa = "Korona Kielce or Draw" },
+                            new SelectionMessage { PrFiId = PROVIDER_FIXTURE_ID, PrMaId = "142497214", PrSeId = "S2", MaTeId = "7202", SeTeId = "8", SeTeNa = "Home or Away", SeNa = "Korona Kielce or Stal Rzeszów" },
+                            new SelectionMessage { PrFiId = PROVIDER_FIXTURE_ID, PrMaId = "142497214", PrSeId = "S3", MaTeId = "7202", SeTeId = "9", SeTeNa = "Draw or Away", SeNa = "Draw or Stal Rzeszów" }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            var selections = message.Ma.Single().Se;
+            Assert.Equal("凯尔采胜或平局", selections[0].SeNaTr!.Single().Tx);
+            Assert.Equal("凯尔采或斯塔尔热舒夫", selections[1].SeNaTr!.Single().Tx);
+            Assert.Equal("平局或斯塔尔热舒夫", selections[2].SeNaTr!.Single().Tx);
+        }
+
+        // Same token template, but the away team has no translation — its token stays generic
+        // (the pre-compose text is the floor, never worse).
+        [Fact]
+        public void MarketChange_TokenTemplateWithUntranslatedTeam_KeepsGenericTokenForThatTeam()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "SeTe:7202:8", LaCo = "ZH", Tx = "主队或客队" },
+                new TranslationChangeItem { StId = "Te:117198", LaCo = "ZH", Tx = "凯尔采" }
+            });
+
+            var message = new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = PROVIDER_FIXTURE_ID,
+                SpId = 10,
+                SegId = 2,
+                LeId = 682,
+                HoId = "117198",
+                HoNa = "Korona Kielce",
+                AwId = "999999",
+                AwNa = "Untranslated FC",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage
+                    {
+                        PrFiId = PROVIDER_FIXTURE_ID,
+                        PrMaId = "M9",
+                        MaTeId = "7202",
+                        IsHa = false,
+                        Se = new List<SelectionMessage>
+                        {
+                            new SelectionMessage { PrFiId = PROVIDER_FIXTURE_ID, PrMaId = "M9", PrSeId = "S1", MaTeId = "7202", SeTeId = "8", SeTeNa = "Home or Away", SeNa = "Korona Kielce or Untranslated FC" }
+                        }
+                    }
+                }
+            };
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            Assert.Equal("凯尔采或客队", message.Ma.Single().Se.Single().SeNaTr!.Single().Tx);
+        }
+
         // Cache-apply only (2026-07 translation-flow redesign): persistence + notification are
         // OE.Translation.Service's job — the adapter must NOT forward the message anywhere.
         [Fact]
