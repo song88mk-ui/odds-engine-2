@@ -126,6 +126,31 @@ namespace OE.Translation.Service.Repositories
             // Fixture-level keys ride the market message too (same taxonomy fields).
             WriteFixtureTranslations(message);
 
+            // Some feed paths deliver market messages WITHOUT the fixture's team ids — composing a
+            // positional token template with them missing stamps the GENERIC text over an already
+            // composed name (2026-07-15: the backlog heal composed ~1k selections and the next
+            // id-less message reverted them). The fixture document reliably carries HoId/AwId even
+            // when its name fields were nulled (AR-16 footprint), so fall back to it; one indexed
+            // read, only on the degraded path.
+            var hoId = message.HoId;
+            var hoNa = message.HoNa;
+            var awId = message.AwId;
+            var awNa = message.AwNa;
+
+            if (string.IsNullOrEmpty(hoId) || string.IsNullOrEmpty(awId))
+            {
+                var fixtureDoc = _fixtureCollection
+                    .Find(Builders<Fixture>.Filter.Eq(f => f.Id, message.Id))
+                    .Project(f => new { f.HoId, f.HoNa, f.AwId, f.AwNa })
+                    .FirstOrDefault();
+
+                if (fixtureDoc != null)
+                {
+                    if (string.IsNullOrEmpty(hoId)) { hoId = fixtureDoc.HoId; hoNa = fixtureDoc.HoNa; }
+                    if (string.IsNullOrEmpty(awId)) { awId = fixtureDoc.AwId; awNa = fixtureDoc.AwNa; }
+                }
+            }
+
             // One unordered BulkWrite per collection per MESSAGE, not one round-trip per document:
             // per-selection UpdateOneWithRetry throttled the consumer to a fraction of the feed's
             // message rate and starved q.oe.translation (2026-07-15 prod incident) — a market
@@ -159,7 +184,7 @@ namespace OE.Translation.Service.Repositories
 
                     var seNaTr = ResolveSelectionTranslations(
                         selection.CompId, selection.SeNa, selection.SeTeNa, selection.SeTeId, market.MaTeId, market.IsHa,
-                        message.HoId, message.HoNa, message.AwId, message.AwNa);
+                        hoId, hoNa, awId, awNa);
 
                     if (seNaTr != null)
                     {
