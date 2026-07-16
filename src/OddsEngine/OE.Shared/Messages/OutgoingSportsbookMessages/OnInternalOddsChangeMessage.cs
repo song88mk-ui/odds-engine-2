@@ -55,6 +55,11 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public List<TranslationMessage> LeTr { get; set; }
         public List<TranslationMessage> HoTr { get; set; }
         public List<TranslationMessage> AwTr { get; set; }
+
+        // Player roster — property name intentionally matches OnFixtureChangeMessage.Pl because
+        // OE.Websocket.Service deserializes ON_ODDS_CHANGE as OnMarketChangeMessage. Null means
+        // "unchanged or none" and consumers keep the roster they already have.
+        public List<PlayerMessage> Pl { get; set; }
     }
 
     public class InternalMarketMessage
@@ -77,6 +82,9 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public bool InPl { get; set; }
         // See OnInternalOddsChangeMessage translation lists — name matches MarketMessage.MaTeTr.
         public List<TranslationMessage> MaTeTr { get; set; }
+        // Per-player prop-market competitor id — name matches MarketMessage.CompId (the websocket
+        // deserializes ON_ODDS_CHANGE as OnMarketChangeMessage). See MarketMessage.CompId.
+        public int? CompId { get; set; }
 
         public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();
     }

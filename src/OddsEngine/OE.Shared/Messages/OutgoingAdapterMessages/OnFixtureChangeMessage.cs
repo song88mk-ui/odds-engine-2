@@ -51,5 +51,25 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         public List<TranslationMessage> LeTr { get; set; }
         public List<TranslationMessage> HoTr { get; set; }
         public List<TranslationMessage> AwTr { get; set; }
+
+        // Player roster for per-player prop markets (2026-07 player-markets feature): flattened
+        // by the adapter (bet-genius) from the vendor fixture's nested CompetitorType=Person
+        // entries. Joined against MarketMessage.CompId to label player markets. Null = this
+        // payload carries no roster information — consumers keep the roster they already have.
+        // Property names (Pl/PlId/PlNa) are the wire contract shared with bet-genius's
+        // OnInternalFixtureChangeMessage — never rename.
+        public List<PlayerMessage> Pl { get; set; }
+    }
+
+    // One roster entry. PlId is the vendor competitor id — the same id space as
+    // MarketMessage.CompId and SelectionMessage.CompId. Deliberately NOT named CoId: that name is
+    // the bet-builder correlation id on platform entities.
+    public class PlayerMessage
+    {
+        public int PlId { get; set; }
+        public string PlNa { get; set; }
+        // Translation of PlNa (TranslationCache2 key "Pl:{PlId}"); populated by
+        // OE.Adapter.Service, null/empty -> fall back to PlNa. See the translation lists above.
+        public List<TranslationMessage> Tr { get; set; }
     }
 }

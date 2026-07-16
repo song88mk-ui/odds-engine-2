@@ -28,6 +28,11 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         // Market template translations (TranslationCache2 key "MaTe:{MaTeId}"); null/empty ->
         // fall back to MaTeNa. See OnFixtureChangeMessage translation lists.
         public List<TranslationMessage> MaTeTr { get; set; }
+        // Vendor market-level CompetitorOne (2026-07 player-markets feature): present = this is a
+        // per-player prop market for that competitor; joined against the fixture roster
+        // (OnFixtureChangeMessage.Pl) to label the market. Null for regular markets. Mirrors the
+        // selection-level CompId precedent below; name shared with bet-genius — never rename.
+        public int? CompId { get; set; }
         public int SoOr { get; set; }
         public string ClCo { get; set; } = string.Empty;
         public string ClCoMa { get; set; } = string.Empty;
