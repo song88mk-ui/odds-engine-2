@@ -148,6 +148,22 @@ namespace OE.Adapter.Service.Repositories
             if (!string.IsNullOrEmpty(currentText) && _translationsByText.TryGetValue(currentText, out var byText))
                 return byText;
 
+            // Market TEMPLATE wording drifts constantly in the feed ("Over/Under" <->
+            // "Total Goals Over / Under") and even oscillates between spellings — refusing to serve
+            // on mismatch rendered whole market groups in English for hours (2026-07-16 prod).
+            // For MaTe: keys, serve the LAST KNOWN translation instead: a slightly stale market
+            // name beats English, the mislabel risk that justifies the strict guard is a
+            // team/competitor-name concern (Te:/Co:/SeTe: stay strict), and the seeding path has
+            // already re-queued the new wording — the retranslation replaces this fallback via
+            // ON_TRANSLATION_CHANGE within minutes.
+            if (translations != null && stringId.StartsWith("MaTe:", StringComparison.Ordinal))
+            {
+                if (_rejectedSourceTextLogged.TryAdd(stringId, 0))
+                    _logger.LogWarning($"Translation for {stringId}: cached SOURCE_TEXT '{cachedText}' differs from live text '{currentText}' — serving last known translation until the re-translation lands");
+
+                return translations;
+            }
+
             // A translated row exists for this key but was rejected as renamed and nothing else
             // matched — the entity renders untranslated until the pipeline re-translates it.
             if (translations != null && _rejectedSourceTextLogged.TryAdd(stringId, 0))

@@ -288,6 +288,38 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal("弗鲁米嫩塞 by 2", translated.Single().Tx);
         }
 
+        // 2026-07-16 prod: market-template wording oscillates in the feed ("Over/Under" <->
+        // "Total Goals Over / Under"), leaving whole market groups in English while a perfectly
+        // good translation sat preloaded. MaTe: rows serve the LAST KNOWN translation on a
+        // wording mismatch — the seeder has already re-queued the new wording, and the
+        // retranslation replaces this fallback via ON_TRANSLATION_CHANGE.
+        [Fact]
+        public void GetTranslations_MaTeWordingMismatch_ServesLastKnownTranslationAsFallback()
+        {
+            var cache = Cache(nameof(GetTranslations_MaTeWordingMismatch_ServesLastKnownTranslationAsFallback),
+                Row("MaTe:259", zh: "总进球数 大/小于", sourceText: "Total Goals Over / Under"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("MaTe:259", "Over/Under");
+
+            Assert.NotNull(translated);
+            Assert.Equal("总进球数 大/小于", translated.Single().Tx);
+        }
+
+        // The stale-serve fallback is deliberately MaTe:-only — a team-name wording change (e.g.
+        // the vendor's "Only {Team}" variant fixtures) must still refuse rather than mislabel.
+        [Fact]
+        public void GetTranslations_TeWordingMismatch_IsStillRefused()
+        {
+            var cache = Cache(nameof(GetTranslations_TeWordingMismatch_IsStillRefused),
+                Row("Te:10033", zh: "国际米兰", sourceText: "Internazionale"));
+
+            cache.Preload();
+
+            Assert.Null(cache.GetTranslations("Te:10033", "Only Internazionale"));
+        }
+
         // A tail with letters that ISN'T the Winning Margin shape must still be treated as a
         // genuine rename, not spliced — otherwise the guard is meaningless.
         [Fact]
