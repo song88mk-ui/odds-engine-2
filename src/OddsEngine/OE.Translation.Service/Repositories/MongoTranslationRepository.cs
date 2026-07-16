@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using OE.Shared.Constants;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Enums;
@@ -488,28 +489,22 @@ namespace OE.Translation.Service.Repositories
             if (candidates.Count == 0)
                 return 0;
 
-            // MaTeNa (the template's EN source text) lives on MarketLookup, not on the Market
-            // document itself (Market.MaNa is the already-resolved display name) — same source
-            // ReadActiveSnapshot uses for the seeding side.
-            var maTeIds = candidates.Select(m => m.MaTeId).Distinct().ToList();
-            var templateNames = _marketLookupCollection
-                .Find(Builders<MarketLookup>.Filter.In(ml => ml.MaTeId, maTeIds))
-                .Project(ml => new { ml.MaTeId, ml.MaTeNa })
-                .ToList()
-                .GroupBy(t => t.MaTeId)
-                .ToDictionary(g => g.Key, g => g.First().MaTeNa);
-
             var writes = new List<WriteModel<Market>>();
 
             foreach (var market in candidates)
             {
-                var currentText = templateNames.TryGetValue(market.MaTeId, out var maTeNa) ? maTeNa : null;
-                var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", currentText);
-
-                // Player markets compose (GM-528) — same rule as the live stamp above.
+                // The market document's own MaNa is the wording THIS market displays — the feed
+                // emits concurrent wordings per template id, so MarketLookup's single name can
+                // belong to a different variant. With the doc's wording the cache resolves the
+                // right row: the primary by key, other wordings via the content-addressed index,
+                // and the last-known fallback otherwise. EXCEPT player markets (GM-528): their
+                // MaNa is the player-inclusive name, never a template wording — pass null so the
+                // primary template row is served by key, then compose with the Pl: translation.
                 var maNaTr = market.CompId.HasValue
-                    ? PlayerMarketNameComposer.Compose(_translationCache.GetTranslations($"Pl:{market.CompId.Value}", null), maTeTr)
-                    : maTeTr;
+                    ? PlayerMarketNameComposer.Compose(
+                        _translationCache.GetTranslations($"Pl:{market.CompId.Value}", null),
+                        _translationCache.GetTranslations($"MaTe:{market.MaTeId}", null))
+                    : _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaNa);
 
                 if (maNaTr != null)
                 {
@@ -694,6 +689,10 @@ namespace OE.Translation.Service.Repositories
             // in the delta as a removal so consumers revert to the English name.
             var deltasByKey = new Dictionary<string, List<TranslationMessage>>();
 
+            // The row's SOURCE_TEXT when the sender provides it (additive SrcTx, 2026-07-16) —
+            // scopes MaTe wording-variant updates to the markets carrying that wording.
+            var sourceTextByKey = new Dictionary<string, string>();
+
             foreach (var item in message.Tr)
             {
                 if (item == null || string.IsNullOrEmpty(item.StId) || string.IsNullOrEmpty(item.LaCo))
@@ -703,6 +702,9 @@ namespace OE.Translation.Service.Repositories
                     deltasByKey[item.StId] = deltas = new List<TranslationMessage>();
 
                 deltas.Add(new TranslationMessage { LaCo = item.LaCo.ToUpperInvariant(), Tx = item.Tx ?? string.Empty });
+
+                if (!string.IsNullOrEmpty(item.SrcTx))
+                    sourceTextByKey[item.StId] = item.SrcTx;
             }
 
             if (deltasByKey.Count == 0)
@@ -731,7 +733,9 @@ namespace OE.Translation.Service.Repositories
             var segmentDeltas = new Dictionary<int, List<TranslationMessage>>();
             var leagueDeltas = new Dictionary<int, List<TranslationMessage>>();
             var teamDeltas = new Dictionary<string, List<TranslationMessage>>();
-            var marketTemplateDeltas = new Dictionary<string, List<TranslationMessage>>();
+            // Keyed by BASE template id; each entry is (SrcTx, deltas) — SrcTx null means the
+            // announce wasn't wording-scoped (older senders) and applies template-wide.
+            var marketTemplateDeltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>();
             var selectionTemplateDeltas = new Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>>();
             var competitorDeltas = new Dictionary<int, List<TranslationMessage>>();
             var playerDeltas = new Dictionary<int, List<TranslationMessage>>();
@@ -769,23 +773,43 @@ namespace OE.Translation.Service.Repositories
                         CascadeTeamTranslationToSelections(id);
                         break;
                     case "MaTe":
-                        marketTemplateDeltas[id] = entry.Value;
-                        // The blanket raw-text update applies to regular markets only: a player
-                        // market's MaNaTr is COMPOSED (Pl: + MaTe:), so raw template text would
-                        // stomp the composed name — same split the token-composed selection
-                        // templates need (see UpdateSelectionTemplateTranslations).
-                        UpdateTranslationArray(
-                            _marketCollection,
-                            Builders<Market>.Filter.And(
-                                Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
-                                Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
-                                Builders<Market>.Filter.Eq(m => m.MaTeId, id),
-                                Builders<Market>.Filter.Eq(m => m.CompId, null)),
-                            "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
+                        // May be a wording-variant id ("259~a1b2c3d4", see MarketTemplateVariantId)
+                        // — strip to the base template id. When the announce carries SrcTx, the
+                        // update applies only to markets whose MaNa is that wording (the feed
+                        // emits concurrent wordings per template id); without it, template-wide.
+                        var baseMaTeId = MarketTemplateVariantId.GetBaseId(id);
+                        sourceTextByKey.TryGetValue(entry.Key, out var maTeSourceText);
+
+                        if (!marketTemplateDeltas.TryGetValue(baseMaTeId, out var maTeEntries))
+                            marketTemplateDeltas[baseMaTeId] = maTeEntries = new List<(string SrcTx, List<TranslationMessage> Deltas)>();
+
+                        maTeEntries.Add((maTeSourceText, entry.Value));
+
+                        // The raw-text update applies to REGULAR markets only: a player market's
+                        // MaNaTr is COMPOSED (Pl: + MaTe:, GM-528), so raw template text would
+                        // stomp the composed name — and a player market's MaNa (player-inclusive)
+                        // never equals a template wording, so a wording-scoped announce could not
+                        // reach it anyway. Player markets are recomposed below instead.
+                        var maTeFilter = Builders<Market>.Filter.And(
+                            Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                            Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
+                            Builders<Market>.Filter.Eq(m => m.MaTeId, baseMaTeId),
+                            Builders<Market>.Filter.Eq(m => m.CompId, null));
+
+                        if (!string.IsNullOrEmpty(maTeSourceText))
+                        {
+                            // Case-insensitive exact match — doc MaNa and TC2 SOURCE_TEXT come
+                            // from the same feed wording but their casing may drift independently.
+                            maTeFilter = Builders<Market>.Filter.And(
+                                maTeFilter,
+                                Builders<Market>.Filter.Regex(m => m.MaNa, new BsonRegularExpression("^" + Regex.Escape(maTeSourceText) + "$", "i")));
+                        }
+
+                        UpdateTranslationArray(_marketCollection, maTeFilter, "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
                         RecomposePlayerMarketNames(Builders<Market>.Filter.And(
                             Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
                             Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
-                            Builders<Market>.Filter.Eq(m => m.MaTeId, id),
+                            Builders<Market>.Filter.Eq(m => m.MaTeId, baseMaTeId),
                             Builders<Market>.Filter.Ne(m => m.CompId, null)));
                         break;
                     case "Pl" when int.TryParse(id, out var plId):
@@ -982,7 +1006,7 @@ namespace OE.Translation.Service.Repositories
             Dictionary<int, List<TranslationMessage>> segmentDeltas,
             Dictionary<int, List<TranslationMessage>> leagueDeltas,
             Dictionary<string, List<TranslationMessage>> teamDeltas,
-            Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
+            Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> marketTemplateDeltas,
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
             Dictionary<int, List<TranslationMessage>> competitorDeltas,
             Dictionary<int, List<TranslationMessage>> playerDeltas,
@@ -1140,7 +1164,7 @@ namespace OE.Translation.Service.Repositories
             Dictionary<int, List<TranslationMessage>> segmentDeltas,
             Dictionary<int, List<TranslationMessage>> leagueDeltas,
             Dictionary<string, List<TranslationMessage>> teamDeltas,
-            Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
+            Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> marketTemplateDeltas,
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
             Dictionary<int, List<TranslationMessage>> competitorDeltas = null,
             ITranslationCache translationCache = null,
@@ -1163,14 +1187,16 @@ namespace OE.Translation.Service.Repositories
 
             foreach (var market in payload.Ma)
             {
-                var templateDelta = market.MaTeId != null && marketTemplateDeltas.TryGetValue(market.MaTeId, out var maTeTr) ? maTeTr : null;
-
                 if (market.CompId != null)
                 {
                     // Player market (GM-528): never push the raw template text — its translated
                     // name is COMPOSED (Pl: + MaTe:, both read from the already-Apply'd cache) when
                     // either side changed; otherwise stay null so consumers keep what they have.
-                    var affected = playerDeltas.ContainsKey(market.CompId.Value) || templateDelta != null;
+                    // The trigger only needs "did this base template change at all": wording
+                    // scoping is meaningless here because a player market's MaNa (player-inclusive)
+                    // never equals a template wording.
+                    var affected = playerDeltas.ContainsKey(market.CompId.Value)
+                        || (market.MaTeId != null && marketTemplateDeltas.ContainsKey(market.MaTeId));
 
                     market.MaTeTr = affected && translationCache != null
                         ? PlayerMarketNameComposer.Compose(
@@ -1180,7 +1206,9 @@ namespace OE.Translation.Service.Repositories
                 }
                 else
                 {
-                    market.MaTeTr = templateDelta;
+                    // Regular market: wording-aware — an exact-wording (SrcTx) delta beats an
+                    // unscoped one (see ResolveMarketTemplateDeltas).
+                    market.MaTeTr = ResolveMarketTemplateDeltas(marketTemplateDeltas, market.MaTeId, market.MaNa);
                 }
 
                 foreach (var selection in market.Se)
@@ -1256,6 +1284,30 @@ namespace OE.Translation.Service.Repositories
                             && selectionTemplateDeltas.TryGetValue((selection.MaTeId, selection.SeTeId), out var seTeTr) ? seTeTr : null);
                 }
             }
+        }
+
+        // Base-template announces (SrcTx null) apply to every market of the template; wording-
+        // variant announces (see MarketTemplateVariantId) apply only to markets whose MaNa
+        // carries that wording. An exact-wording entry wins over an unscoped one.
+        internal static List<TranslationMessage> ResolveMarketTemplateDeltas(
+            Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> marketTemplateDeltas,
+            string maTeId,
+            string maNa)
+        {
+            if (maTeId == null || !marketTemplateDeltas.TryGetValue(maTeId, out var entries))
+                return null;
+
+            List<TranslationMessage> unscoped = null;
+
+            foreach (var (srcTx, deltas) in entries)
+            {
+                if (string.IsNullOrEmpty(srcTx))
+                    unscoped = deltas;
+                else if (maNa != null && string.Equals(srcTx, maNa, StringComparison.OrdinalIgnoreCase))
+                    return deltas;
+            }
+
+            return unscoped;
         }
 
         // Builds the internal odds payload from the Mongo documents, mirroring

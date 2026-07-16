@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OE.Shared.Data.Translation;
 using OE.Shared.Messages.OutgoingAdapterMessages;
+using OE.Shared.Utilities;
 using OE.Translation.Service.Repositories;
 
 namespace OE.Translation.Service.Tests
@@ -178,6 +179,84 @@ namespace OE.Translation.Service.Tests
             Assert.Equal("Arsenal FC", updated.SourceText); // source side updated
             Assert.Equal(string.Empty, updated.TargetTextZh); // stale target invalidated
             Assert.False(updated.Processed); // back on the pipeline's worklist
+        }
+
+        private static OnMarketChangeMessage MarketTemplateMessage(string maTeId, string maTeNa)
+        {
+            return new OnMarketChangeMessage
+            {
+                ChTyId = 0,
+                PrFiId = "1234567890",
+                Ma = new List<MarketMessage>
+                {
+                    new MarketMessage { ChTyId = 0, PrFiId = "1234567890", PrMaId = "M9", MaTeId = maTeId, MaTeNa = maTeNa, MaNa = maTeNa }
+                }
+            };
+        }
+
+        // 2026-07-16 prod: the feed emits MULTIPLE CONCURRENT wordings for one market template id
+        // (MaTe:259 arrived as both "Total Goals Over / Under" and "Over/Under" at the same time).
+        // A second wording must become its own variant row — the old rename+wipe flip-flopped the
+        // single row between the wordings, re-translating on every flip while whichever wording
+        // lost the last flip rendered untranslated.
+        [Fact]
+        public async Task MarketUpdate_SecondConcurrentWording_CreatesVariantRow_PrimaryUntouched()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_SecondConcurrentWording_CreatesVariantRow_PrimaryUntouched));
+
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Over/Under"));
+
+            using (var context = GetContext(provider))
+            {
+                var row = context.TranslationCache2.Single(r => r.StringId == "MaTe:259");
+                row.TargetTextZh = "大/小"; // the external pipeline translated the primary wording
+                row.Processed = true;
+                context.SaveChanges();
+            }
+
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Total Goals Over / Under"));
+
+            using var verify = GetContext(provider);
+
+            var primary = verify.TranslationCache2.Single(r => r.StringId == "MaTe:259");
+            Assert.Equal("Over/Under", primary.SourceText); // NOT renamed
+            Assert.Equal("大/小", primary.TargetTextZh);    // NOT wiped
+            Assert.True(primary.Processed);                 // NOT re-queued
+
+            var variantId = MarketTemplateVariantId.Compute("259", "Total Goals Over / Under");
+            var variant = verify.TranslationCache2.Single(r => r.StringId == variantId);
+            Assert.Equal("Total Goals Over / Under", variant.SourceText);
+            Assert.Equal(string.Empty, variant.TargetTextZh);
+            Assert.False(variant.Processed);                // on the pipeline's worklist
+        }
+
+        [Fact]
+        public async Task MarketUpdate_CaseOnlyWording_AlignsPrimaryWithoutVariantRow()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_CaseOnlyWording_AlignsPrimaryWithoutVariantRow));
+
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Over/under"));
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Over/Under"));
+
+            using var verify = GetContext(provider);
+
+            var rows = verify.TranslationCache2.Where(r => r.StringId.StartsWith("MaTe:259")).ToList();
+            Assert.Single(rows);
+            Assert.Equal("Over/Under", rows[0].SourceText); // re-cased to the live feed
+        }
+
+        [Fact]
+        public async Task MarketUpdate_RepeatedVariantWording_DoesNotDuplicateRows()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_RepeatedVariantWording_DoesNotDuplicateRows));
+
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Over/Under"));
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Total Goals Over / Under"));
+            await repository.OnProcessMarketSetUpdate(MarketTemplateMessage("259", "Total Goals Over / Under"));
+
+            using var verify = GetContext(provider);
+
+            Assert.Equal(2, verify.TranslationCache2.Count(r => r.StringId.StartsWith("MaTe:259")));
         }
 
         // 2026-07-14 prod incident ("Odd Or Even Total"): TranslationCache2 rows seeded with a

@@ -210,6 +210,13 @@ namespace OE.Adapter.Service.Repositories
                 if (_translations.TryGetValue(item.StId, out var result) && result.Count == 0)
                     _translations.TryRemove(item.StId, out _);
 
+                // Additive SrcTx (2026-07-16): rows announced AFTER startup (e.g. MaTe wording-
+                // variant rows, see MarketTemplateVariantId) become content-addressable
+                // immediately — without this, a new wording's translation was only findable by
+                // text after the next preload/restart. Null from older senders is fine.
+                if (!string.IsNullOrEmpty(item.SrcTx))
+                    _sourceTextByStringId[item.StId] = item.SrcTx;
+
                 // Keep the content index in sync for rows whose SOURCE_TEXT we know (preloaded
                 // rows) so a subsequent content-fallback lookup doesn't serve a stale list.
                 if (_sourceTextByStringId.TryGetValue(item.StId, out var sourceText) && !string.IsNullOrEmpty(sourceText))

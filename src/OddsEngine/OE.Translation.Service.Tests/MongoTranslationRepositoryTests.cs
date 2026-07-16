@@ -144,7 +144,10 @@ namespace OE.Translation.Service.Tests
             var fixture = MakeFixture();
             var payload = MakePayload();
             payload.Ma.Add(new InternalMarketMessage { MaTeId = "MT2", Se = new List<InternalSelectionMessage>() });
-            var marketTemplateDeltas = new Dictionary<string, List<TranslationMessage>> { ["MT1"] = Delta("Over/Under") };
+            var marketTemplateDeltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>
+            {
+                ["MT1"] = new() { (null, Delta("Over/Under")) }
+            };
 
             MongoTranslationRepository.ApplyTranslationDeltas(
                 payload, fixture,
@@ -152,8 +155,53 @@ namespace OE.Translation.Service.Tests
                 marketTemplateDeltas: marketTemplateDeltas,
                 selectionTemplateDeltas: new());
 
-            Assert.Same(marketTemplateDeltas["MT1"], payload.Ma[0].MaTeTr);
+            Assert.Same(marketTemplateDeltas["MT1"][0].Deltas, payload.Ma[0].MaTeTr);
             Assert.Null(payload.Ma[1].MaTeTr);
+        }
+
+        // 2026-07-16: the feed emits concurrent wordings per template id; a wording-variant
+        // announce (SrcTx set) applies only to the markets whose MaNa carries that wording,
+        // while an unscoped announce (SrcTx null, older senders) applies template-wide.
+        [Fact]
+        public void ApplyTranslationDeltas_WordingScopedMarketDelta_AppliesOnlyToMatchingMaNa()
+        {
+            var fixture = MakeFixture();
+            var payload = MakePayload();
+            payload.Ma[0].MaNa = "Over/Under";
+            payload.Ma.Add(new InternalMarketMessage { MaTeId = "MT1", MaNa = "Total Goals Over / Under", Se = new List<InternalSelectionMessage>() });
+
+            var scoped = Delta("大/小");
+            var marketTemplateDeltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>
+            {
+                ["MT1"] = new() { ("Over/Under", scoped) }
+            };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: marketTemplateDeltas,
+                selectionTemplateDeltas: new());
+
+            Assert.Same(scoped, payload.Ma[0].MaTeTr);  // MaNa matches the wording
+            Assert.Null(payload.Ma[1].MaTeTr);          // other wording untouched
+        }
+
+        // An exact-wording entry wins over an unscoped one for the matching market; the unscoped
+        // entry still covers everything else.
+        [Fact]
+        public void ResolveMarketTemplateDeltas_ExactWordingBeatsUnscoped()
+        {
+            var scoped = Delta("大/小");
+            var unscoped = Delta("总进球数 大/小于");
+            var deltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>
+            {
+                ["MT1"] = new() { (null, unscoped), ("Over/Under", scoped) }
+            };
+
+            Assert.Same(scoped, MongoTranslationRepository.ResolveMarketTemplateDeltas(deltas, "MT1", "Over/Under"));
+            Assert.Same(scoped, MongoTranslationRepository.ResolveMarketTemplateDeltas(deltas, "MT1", "over/under")); // case drift tolerated
+            Assert.Same(unscoped, MongoTranslationRepository.ResolveMarketTemplateDeltas(deltas, "MT1", "Total Goals Over / Under"));
+            Assert.Null(MongoTranslationRepository.ResolveMarketTemplateDeltas(deltas, "MT2", "Over/Under"));
         }
 
         [Fact]
@@ -457,7 +505,7 @@ namespace OE.Translation.Service.Tests
             MongoTranslationRepository.ApplyTranslationDeltas(
                 payload, fixture,
                 sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
-                marketTemplateDeltas: new Dictionary<string, List<TranslationMessage>> { ["MT1"] = templateDelta },
+                marketTemplateDeltas: new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> { ["MT1"] = new() { (null, templateDelta) } },
                 selectionTemplateDeltas: new(),
                 translationCache: cache);
 
@@ -479,7 +527,7 @@ namespace OE.Translation.Service.Tests
             MongoTranslationRepository.ApplyTranslationDeltas(
                 payload, fixture,
                 sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
-                marketTemplateDeltas: new Dictionary<string, List<TranslationMessage>> { ["MT1"] = templateDelta },
+                marketTemplateDeltas: new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> { ["MT1"] = new() { (null, templateDelta) } },
                 selectionTemplateDeltas: new(),
                 translationCache: cache);
 

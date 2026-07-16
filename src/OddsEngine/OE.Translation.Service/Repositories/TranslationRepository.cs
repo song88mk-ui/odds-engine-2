@@ -147,8 +147,14 @@ namespace OE.Translation.Service.Repositories
                     if (market == null)
                         continue;
 
-                    // Market template (deduped): MaTe:{MaTeId} -> template name.
-                    AddIfValid(items, $"MaTe:{market.MaTeId}", market.MaTeNa);
+                    // Market template (deduped): MaTe:{MaTeId} -> template name. Throttled PER
+                    // WORDING, not per key: the feed emits multiple concurrent wordings for one
+                    // template id (verified 2026-07-16, MaTe:259 = "Total Goals Over / Under" AND
+                    // "Over/Under" simultaneously), and a key-only throttle swallowed every
+                    // wording after the first for the cache TTL — BulkSeed never even saw the
+                    // second wording to create its variant row.
+                    AddIfValid(items, $"MaTe:{market.MaTeId}", market.MaTeNa,
+                        throttleKey: MarketTemplateVariantId.Compute(market.MaTeId, market.MaTeNa));
 
                     if (market.Se == null)
                         continue;
@@ -260,11 +266,14 @@ namespace OE.Translation.Service.Repositories
         #region Utilities
 
         // The caller composes the full String_ID key (MaTe:/SeTe:/Te:/SpId:/...); the memcache
-        // check throttles writes to ~once per key per TTL.
+        // check throttles writes to ~once per key per TTL. throttleKey overrides the cache key
+        // when the throttle must be finer than the row key — MaTe: throttles per WORDING (see
+        // OnProcessMarketSetUpdate) so concurrent template wordings each reach BulkSeed.
         private void AddIfValid(
             List<(string id, string value)> list,
             string key,
-            string? value)
+            string? value,
+            string? throttleKey = null)
         {
             if (string.IsNullOrWhiteSpace(key) ||
                 string.IsNullOrWhiteSpace(value))
@@ -272,7 +281,7 @@ namespace OE.Translation.Service.Repositories
                 return;
             }
 
-            if (_memCache.GetCache<string>(TranslationCachePrefix + key) != null)
+            if (_memCache.GetCache<string>(TranslationCachePrefix + (throttleKey ?? key)) != null)
                 return;
 
             list.Add((key, value));
@@ -293,8 +302,11 @@ namespace OE.Translation.Service.Repositories
         // content-matched translation because the row was never visited by the pipeline).
         private async Task BulkSeed(List<(string id, string value)> items)
         {
+            // Dedup per row IDENTITY: for MaTe: items that's id + normalized wording — the feed
+            // emits multiple concurrent wordings for one template id, and each is its own row
+            // (see MarketTemplateVariantId) — for every other key the id alone, as before.
             var distinctItems = items
-                .GroupBy(x => x.id)
+                .GroupBy(SeedIdentity)
                 .Select(g => g.Last())
                 .ToList();
 
@@ -303,9 +315,18 @@ namespace OE.Translation.Service.Repositories
             var context = scope.ServiceProvider
                 .GetRequiredService<TranslationContext>();
 
-            var ids = distinctItems
-                .Select(x => x.id)
-                .ToList();
+            // Fetch base rows AND, for MaTe: items, their wording-variant candidate in the same
+            // round trip (the variant id is deterministic from the wording, so it is computable
+            // before knowing whether the primary row's wording matches).
+            var ids = new List<string>();
+
+            foreach (var item in distinctItems)
+            {
+                ids.Add(item.id);
+
+                if (IsMarketTemplateKey(item.id))
+                    ids.Add(MarketTemplateVariantId.Compute(MarketTemplateIdSegment(item.id), item.value));
+            }
 
             var existing = await context.TranslationCache2
                 .Where(x => ids.Contains(x.StringId))
@@ -322,12 +343,55 @@ namespace OE.Translation.Service.Repositories
                     ? item.value
                     : item.value.Substring(0, 250);
 
+                // A market template whose primary row holds a DIFFERENT wording: never rename or
+                // wipe the primary (the old behavior flip-flopped the single row between the
+                // concurrent wordings, wiping and re-translating on every flip while the losing
+                // wording rendered untranslated) — this wording gets its own variant row instead,
+                // translated independently and served through the caches' content-addressed index.
+                if (IsMarketTemplateKey(item.id)
+                    && dict.TryGetValue(item.id, out var primary)
+                    && !string.Equals(primary.SourceText, sourceText, StringComparison.OrdinalIgnoreCase))
+                {
+                    var variantId = MarketTemplateVariantId.Compute(MarketTemplateIdSegment(item.id), sourceText);
+
+                    if (dict.TryGetValue(variantId, out var variant))
+                    {
+                        if (!string.Equals(variant.SourceText, sourceText, StringComparison.Ordinal))
+                            variant.SourceText = sourceText; // case-only alignment, targets kept
+
+                        variant.UpdatedAt = DateTime.UtcNow; // liveness
+                    }
+                    else
+                    {
+                        variant = new TranslationCache2
+                        {
+                            StringId = variantId,
+                            SourceLanguage = "EN",
+                            SourceText = sourceText,
+                            TargetTextZh = string.Empty,
+                            TargetTextEs = string.Empty,
+                            TargetTextFr = string.Empty,
+                            HasBetPlacement = false,
+                            Processed = false,
+                            CreatedAt = DateTime.UtcNow
+                        };
+
+                        context.TranslationCache2.Add(variant);
+                    }
+
+                    savedEntities.Add(variant);
+
+                    _memCache.AddOrUpdateCache(TranslationCachePrefix + variantId, item.value, 24);
+                    continue;
+                }
+
                 if (dict.TryGetValue(item.id, out var entity))
                 {
                     if (!string.Equals(entity.SourceText, sourceText, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Genuine name change: stale targets are cleared and the row goes back
-                        // on the pipeline's worklist (PROCESSED = 0) so every configured
+                        // Genuine name change (non-MaTe keys only — MaTe wording changes branch
+                        // to a variant row above): stale targets are cleared and the row goes
+                        // back on the pipeline's worklist (PROCESSED = 0) so every configured
                         // language is re-translated from the new SOURCE_TEXT.
                         entity.SourceText = sourceText;
                         entity.TargetTextZh = string.Empty;
@@ -368,8 +432,12 @@ namespace OE.Translation.Service.Repositories
 
                 savedEntities.Add(entity);
 
+                // Throttle-set must mirror AddIfValid's throttle key: per wording for MaTe:,
+                // per key for everything else.
                 _memCache.AddOrUpdateCache(
-                    TranslationCachePrefix + item.id,
+                    TranslationCachePrefix + (IsMarketTemplateKey(item.id)
+                        ? MarketTemplateVariantId.Compute(MarketTemplateIdSegment(item.id), item.value)
+                        : item.id),
                     item.value,
                     24);
             }
@@ -379,6 +447,18 @@ namespace OE.Translation.Service.Repositories
             if (_cacheBackfill)
                 await BackfillTranslationCache2(context, savedEntities);
         }
+
+        private static bool IsMarketTemplateKey(string id) =>
+            id.StartsWith("MaTe:", StringComparison.Ordinal);
+
+        private static string MarketTemplateIdSegment(string id) =>
+            id.Substring("MaTe:".Length);
+
+        // Grouping identity for BulkSeed dedup — MaTe: items are distinct per wording.
+        private static string SeedIdentity((string id, string value) item) =>
+            IsMarketTemplateKey(item.id)
+                ? MarketTemplateVariantId.Compute(MarketTemplateIdSegment(item.id), item.value)
+                : item.id;
 
         // TEMPORARY bridge (ported from the removed BG.Translation.Service, adapted to the flat
         // schema): the external TranslationCache table is keyed by SOURCE_HASH, TranslationCache2

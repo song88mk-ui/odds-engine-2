@@ -17,9 +17,17 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
     public class TranslationChangeItem
     {
         // TranslationCache2.STRING_ID — glossary key formats:
-        // "SpId:{id}" | "SegId:{id}" | "LeId:{id}" | "Te:{teamId}" | "MaTe:{MaTeId}" | "SeTe:{MaTeId}:{SeTeId}"
+        // "SpId:{id}" | "SegId:{id}" | "LeId:{id}" | "Te:{teamId}" | "MaTe:{MaTeId}" |
+        // "MaTe:{MaTeId}~{wordingHash}" (per-wording variant, see MarketTemplateVariantId) |
+        // "SeTe:{MaTeId}:{SeTeId}"
         public string StId { get; set; }
         public string LaCo { get; set; } // target language code, e.g. "ZH" | "ES" | "FR"
         public string Tx { get; set; }   // translated text; empty string clears the translation
+
+        // The row's SOURCE_TEXT (additive, 2026-07-16; may be null from older senders). Lets the
+        // in-memory caches keep their content-addressed index current without a restart, and lets
+        // the Mongo change path scope a MaTe wording-variant update to exactly the markets whose
+        // MaNa carries that wording. Consumers must tolerate null.
+        public string SrcTx { get; set; }
     }
 }

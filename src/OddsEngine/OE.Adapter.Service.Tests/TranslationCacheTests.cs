@@ -320,6 +320,29 @@ namespace OE.Adapter.Service.Tests
             Assert.Null(cache.GetTranslations("Te:10033", "Only Internazionale"));
         }
 
+        // 2026-07-16: a wording-variant row (MarketTemplateVariantId) announced after startup
+        // must be content-addressable immediately — the announce carries SrcTx and Apply indexes
+        // it. Without this, the stale-serve MaTe fallback (not the fresh, wording-exact variant
+        // translation) kept answering until the next restart's preload.
+        [Fact]
+        public void Apply_WithSourceText_MakesTheNewWordingContentAddressable()
+        {
+            var cache = Cache(nameof(Apply_WithSourceText_MakesTheNewWordingContentAddressable),
+                Row("MaTe:259", zh: "总进球数 大/小于", sourceText: "Total Goals Over / Under"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "MaTe:259~a1b2c3d4", LaCo = "ZH", Tx = "大/小", SrcTx = "Over/Under" }
+            });
+
+            var translated = cache.GetTranslations("MaTe:259", "Over/Under");
+
+            Assert.NotNull(translated);
+            Assert.Equal("大/小", translated.Single().Tx); // the variant's own translation, not the stale fallback
+        }
+
         // A tail with letters that ISN'T the Winning Margin shape must still be treated as a
         // genuine rename, not spliced — otherwise the guard is meaningless.
         [Fact]
