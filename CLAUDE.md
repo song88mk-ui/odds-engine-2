@@ -129,6 +129,9 @@ Playbook: [.claude/checklists/standard-workflow.md](.claude/checklists/standard-
 - **Clearly distinguish verified facts, assumptions, and unknowns** (tag everything).
 - **Production is READ-ONLY by default** — never publish, deploy, change schemas, invalidate caches,
   or run admin actions unless explicitly instructed.
+- **Every SQL script must be idempotent** (data fixes, seeds, DDL, hand-run/flyway migrations):
+  guard INSERTs with `NOT EXISTS`/`MERGE`, schema changes with `IF NOT EXISTS`/`OBJECT_ID` checks,
+  so re-running is a no-op with the same end state.
 - **For external repositories, identify dependencies — never invent their behavior**
   ([docs/CrossRepositoryDependencies.md](docs/CrossRepositoryDependencies.md)).
 - **Keep documentation, CLAUDE.md, AGENTS.md, commands, skills, and playbooks synchronized** with

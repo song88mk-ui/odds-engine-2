@@ -33,6 +33,9 @@ Full version: [CLAUDE.md](CLAUDE.md) + [.claude/checklists/standard-workflow.md]
    ([docs/CrossRepositoryDependencies.md](docs/CrossRepositoryDependencies.md)).
 7. **Keep docs + `CLAUDE.md`/`AGENTS.md`/commands/skills/playbooks synchronized** with architectural
    changes.
+8. **SQL scripts must be idempotent.** Any SQL script (data fix, seed, DDL, hand-run/flyway migration)
+   must be safe to run multiple times with the same end state: guard INSERTs with `NOT EXISTS`/`MERGE`
+   and schema changes with `IF NOT EXISTS`/`OBJECT_ID` checks.
 
 ## High-blast-radius (touch with extra care)
 - `OE.Shared/Constants/MessageType.cs` + `Messages/**` (wire/DB contract).
