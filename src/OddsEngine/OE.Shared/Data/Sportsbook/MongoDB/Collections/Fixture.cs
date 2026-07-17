@@ -59,6 +59,15 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public int LeBeId { get; set; }
         public List<PeriodScoreMDB> PeSc { get; set; }
         public int CuSe { get; set; }
+        // Player roster (2026-07 player-markets, GM-528): vendor CompetitorType=Person entries
+        // flattened by the adapter (OnFixtureChangeMessage.Pl); joined against Market.CompId to
+        // label per-player prop markets. Names only — the message path replaces this list
+        // wholesale, so translations deliberately live in PlNaTr below, never in here.
+        public List<PlayerMDB> Pl { get; set; }
+        // Per-player name translations (TranslationCache2 key "Pl:{PlId}"). Owned by
+        // OE.Translation.Service like every other *NaTr field; kept OUTSIDE the Pl roster so a
+        // roster refresh can never wipe them and delta updates need no nested arrayFilters.
+        public List<PlayerTranslationMDB> PlNaTr { get; set; }
     }
 
     public class SportTranslationMDB
@@ -94,6 +103,21 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         [BsonId]
         public string LaCo { get; set; }
         public string TeNa { get; set; }
+    }
+
+    public class PlayerMDB
+    {
+        [BsonId]
+        public int PlId { get; set; }
+        public string PlNa { get; set; }
+    }
+
+    // One (player, language) translation row — flat on purpose, see Fixture.PlNaTr.
+    public class PlayerTranslationMDB
+    {
+        public int PlId { get; set; }
+        public string LaCo { get; set; }
+        public string PlNa { get; set; }
     }
 
     public class PeriodScoreMDB

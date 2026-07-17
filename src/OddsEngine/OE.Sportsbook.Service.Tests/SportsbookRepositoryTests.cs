@@ -260,5 +260,127 @@ namespace OE.Sportsbook.Service.Tests
             Assert.NotNull(selection.SeNaTr);
             Assert.Equal("主胜", selection.SeNaTr!.Single().Tx);
         }
+
+        // Player markets (GM-528): the fixture roster (OnFixtureChangeMessage.Pl) persists to
+        // Fixture.Pl (names only — PlNaTr stays owned by OE.Translation.Service) and passes
+        // through to the websocket payload; the market-level CompetitorOne persists to
+        // Market.CompId and rides both ON_ODDS_CHANGE builders. Null roster / absent CompId must
+        // never wipe stored state.
+        [Fact]
+        public void ToFixture_RosterPresent_PersistsPlayerDocs_NamesOnly()
+        {
+            var repository = CreateRepository();
+            var message = FixtureChangeMessage();
+            message.Pl = new List<PlayerMessage>
+            {
+                new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" },
+                new PlayerMessage { PlId = 150763, PlNa = "Kohli, Virat" }
+            };
+
+            var update = Assert.IsType<UpdateOneModel<Fixture>>(Assert.Single(repository.ToFixture(message)));
+            var rendered = update.Update.Render(new RenderArgs<Fixture>(
+                BsonSerializer.SerializerRegistry.GetSerializer<Fixture>(),
+                BsonSerializer.SerializerRegistry));
+
+            var players = rendered["$set"]["Pl"].AsBsonArray;
+            Assert.Equal(2, players.Count);
+            // PlId is the [BsonId] of the embedded doc, so the driver renders it as _id
+            Assert.Equal(150762, players[0]["_id"].AsInt32);
+            Assert.Equal("Sharma, Rohit", players[0]["PlNa"].AsString);
+            // Translations are owned by OE.Translation.Service — the roster refresh must not touch them
+            Assert.False(rendered["$set"].AsBsonDocument.Contains("PlNaTr"));
+        }
+
+        [Fact]
+        public void ToFixture_NoRoster_DoesNotTouchStoredRoster()
+        {
+            var repository = CreateRepository();
+
+            var update = Assert.IsType<UpdateOneModel<Fixture>>(Assert.Single(repository.ToFixture(FixtureChangeMessage())));
+            var rendered = update.Update.Render(new RenderArgs<Fixture>(
+                BsonSerializer.SerializerRegistry.GetSerializer<Fixture>(),
+                BsonSerializer.SerializerRegistry));
+
+            Assert.False(rendered["$set"].AsBsonDocument.Contains("Pl"));
+        }
+
+        [Fact]
+        public void ToMarketAndSelectionChange_MarketCompIdPresent_PersistsIt()
+        {
+            var repository = CreateRepository();
+            var message = MarketChangeMessage(compId: null);
+            message.Ma[0].CompId = 150762;
+
+            var (marketWrites, _) = repository.ToMarketAndSelectionChange(message, "cid");
+
+            var update = Assert.IsType<UpdateOneModel<Market>>(Assert.Single(marketWrites));
+            var rendered = update.Update.Render(new RenderArgs<Market>(
+                BsonSerializer.SerializerRegistry.GetSerializer<Market>(),
+                BsonSerializer.SerializerRegistry));
+
+            Assert.Equal(150762, rendered["$set"]["CompId"].AsInt32);
+        }
+
+        [Fact]
+        public void ToMarketAndSelectionChange_MarketCompIdAbsent_DoesNotTouchStoredValue()
+        {
+            var repository = CreateRepository();
+
+            var (marketWrites, _) = repository.ToMarketAndSelectionChange(MarketChangeMessage(compId: null), "cid");
+
+            var update = Assert.IsType<UpdateOneModel<Market>>(Assert.Single(marketWrites));
+            var rendered = update.Update.Render(new RenderArgs<Market>(
+                BsonSerializer.SerializerRegistry.GetSerializer<Market>(),
+                BsonSerializer.SerializerRegistry));
+
+            Assert.False(rendered["$set"].AsBsonDocument.Contains("CompId"),
+                "a message without CompId must not add it to the $set (it would wipe the stored id)");
+        }
+
+        [Fact]
+        public void PrepareInternalOddsChangeMessage_MarketChange_CarriesRosterAndMarketCompId()
+        {
+            var repository = CreateRepository();
+            var message = MarketChangeMessage(compId: null);
+            message.Ma[0].CompId = 150762;
+            message.Pl = new List<PlayerMessage> { new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" } };
+
+            var payload = repository.PrepareInternalOddsChangeMessage(message, "cid");
+
+            Assert.Equal(150762, payload.Ma.Single().CompId);
+            Assert.Equal("Sharma, Rohit", payload.Pl!.Single().PlNa);
+        }
+
+        [Fact]
+        public void PrepareInternalOddsChangeMessage_FixtureTriggered_CarriesRosterAndStoredMarketCompId()
+        {
+            var repository = CreateRepository();
+            var message = FixtureChangeMessage();
+            message.Pl = new List<PlayerMessage> { new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" } };
+            var market = MongoMarket();
+            market.CompId = 150762;
+
+            var payload = repository.PrepareInternalOddsChangeMessage(
+                message,
+                new List<Market> { market },
+                new List<Selection> { MongoSelection(compId: null) },
+                "cid");
+
+            Assert.Equal(150762, payload.Ma.Single().CompId);
+            Assert.Equal("Sharma, Rohit", payload.Pl!.Single().PlNa);
+        }
+
+        [Fact]
+        public void PrepareInternalOddsChangeMessage_NoRoster_LeavesPlNull_SoConsumersKeepTheirs()
+        {
+            var repository = CreateRepository();
+
+            var marketChangePayload = repository.PrepareInternalOddsChangeMessage(MarketChangeMessage(compId: null), "cid");
+            var fixturePayload = repository.PrepareInternalOddsChangeMessage(
+                FixtureChangeMessage(), new List<Market> { MongoMarket() }, new List<Selection> { MongoSelection(compId: null) }, "cid");
+
+            Assert.Null(marketChangePayload.Pl);
+            Assert.Null(fixturePayload.Pl);
+        }
     }
 }

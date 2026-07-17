@@ -433,6 +433,13 @@ namespace OE.Sportsbook.Service.Repositories
                     message.Fa == FavoriteSelection.Home.ToString());
             }
 
+            // Roster only arrives on genuine adapter fixture payloads; null means "no roster info
+            // in this message", so the stored roster is preserved (same contract as HoNa/AwNa).
+            // Names only — per-player translations live in PlNaTr, owned by OE.Translation.Service.
+            if (message.Pl != null)
+                updateFixture = updateFixture.Set(
+                    s => s.Pl, message.Pl.Select(p => new PlayerMDB { PlId = p.PlId, PlNa = p.PlNa }).ToList());
+
             return new WriteModel<Fixture>[]
             {
                     new UpdateOneModel<Fixture>(filter, updateFixture)
@@ -514,6 +521,12 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.CaStId, market.CaStId)
                         .Set(s => s.CaStNa, market.CaStNa)
                         .Set(s => s.InPl, market.InPl);
+
+                // CompetitorOne is the market's player identity; only set when the message carries
+                // a value so payloads without it never wipe a stored id (a market cannot stop
+                // being a player market).
+                if (market.CompId.HasValue)
+                    marketUpdate = marketUpdate.Set(s => s.CompId, market.CompId);
 
                 markets.Add(new UpdateOneModel<Market>(Builders<Market>.Filter.Eq("Id", market.Id), marketUpdate)
                 { IsUpsert = true });
@@ -710,6 +723,7 @@ namespace OE.Sportsbook.Service.Repositories
                     InPl = market.InPl,
                     // Deliberately not gated — see SeNaTr above.
                     MaTeTr = market.MaTeTr,
+                    CompId = market.CompId,
                     Se = selections
                 });
             }
@@ -762,6 +776,9 @@ namespace OE.Sportsbook.Service.Repositories
                 //}).ToList()
                 StUr = message.StUr,
                 Ma = markets,
+                // Ungated pass-through: producers only set Pl on genuine fixture payloads, so it
+                // is null on market changes anyway; null = "unchanged or none" downstream.
+                Pl = message.Pl,
                 SpTr = GateTranslations($"{message.Id}:Sp", message.SpTr),
                 SegTr = GateTranslations($"{message.Id}:Seg", message.SegTr),
                 LeTr = GateTranslations($"{message.Id}:Le", message.LeTr),
@@ -834,6 +851,7 @@ namespace OE.Sportsbook.Service.Repositories
                     InPl = market.InPl,
                     // Deliberately not gated — see MaTeTr in the OnMarketChangeMessage overload.
                     MaTeTr = market.MaNaTr?.Select(t => new TranslationMessage { LaCo = t.LaCo, Tx = t.MaNa }).ToList(),
+                    CompId = market.CompId,
                     Se = selections
                 });
             }
@@ -885,6 +903,9 @@ namespace OE.Sportsbook.Service.Repositories
                 //}).ToList()
                 StUr = message.StUr,
                 Ma = markets,
+                // Ungated pass-through — this fixture-triggered path is the main carrier of a
+                // fresh roster; null = "unchanged or none" downstream.
+                Pl = message.Pl,
                 SpTr = GateTranslations($"{message.Id}:Sp", message.SpTr),
                 SegTr = GateTranslations($"{message.Id}:Seg", message.SegTr),
                 LeTr = GateTranslations($"{message.Id}:Le", message.LeTr),

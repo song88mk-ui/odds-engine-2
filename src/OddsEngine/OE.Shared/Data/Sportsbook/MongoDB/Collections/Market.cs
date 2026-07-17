@@ -34,6 +34,11 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public string ClBo { get; set; }
         public bool InPl { get; set; }
         public List<MarketTranslationMDB> MaNaTr { get; set; }
+        // Vendor market-level CompetitorOne (2026-07 player-markets, GM-528): present = per-player
+        // prop market for that player; joined against Fixture.Pl. Distinct from Selection.CompId
+        // (competitor-specific outcome) and never to be confused with Selection.CoId (bet-builder
+        // correlation id).
+        public int? CompId { get; set; }
     }
 
     public class MarketTranslationMDB
