@@ -98,6 +98,20 @@ namespace OE.Translation.Service.Repositories
                 AddIfValid(items, $"Te:{message.HoId}", message.HoNa);
                 AddIfValid(items, $"Te:{message.AwId}", message.AwNa);
 
+                // Player roster (GM-528 per-player prop markets): one row per player, keyed by the
+                // vendor competitor id. Deliberately NOT Co:{id} — Co: rows carry a selection's
+                // SeNa as SOURCE_TEXT, wrong semantics for roster names.
+                if (message.Pl != null)
+                {
+                    foreach (var player in message.Pl)
+                    {
+                        if (player == null)
+                            continue;
+
+                        AddIfValid(items, $"Pl:{player.PlId}", player.PlNa);
+                    }
+                }
+
                 if (items.Count == 0)
                 {
                     _logger.LogDebug("No new fixture data for message {Id} (invalid or already cached)", message.Id);

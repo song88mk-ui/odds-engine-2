@@ -414,6 +414,58 @@ namespace OE.Translation.Service.Tests
             Assert.Null(payload.AwTr);
             Assert.Null(payload.Ma[0].MaTeTr);
             Assert.Null(payload.Ma[0].Se[0].SeNaTr);
+            Assert.Null(payload.Pl);
+        }
+
+        // Player roster deltas (GM-528): a changed Pl:{PlId} key on this fixture's roster sends
+        // the FULL roster (Pl replaces the roster downstream — a partial list would drop
+        // players); the changed player carries the delta, the others their persisted PlNaTr rows.
+        [Fact]
+        public void ApplyTranslationDeltas_PlayerDeltaOnRoster_SendsFullRosterWithDeltaAndPersistedTr()
+        {
+            var fixture = MakeFixture();
+            fixture.Pl = new List<PlayerMDB>
+            {
+                new PlayerMDB { PlId = 150762, PlNa = "Sharma, Rohit" },
+                new PlayerMDB { PlId = 150763, PlNa = "Kohli, Virat" }
+            };
+            fixture.PlNaTr = new List<PlayerTranslationMDB>
+            {
+                new PlayerTranslationMDB { PlId = 150763, LaCo = "ZH", PlNa = "维拉特·科利" }
+            };
+            var payload = MakePayload();
+            var playerDeltas = new Dictionary<int, List<TranslationMessage>> { [150762] = Delta("罗希特·夏尔马") };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                playerDeltas: playerDeltas);
+
+            Assert.NotNull(payload.Pl);
+            Assert.Equal(2, payload.Pl!.Count);
+            var changed = payload.Pl.Single(p => p.PlId == 150762);
+            Assert.Same(playerDeltas[150762], changed.Tr);
+            var unchanged = payload.Pl.Single(p => p.PlId == 150763);
+            Assert.Equal("Kohli, Virat", unchanged.PlNa);
+            Assert.Equal("维拉特·科利", unchanged.Tr!.Single().Tx);
+        }
+
+        [Fact]
+        public void ApplyTranslationDeltas_PlayerDeltaNotOnRoster_LeavesPlNull()
+        {
+            var fixture = MakeFixture();
+            fixture.Pl = new List<PlayerMDB> { new PlayerMDB { PlId = 150762, PlNa = "Sharma, Rohit" } };
+            var payload = MakePayload();
+            var playerDeltas = new Dictionary<int, List<TranslationMessage>> { [999999] = Delta("someone else") };
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                playerDeltas: playerDeltas);
+
+            Assert.Null(payload.Pl);
         }
 
         #endregion

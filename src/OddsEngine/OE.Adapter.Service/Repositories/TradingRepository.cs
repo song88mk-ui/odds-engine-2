@@ -121,6 +121,20 @@ namespace OE.Adapter.Service.Repositories
             message.LeTr = _translationCache.GetTranslations($"LeId:{message.LeId}", message.LeNa);
             message.HoTr = _translationCache.GetTranslations($"Te:{message.HoId}", message.HoNa);
             message.AwTr = _translationCache.GetTranslations($"Te:{message.AwId}", message.AwNa);
+
+            // Player roster (GM-528 per-player prop markets): per-player name translations,
+            // TranslationCache2 key Pl:{PlId}. A null roster stays null — this payload simply
+            // carries no roster information.
+            if (message.Pl != null)
+            {
+                foreach (var player in message.Pl)
+                {
+                    if (player == null)
+                        continue;
+
+                    player.Tr = _translationCache.GetTranslations($"Pl:{player.PlId}", player.PlNa);
+                }
+            }
         }
 
         private void EnrichMarketTranslations(OnMarketChangeMessage message)

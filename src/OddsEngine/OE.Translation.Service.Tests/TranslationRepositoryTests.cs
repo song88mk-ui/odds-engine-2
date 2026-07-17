@@ -132,6 +132,29 @@ namespace OE.Translation.Service.Tests
             }
         }
 
+        // Player roster (GM-528): every roster entry seeds a Pl:{PlId} row with the English name
+        // as SOURCE_TEXT — deliberately NOT Co:{id}, whose SOURCE_TEXT is a selection's SeNa.
+        [Fact]
+        public async Task FixtureUpdate_WithRoster_SeedsPlRowsPerPlayer()
+        {
+            var (repository, provider) = CreateRepository(nameof(FixtureUpdate_WithRoster_SeedsPlRowsPerPlayer));
+
+            var message = FixtureMessage();
+            message.Pl = new List<PlayerMessage>
+            {
+                new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" },
+                new PlayerMessage { PlId = 150763, PlNa = " " } // blank name — skipped by AddIfValid
+            };
+
+            await repository.OnProcessFixtureSetUpdate(message);
+
+            using var context = GetContext(provider);
+            var row = context.TranslationCache2.Single(r => r.StringId == "Pl:150762");
+            Assert.Equal("Sharma, Rohit", row.SourceText);
+            Assert.False(row.Processed);
+            Assert.False(context.TranslationCache2.Any(r => r.StringId == "Pl:150763"));
+        }
+
         [Fact]
         public async Task FixtureUpdate_SourceNameChange_ClearsTargetsAndReopensWorklist()
         {

@@ -40,7 +40,8 @@ namespace OE.Adapter.Service.Tests
                 new TranslationChangeItem { StId = "Te:H1", LaCo = "ZH", Tx = "阿森纳" },
                 new TranslationChangeItem { StId = "Te:A1", LaCo = "ZH", Tx = "切尔西" },
                 new TranslationChangeItem { StId = "MaTe:16", LaCo = "ZH", Tx = "赛果" },
-                new TranslationChangeItem { StId = "SeTe:16:1", LaCo = "ZH", Tx = "主胜" }
+                new TranslationChangeItem { StId = "SeTe:16:1", LaCo = "ZH", Tx = "主胜" },
+                new TranslationChangeItem { StId = "Pl:150762", LaCo = "ZH", Tx = "罗希特·夏尔马" }
             });
 
             _repository = new TradingRepository(
@@ -108,6 +109,34 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal(MessageType.ON_FIXTURE_CHANGE, published.MessageType);
             Assert.Equal($"r.oe.adapter.onfixturechange.{_instanceName}", published.RoutingKey);
             Assert.Same(message, published.Payload);
+        }
+
+        // Player roster (GM-528): each roster entry gets its Pl:{PlId} translation attached;
+        // misses stay null (fall back to the English PlNa), and a roster-less payload stays null.
+        [Fact]
+        public void FixtureChange_EnrichesRosterTranslationsPerPlayer()
+        {
+            var message = FixtureMessage();
+            message.Pl = new List<PlayerMessage>
+            {
+                new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" },
+                new PlayerMessage { PlId = 150763, PlNa = "Kohli, Virat" }
+            };
+
+            _repository.ProcessOnFixtureChangeMessage(_broker, message, "cid");
+
+            Assert.Equal("罗希特·夏尔马", message.Pl[0].Tr!.Single().Tx);
+            Assert.Null(message.Pl[1].Tr); // no Pl:150763 row — falls back to English PlNa
+        }
+
+        [Fact]
+        public void FixtureChange_NoRoster_LeavesPlNull()
+        {
+            var message = FixtureMessage();
+
+            _repository.ProcessOnFixtureChangeMessage(_broker, message, "cid");
+
+            Assert.Null(message.Pl);
         }
 
         [Fact]

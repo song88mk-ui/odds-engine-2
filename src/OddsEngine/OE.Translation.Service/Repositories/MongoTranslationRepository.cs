@@ -719,6 +719,7 @@ namespace OE.Translation.Service.Repositories
             var marketTemplateDeltas = new Dictionary<string, List<TranslationMessage>>();
             var selectionTemplateDeltas = new Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>>();
             var competitorDeltas = new Dictionary<int, List<TranslationMessage>>();
+            var playerDeltas = new Dictionary<int, List<TranslationMessage>>();
 
             var appliedKeys = 0;
 
@@ -774,6 +775,12 @@ namespace OE.Translation.Service.Repositories
                                 Builders<Selection>.Filter.Eq(s => s.CompId, compId)),
                             "SeNaTr", entry.Value, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
                         break;
+                    case "Pl" when int.TryParse(id, out var plId):
+                        // Player roster name (GM-528 per-player prop markets) — writes the flat
+                        // Fixture.PlNaTr rows for every fixture whose roster contains the player.
+                        playerDeltas[plId] = entry.Value;
+                        UpdatePlayerTranslations(plId, entry.Value);
+                        break;
                     case "SeTe":
                         // "SeTe:{MaTeId}:{SeTeId}" — SeTeId is the segment after the LAST colon.
                         var lastSeparator = id.LastIndexOf(':');
@@ -802,7 +809,7 @@ namespace OE.Translation.Service.Repositories
             }
 
             PublishTranslationOnlyOddsChanges(messageBroker, correlationId,
-                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, openFixtureIds);
+                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, playerDeltas, openFixtureIds);
 
             _logger.LogInformationEx($"OnTranslationChange: completed {appliedKeys} keys in {stopwatch.ElapsedMilliseconds}ms");
         }
@@ -877,6 +884,27 @@ namespace OE.Translation.Service.Repositories
         // SeNaTr): pull the language entry, push the replacement (skip the push on removal).
         // Two-step because Mongo rejects pull+push on the same field in one update; the *Tr MDB
         // items carry [BsonId] on LaCo, hence the "_id" element filter.
+        // A player-name edit (Pl:{PlId}) touches Fixture.PlNaTr on every fixture whose roster
+        // contains the player. Same pull-then-push shape as UpdateTranslationArray, but PlNaTr
+        // rows have a two-part identity (PlId, LaCo) — the generic helper only pulls by the
+        // [BsonId] LaCo, which would drop OTHER players' rows for the same language. The Fixture
+        // collection is small (cleanup-bounded), so like the other fixture-field updates this is
+        // deliberately unscoped by fixture status.
+        private void UpdatePlayerTranslations(int plId, List<TranslationMessage> deltas)
+        {
+            var rosterHasPlayer = Builders<Fixture>.Filter.ElemMatch(f => f.Pl, p => p.PlId == plId);
+
+            foreach (var delta in deltas)
+            {
+                _fixtureCollection.UpdateMany(rosterHasPlayer,
+                    Builders<Fixture>.Update.PullFilter(f => f.PlNaTr, t => t.PlId == plId && t.LaCo == delta.LaCo));
+
+                if (!string.IsNullOrEmpty(delta.Tx))
+                    _fixtureCollection.UpdateMany(rosterHasPlayer,
+                        Builders<Fixture>.Update.Push(f => f.PlNaTr, new PlayerTranslationMDB { PlId = plId, LaCo = delta.LaCo, PlNa = delta.Tx }));
+            }
+        }
+
         private void UpdateTranslationArray<TDoc, TItem>(
             IMongoCollection<TDoc> collection,
             FilterDefinition<TDoc> filter,
@@ -905,6 +933,7 @@ namespace OE.Translation.Service.Repositories
             Dictionary<string, List<TranslationMessage>> marketTemplateDeltas,
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
             Dictionary<int, List<TranslationMessage>> competitorDeltas,
+            Dictionary<int, List<TranslationMessage>> playerDeltas,
             List<long> openFixtureIds)
         {
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
@@ -924,6 +953,9 @@ namespace OE.Translation.Service.Repositories
                 fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.HoId, teamDeltas.Keys));
                 fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.AwId, teamDeltas.Keys));
             }
+
+            if (playerDeltas.Count > 0)
+                fixtureFilters.Add(Builders<Fixture>.Filter.ElemMatch(f => f.Pl, p => playerDeltas.Keys.Contains(p.PlId)));
 
             // All three discovery queries lead with FiId IN (open fixtures) + MaStId so they ride
             // the (FiId, MaStId, MaTeId) index — only open fixtures get notified anyway (the
@@ -1024,7 +1056,7 @@ namespace OE.Translation.Service.Repositories
                     .GroupBy(s => (s.MaTeId, s.SeTeId))
                     .ToDictionary(g => g.Key, g => g.First().SeTeNa);
 
-                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache, seTeNaByTemplate);
+                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache, seTeNaByTemplate, playerDeltas);
 
                 messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
             }
@@ -1050,15 +1082,36 @@ namespace OE.Translation.Service.Repositories
             // token-composition trigger needs the English template text (see
             // SelectionTranslationComposer). Null-safe: without it, token selections simply
             // fall through to the raw selectionTemplateDeltas assignment (pre-compose behavior).
-            IReadOnlyDictionary<(string MaTeId, string SeTeId), string> seTeNaByTemplate = null)
+            IReadOnlyDictionary<(string MaTeId, string SeTeId), string> seTeNaByTemplate = null,
+            Dictionary<int, List<TranslationMessage>> playerDeltas = null)
         {
             competitorDeltas ??= new Dictionary<int, List<TranslationMessage>>();
+            playerDeltas ??= new Dictionary<int, List<TranslationMessage>>();
 
             payload.SpTr = sportDeltas.TryGetValue(fixture.SpId, out var spTr) ? spTr : null;
             payload.SegTr = segmentDeltas.TryGetValue(fixture.SegId, out var segTr) ? segTr : null;
             payload.LeTr = leagueDeltas.TryGetValue(fixture.LeId, out var leTr) ? leTr : null;
             payload.HoTr = fixture.HoId != null && teamDeltas.TryGetValue(fixture.HoId, out var hoTr) ? hoTr : null;
             payload.AwTr = fixture.AwId != null && teamDeltas.TryGetValue(fixture.AwId, out var awTr) ? awTr : null;
+
+            // Fixture roster (GM-528): when a changed Pl:{PlId} key is on this fixture's roster,
+            // send the FULL roster — Pl replaces the roster downstream, so a partial list would
+            // drop players. Changed players carry the delta; the rest carry their persisted
+            // PlNaTr rows so the payload stays complete. No changed player on the roster keeps
+            // Pl null and consumers keep what they have.
+            if (fixture.Pl != null && fixture.Pl.Any(p => playerDeltas.ContainsKey(p.PlId)))
+            {
+                payload.Pl = fixture.Pl.Select(p => new PlayerMessage
+                {
+                    PlId = p.PlId,
+                    PlNa = p.PlNa,
+                    Tr = playerDeltas.TryGetValue(p.PlId, out var plTr)
+                        ? plTr
+                        : fixture.PlNaTr?.Where(t => t.PlId == p.PlId)
+                            .Select(t => new TranslationMessage { LaCo = t.LaCo, Tx = t.PlNa })
+                            .ToList()
+                }).ToList();
+            }
 
             foreach (var market in payload.Ma)
             {
