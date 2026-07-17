@@ -414,58 +414,98 @@ namespace OE.Translation.Service.Tests
             Assert.Null(payload.AwTr);
             Assert.Null(payload.Ma[0].MaTeTr);
             Assert.Null(payload.Ma[0].Se[0].SeNaTr);
-            Assert.Null(payload.Pl);
         }
 
-        // Player roster deltas (GM-528): a changed Pl:{PlId} key on this fixture's roster sends
-        // the FULL roster (Pl replaces the roster downstream — a partial list would drop
-        // players); the changed player carries the delta, the others their persisted PlNaTr rows.
+        // Player markets (GM-528): the pushed MaTeTr is COMPOSED from the cache's merged Pl: and
+        // MaTe: state (the Worker Apply'd the delta before this path) — never the raw template
+        // text, which would collapse the N per-player markets into one translated block.
         [Fact]
-        public void ApplyTranslationDeltas_PlayerDeltaOnRoster_SendsFullRosterWithDeltaAndPersistedTr()
+        public void ApplyTranslationDeltas_PlayerMarket_PlayerDelta_ComposesMaTeTrFromCache()
         {
             var fixture = MakeFixture();
-            fixture.Pl = new List<PlayerMDB>
-            {
-                new PlayerMDB { PlId = 150762, PlNa = "Sharma, Rohit" },
-                new PlayerMDB { PlId = 150763, PlNa = "Kohli, Virat" }
-            };
-            fixture.PlNaTr = new List<PlayerTranslationMDB>
-            {
-                new PlayerTranslationMDB { PlId = 150763, LaCo = "ZH", PlNa = "维拉特·科利" }
-            };
             var payload = MakePayload();
-            var playerDeltas = new Dictionary<int, List<TranslationMessage>> { [150762] = Delta("罗希特·夏尔马") };
+            payload.Ma[0].CompId = 150762;
+            var cache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Pl:150762"] = Delta("罗希特·夏尔马"),
+                ["MaTe:MT1"] = Delta("第一局首位达到50分的球员 是/否")
+            });
 
             MongoTranslationRepository.ApplyTranslationDeltas(
                 payload, fixture,
                 sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
                 marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
-                playerDeltas: playerDeltas);
+                translationCache: cache,
+                playerDeltas: new Dictionary<int, List<TranslationMessage>> { [150762] = Delta("罗希特·夏尔马") });
 
-            Assert.NotNull(payload.Pl);
-            Assert.Equal(2, payload.Pl!.Count);
-            var changed = payload.Pl.Single(p => p.PlId == 150762);
-            Assert.Same(playerDeltas[150762], changed.Tr);
-            var unchanged = payload.Pl.Single(p => p.PlId == 150763);
-            Assert.Equal("Kohli, Virat", unchanged.PlNa);
-            Assert.Equal("维拉特·科利", unchanged.Tr!.Single().Tx);
+            Assert.Equal("罗希特·夏尔马 - 第一局首位达到50分的球员 是/否", payload.Ma[0].MaTeTr!.Single().Tx);
         }
 
         [Fact]
-        public void ApplyTranslationDeltas_PlayerDeltaNotOnRoster_LeavesPlNull()
+        public void ApplyTranslationDeltas_PlayerMarket_TemplateDelta_ComposesInsteadOfRawText()
         {
             var fixture = MakeFixture();
-            fixture.Pl = new List<PlayerMDB> { new PlayerMDB { PlId = 150762, PlNa = "Sharma, Rohit" } };
             var payload = MakePayload();
-            var playerDeltas = new Dictionary<int, List<TranslationMessage>> { [999999] = Delta("someone else") };
+            payload.Ma[0].CompId = 150762;
+            var templateDelta = Delta("第一局首位达到50分的球员 是/否");
+            var cache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Pl:150762"] = Delta("罗希特·夏尔马"),
+                ["MaTe:MT1"] = templateDelta
+            });
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new Dictionary<string, List<TranslationMessage>> { ["MT1"] = templateDelta },
+                selectionTemplateDeltas: new(),
+                translationCache: cache);
+
+            Assert.Equal("罗希特·夏尔马 - 第一局首位达到50分的球员 是/否", payload.Ma[0].MaTeTr!.Single().Tx);
+        }
+
+        [Fact]
+        public void ApplyTranslationDeltas_PlayerMarket_UntranslatedPlayer_PushesNothingForThatMarket()
+        {
+            var fixture = MakeFixture();
+            var payload = MakePayload();
+            payload.Ma[0].CompId = 150762;
+            var templateDelta = Delta("模板");
+            var cache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["MaTe:MT1"] = templateDelta // no Pl:150762 — composing is impossible
+            });
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new Dictionary<string, List<TranslationMessage>> { ["MT1"] = templateDelta },
+                selectionTemplateDeltas: new(),
+                translationCache: cache);
+
+            Assert.Null(payload.Ma[0].MaTeTr);
+        }
+
+        [Fact]
+        public void ApplyTranslationDeltas_PlayerMarket_UnrelatedDelta_StaysNull()
+        {
+            var fixture = MakeFixture();
+            var payload = MakePayload();
+            payload.Ma[0].CompId = 150762;
+            var cache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Pl:150762"] = Delta("罗希特·夏尔马"),
+                ["MaTe:MT1"] = Delta("模板")
+            });
 
             MongoTranslationRepository.ApplyTranslationDeltas(
                 payload, fixture,
                 sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
                 marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
-                playerDeltas: playerDeltas);
+                translationCache: cache,
+                playerDeltas: new Dictionary<int, List<TranslationMessage>> { [999999] = Delta("someone else") });
 
-            Assert.Null(payload.Pl);
+            Assert.Null(payload.Ma[0].MaTeTr);
         }
 
         #endregion

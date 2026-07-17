@@ -56,10 +56,9 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public List<TranslationMessage> HoTr { get; set; }
         public List<TranslationMessage> AwTr { get; set; }
 
-        // Player roster — property name intentionally matches OnFixtureChangeMessage.Pl because
-        // OE.Websocket.Service deserializes ON_ODDS_CHANGE as OnMarketChangeMessage. Null means
-        // "unchanged or none" and consumers keep the roster they already have.
-        public List<PlayerMessage> Pl { get; set; }
+        // The fixture roster deliberately does NOT ride this hop: a player market's label reaches
+        // clients through the existing MaNa/MaTeTr fields (composed per PlayerMarketNameComposer),
+        // so downstream of OE.Sportsbook.Service needs nothing new.
     }
 
     public class InternalMarketMessage
@@ -82,8 +81,9 @@ namespace OE.Shared.Messages.OutgoingSportsbookMessages
         public bool InPl { get; set; }
         // See OnInternalOddsChangeMessage translation lists — name matches MarketMessage.MaTeTr.
         public List<TranslationMessage> MaTeTr { get; set; }
-        // Per-player prop-market competitor id — name matches MarketMessage.CompId (the websocket
-        // deserializes ON_ODDS_CHANGE as OnMarketChangeMessage). See MarketMessage.CompId.
+        // Per-player prop-market competitor id — name matches MarketMessage.CompId. Set on the
+        // translation-only push path (built from the Mongo Market doc) so ApplyTranslationDeltas
+        // can recompose this market's MaTeTr when a Pl:/MaTe: delta lands; downstream ignores it.
         public int? CompId { get; set; }
 
         public List<InternalSelectionMessage> Se { get; set; } = new List<InternalSelectionMessage>();

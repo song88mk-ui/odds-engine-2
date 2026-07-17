@@ -111,32 +111,30 @@ namespace OE.Adapter.Service.Tests
             Assert.Same(message, published.Payload);
         }
 
-        // Player roster (GM-528): each roster entry gets its Pl:{PlId} translation attached;
-        // misses stay null (fall back to the English PlNa), and a roster-less payload stays null.
+        // Player market (GM-528): its MaTeTr is COMPOSED — "{Pl:{CompId} translation} - {MaTe:
+        // translation}" — never the raw template text (which would collapse the N per-player
+        // markets into one indistinguishable translated block). Either side missing -> null, and
+        // the English MaNa (player-inclusive) is the fallback.
         [Fact]
-        public void FixtureChange_EnrichesRosterTranslationsPerPlayer()
+        public void MarketChange_PlayerMarket_ComposesMaTeTrFromPlayerAndTemplate()
         {
-            var message = FixtureMessage();
-            message.Pl = new List<PlayerMessage>
-            {
-                new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" },
-                new PlayerMessage { PlId = 150763, PlNa = "Kohli, Virat" }
-            };
+            var message = MarketMessage();
+            message.Ma[0].CompId = 150762;
 
-            _repository.ProcessOnFixtureChangeMessage(_broker, message, "cid");
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
 
-            Assert.Equal("罗希特·夏尔马", message.Pl[0].Tr!.Single().Tx);
-            Assert.Null(message.Pl[1].Tr); // no Pl:150763 row — falls back to English PlNa
+            Assert.Equal("罗希特·夏尔马 - 赛果", message.Ma.Single().MaTeTr!.Single().Tx);
         }
 
         [Fact]
-        public void FixtureChange_NoRoster_LeavesPlNull()
+        public void MarketChange_PlayerMarket_UntranslatedPlayer_LeavesMaTeTrNull()
         {
-            var message = FixtureMessage();
+            var message = MarketMessage();
+            message.Ma[0].CompId = 999999; // no Pl:999999 row
 
-            _repository.ProcessOnFixtureChangeMessage(_broker, message, "cid");
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
 
-            Assert.Null(message.Pl);
+            Assert.Null(message.Ma.Single().MaTeTr);
         }
 
         [Fact]

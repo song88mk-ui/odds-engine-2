@@ -5,10 +5,12 @@ using OE.Shared.Messages.OutgoingSportsbookMessages;
 namespace OE.Shared.Test.Messages
 {
     // Pins the 2026-07 player-markets contract additions: the fixture roster
-    // (OnFixtureChangeMessage.Pl, entries {PlId, PlNa, Tr}) and the market-level competitor id
+    // (OnFixtureChangeMessage.Pl, entries {PlId, PlNa}) and the market-level competitor id
     // (MarketMessage.CompId). The names are shared verbatim with bet-genius's
-    // OnInternalFixtureChangeMessage/InternalMarketMessage and with the sportsbook -> websocket
-    // ON_ODDS_CHANGE hop (deserialized as OnMarketChangeMessage) — a rename breaks them silently.
+    // OnInternalFixtureChangeMessage/InternalMarketMessage — a rename breaks them silently. The
+    // roster rides only the producer -> adapter -> sportsbook leg (seeding + persistence); the
+    // player label reaches clients through MaNa/MaTeTr (see PlayerMarketNameComposer), so
+    // OnInternalOddsChangeMessage carries no roster.
     public class PlayerMarketWireContractTests
     {
         [Fact]
@@ -20,12 +22,7 @@ namespace OE.Shared.Test.Messages
                 PrFiId = "1234567890",
                 Pl = new List<PlayerMessage>
                 {
-                    new PlayerMessage
-                    {
-                        PlId = 150762,
-                        PlNa = "Sharma, Rohit",
-                        Tr = new List<TranslationMessage> { new() { LaCo = "ZH", Tx = "罗希特·夏尔马" } }
-                    }
+                    new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" }
                 },
                 Ma = new List<MarketMessage>
                 {
@@ -39,12 +36,11 @@ namespace OE.Shared.Test.Messages
             var player = document.RootElement.GetProperty("Pl")[0];
             Assert.Equal(150762, player.GetProperty("PlId").GetInt32());
             Assert.Equal("Sharma, Rohit", player.GetProperty("PlNa").GetString());
-            Assert.Equal("罗希特·夏尔马", player.GetProperty("Tr")[0].GetProperty("Tx").GetString());
             Assert.Equal(150762, document.RootElement.GetProperty("Ma")[0].GetProperty("CompId").GetInt32());
         }
 
-        // A payload from the bet-genius producer, whose PlayerMessage has no Tr property yet,
-        // must deserialize cleanly and keep the roster/CompId join intact.
+        // A payload from the bet-genius producer must deserialize cleanly and keep the
+        // roster/CompId join intact.
         [Fact]
         public void BetGeniusShapedPayload_DeserializesRosterAndCompId()
         {
@@ -57,20 +53,19 @@ namespace OE.Shared.Test.Messages
             Assert.NotNull(message);
             Assert.Equal(2, message!.Pl.Count);
             Assert.Equal("Sharma, Rohit", message.Pl[0].PlNa);
-            Assert.Null(message.Pl[0].Tr);
             Assert.Equal(150762, message.Ma.Single().CompId);
             Assert.Equal(message.Ma.Single().CompId, message.Pl[0].PlId);
         }
 
         // OE.Websocket.Service deserializes ON_ODDS_CHANGE (produced as OnInternalOddsChangeMessage)
-        // as OnMarketChangeMessage, so the property names on the two classes must line up.
+        // as OnMarketChangeMessage, so the market-level CompId name must line up across the hop
+        // (it rides the translation-only push for recompose routing; downstream ignores it).
         [Fact]
-        public void OnInternalOddsChangeMessage_RosterAndCompIdSurviveTheWebsocketHop()
+        public void OnInternalOddsChangeMessage_MarketCompIdSurvivesTheWebsocketHop()
         {
             var internalMessage = new OnInternalOddsChangeMessage
             {
                 PrFiId = "14041033",
-                Pl = new List<PlayerMessage> { new() { PlId = 150762, PlNa = "Sharma, Rohit" } },
                 Ma = new List<InternalMarketMessage>
                 {
                     new InternalMarketMessage { PrFiId = "14041033", PrMaId = "M1", MaTeId = "15858", CompId = 150762 }
@@ -80,16 +75,13 @@ namespace OE.Shared.Test.Messages
             var asWebsocketSees = JsonSerializer.Deserialize<OnMarketChangeMessage>(JsonSerializer.Serialize(internalMessage));
 
             Assert.NotNull(asWebsocketSees);
-            Assert.Equal(150762, asWebsocketSees!.Pl.Single().PlId);
-            Assert.Equal("Sharma, Rohit", asWebsocketSees.Pl.Single().PlNa);
-            Assert.Equal(150762, asWebsocketSees.Ma.Single().CompId);
+            Assert.Equal(150762, asWebsocketSees!.Ma.Single().CompId);
         }
 
         [Fact]
         public void RosterAndCompId_DefaultToNull_SoPayloadsWithoutThemDontWipeState()
         {
             Assert.Null(new OnFixtureChangeMessage { ChTyId = 0, PrFiId = "1" }.Pl);
-            Assert.Null(new OnInternalOddsChangeMessage { PrFiId = "1" }.Pl);
             Assert.Null(new MarketMessage { ChTyId = 0, PrFiId = "1", PrMaId = "M1" }.CompId);
             Assert.Null(new InternalMarketMessage { PrFiId = "1", PrMaId = "M1" }.CompId);
         }

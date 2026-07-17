@@ -63,13 +63,12 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
 
     // One roster entry. PlId is the vendor competitor id — the same id space as
     // MarketMessage.CompId and SelectionMessage.CompId. Deliberately NOT named CoId: that name is
-    // the bet-builder correlation id on platform entities.
+    // the bet-builder correlation id on platform entities. The player's translation is never
+    // carried per entry: it feeds the COMPOSED market name instead (Pl:{PlId} + MaTe:{MaTeId},
+    // see PlayerMarketNameComposer), which rides the existing MaTeTr/MaNaTr fields.
     public class PlayerMessage
     {
         public int PlId { get; set; }
         public string PlNa { get; set; }
-        // Translation of PlNa (TranslationCache2 key "Pl:{PlId}"); populated by
-        // OE.Adapter.Service, null/empty -> fall back to PlNa. See the translation lists above.
-        public List<TranslationMessage> Tr { get; set; }
     }
 }

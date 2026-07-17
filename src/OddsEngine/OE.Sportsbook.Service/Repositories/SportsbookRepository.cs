@@ -776,9 +776,6 @@ namespace OE.Sportsbook.Service.Repositories
                 //}).ToList()
                 StUr = message.StUr,
                 Ma = markets,
-                // Ungated pass-through: producers only set Pl on genuine fixture payloads, so it
-                // is null on market changes anyway; null = "unchanged or none" downstream.
-                Pl = message.Pl,
                 SpTr = GateTranslations($"{message.Id}:Sp", message.SpTr),
                 SegTr = GateTranslations($"{message.Id}:Seg", message.SegTr),
                 LeTr = GateTranslations($"{message.Id}:Le", message.LeTr),
@@ -903,9 +900,6 @@ namespace OE.Sportsbook.Service.Repositories
                 //}).ToList()
                 StUr = message.StUr,
                 Ma = markets,
-                // Ungated pass-through — this fixture-triggered path is the main carrier of a
-                // fresh roster; null = "unchanged or none" downstream.
-                Pl = message.Pl,
                 SpTr = GateTranslations($"{message.Id}:Sp", message.SpTr),
                 SegTr = GateTranslations($"{message.Id}:Seg", message.SegTr),
                 LeTr = GateTranslations($"{message.Id}:Le", message.LeTr),

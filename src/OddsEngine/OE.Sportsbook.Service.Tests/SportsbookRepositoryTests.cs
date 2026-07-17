@@ -287,8 +287,6 @@ namespace OE.Sportsbook.Service.Tests
             // PlId is the [BsonId] of the embedded doc, so the driver renders it as _id
             Assert.Equal(150762, players[0]["_id"].AsInt32);
             Assert.Equal("Sharma, Rohit", players[0]["PlNa"].AsString);
-            // Translations are owned by OE.Translation.Service — the roster refresh must not touch them
-            Assert.False(rendered["$set"].AsBsonDocument.Contains("PlNaTr"));
         }
 
         [Fact]
@@ -337,50 +335,35 @@ namespace OE.Sportsbook.Service.Tests
                 "a message without CompId must not add it to the $set (it would wipe the stored id)");
         }
 
+        // The market-level CompId rides both ON_ODDS_CHANGE builders so the translation-only push
+        // path can recompose player-market names; the roster itself never leaves this service
+        // (the player label reaches clients through MaNa/MaTeTr).
         [Fact]
-        public void PrepareInternalOddsChangeMessage_MarketChange_CarriesRosterAndMarketCompId()
+        public void PrepareInternalOddsChangeMessage_MarketChange_CarriesMarketCompId()
         {
             var repository = CreateRepository();
             var message = MarketChangeMessage(compId: null);
             message.Ma[0].CompId = 150762;
-            message.Pl = new List<PlayerMessage> { new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" } };
 
             var payload = repository.PrepareInternalOddsChangeMessage(message, "cid");
 
             Assert.Equal(150762, payload.Ma.Single().CompId);
-            Assert.Equal("Sharma, Rohit", payload.Pl!.Single().PlNa);
         }
 
         [Fact]
-        public void PrepareInternalOddsChangeMessage_FixtureTriggered_CarriesRosterAndStoredMarketCompId()
+        public void PrepareInternalOddsChangeMessage_FixtureTriggered_CarriesStoredMarketCompId()
         {
             var repository = CreateRepository();
-            var message = FixtureChangeMessage();
-            message.Pl = new List<PlayerMessage> { new PlayerMessage { PlId = 150762, PlNa = "Sharma, Rohit" } };
             var market = MongoMarket();
             market.CompId = 150762;
 
             var payload = repository.PrepareInternalOddsChangeMessage(
-                message,
+                FixtureChangeMessage(),
                 new List<Market> { market },
                 new List<Selection> { MongoSelection(compId: null) },
                 "cid");
 
             Assert.Equal(150762, payload.Ma.Single().CompId);
-            Assert.Equal("Sharma, Rohit", payload.Pl!.Single().PlNa);
-        }
-
-        [Fact]
-        public void PrepareInternalOddsChangeMessage_NoRoster_LeavesPlNull_SoConsumersKeepTheirs()
-        {
-            var repository = CreateRepository();
-
-            var marketChangePayload = repository.PrepareInternalOddsChangeMessage(MarketChangeMessage(compId: null), "cid");
-            var fixturePayload = repository.PrepareInternalOddsChangeMessage(
-                FixtureChangeMessage(), new List<Market> { MongoMarket() }, new List<Selection> { MongoSelection(compId: null) }, "cid");
-
-            Assert.Null(marketChangePayload.Pl);
-            Assert.Null(fixturePayload.Pl);
         }
     }
 }

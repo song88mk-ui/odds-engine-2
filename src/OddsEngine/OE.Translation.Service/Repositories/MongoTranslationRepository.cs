@@ -166,11 +166,21 @@ namespace OE.Translation.Service.Repositories
 
                 var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaTeNa);
 
-                if (maTeTr != null)
+                // Per-player prop market (GM-528): MaNaTr is COMPOSED from the player's
+                // Pl:{CompId} translation and the template translation — never the raw template
+                // text, which would collapse the N per-player markets into one indistinguishable
+                // translated block (see PlayerMarketNameComposer, shared with the adapter's wire
+                // enrichment). Missing either side -> no stamp; English MaNa (player-inclusive)
+                // remains the fallback.
+                var maNaTr = market.CompId.HasValue
+                    ? PlayerMarketNameComposer.Compose(_translationCache.GetTranslations($"Pl:{market.CompId.Value}", null), maTeTr)
+                    : maTeTr;
+
+                if (maNaTr != null)
                 {
                     marketWrites.Add(new UpdateOneModel<Market>(
                         Builders<Market>.Filter.Eq("Id", market.Id),
-                        Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
+                        Builders<Market>.Update.Set(m => m.MaNaTr, maNaTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
                     { IsUpsert = false });
                 }
 
@@ -496,11 +506,16 @@ namespace OE.Translation.Service.Repositories
                 var currentText = templateNames.TryGetValue(market.MaTeId, out var maTeNa) ? maTeNa : null;
                 var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", currentText);
 
-                if (maTeTr != null)
+                // Player markets compose (GM-528) — same rule as the live stamp above.
+                var maNaTr = market.CompId.HasValue
+                    ? PlayerMarketNameComposer.Compose(_translationCache.GetTranslations($"Pl:{market.CompId.Value}", null), maTeTr)
+                    : maTeTr;
+
+                if (maNaTr != null)
                 {
                     writes.Add(new UpdateOneModel<Market>(
                         Builders<Market>.Filter.Eq(m => m.Id, market.Id),
-                        Builders<Market>.Update.Set(m => m.MaNaTr, maTeTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
+                        Builders<Market>.Update.Set(m => m.MaNaTr, maNaTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
                     { IsUpsert = false });
                 }
             }
@@ -755,13 +770,33 @@ namespace OE.Translation.Service.Repositories
                         break;
                     case "MaTe":
                         marketTemplateDeltas[id] = entry.Value;
+                        // The blanket raw-text update applies to regular markets only: a player
+                        // market's MaNaTr is COMPOSED (Pl: + MaTe:), so raw template text would
+                        // stomp the composed name — same split the token-composed selection
+                        // templates need (see UpdateSelectionTemplateTranslations).
                         UpdateTranslationArray(
                             _marketCollection,
                             Builders<Market>.Filter.And(
                                 Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
                                 Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
-                                Builders<Market>.Filter.Eq(m => m.MaTeId, id)),
+                                Builders<Market>.Filter.Eq(m => m.MaTeId, id),
+                                Builders<Market>.Filter.Eq(m => m.CompId, null)),
                             "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
+                        RecomposePlayerMarketNames(Builders<Market>.Filter.And(
+                            Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                            Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
+                            Builders<Market>.Filter.Eq(m => m.MaTeId, id),
+                            Builders<Market>.Filter.Ne(m => m.CompId, null)));
+                        break;
+                    case "Pl" when int.TryParse(id, out var plId):
+                        // Player-name edit (GM-528): recompose MaNaTr on that player's open
+                        // markets. The cache was Apply'd before this path runs (Worker order), so
+                        // the compose reads the fully merged Pl:/MaTe: state, not just the delta.
+                        playerDeltas[plId] = entry.Value;
+                        RecomposePlayerMarketNames(Builders<Market>.Filter.And(
+                            Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                            Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
+                            Builders<Market>.Filter.Eq(m => m.CompId, plId)));
                         break;
                     case "Co" when int.TryParse(id, out var compId):
                         // Competitor-specific selection name (as-is, not a template) — mutually
@@ -774,12 +809,6 @@ namespace OE.Translation.Service.Repositories
                                 Builders<Selection>.Filter.In(s => s.MaStId, openMarketStatusIds),
                                 Builders<Selection>.Filter.Eq(s => s.CompId, compId)),
                             "SeNaTr", entry.Value, t => new SelectionTranslationMDB { LaCo = t.LaCo, SeNa = t.Tx });
-                        break;
-                    case "Pl" when int.TryParse(id, out var plId):
-                        // Player roster name (GM-528 per-player prop markets) — writes the flat
-                        // Fixture.PlNaTr rows for every fixture whose roster contains the player.
-                        playerDeltas[plId] = entry.Value;
-                        UpdatePlayerTranslations(plId, entry.Value);
                         break;
                     case "SeTe":
                         // "SeTe:{MaTeId}:{SeTeId}" — SeTeId is the segment after the LAST colon.
@@ -884,25 +913,48 @@ namespace OE.Translation.Service.Repositories
         // SeNaTr): pull the language entry, push the replacement (skip the push on removal).
         // Two-step because Mongo rejects pull+push on the same field in one update; the *Tr MDB
         // items carry [BsonId] on LaCo, hence the "_id" element filter.
-        // A player-name edit (Pl:{PlId}) touches Fixture.PlNaTr on every fixture whose roster
-        // contains the player. Same pull-then-push shape as UpdateTranslationArray, but PlNaTr
-        // rows have a two-part identity (PlId, LaCo) — the generic helper only pulls by the
-        // [BsonId] LaCo, which would drop OTHER players' rows for the same language. The Fixture
-        // collection is small (cleanup-bounded), so like the other fixture-field updates this is
-        // deliberately unscoped by fixture status.
-        private void UpdatePlayerTranslations(int plId, List<TranslationMessage> deltas)
+        // Recomposes MaNaTr for the player markets matched by the caller's (open-scoped) filter,
+        // after a Pl: or MaTe: delta. Both sides are read from the cache, which the Worker
+        // Apply'd before this path runs, so a partial-language delta still composes the full
+        // merged translation set. Compose failure (either side missing) leaves the stored MaNaTr
+        // untouched rather than degrading it to raw template text.
+        private void RecomposePlayerMarketNames(FilterDefinition<Market> filter)
         {
-            var rosterHasPlayer = Builders<Fixture>.Filter.ElemMatch(f => f.Pl, p => p.PlId == plId);
+            var markets = _marketCollection.Find(filter)
+                .Project(m => new { m.Id, m.MaTeId, m.CompId })
+                .ToList();
 
-            foreach (var delta in deltas)
+            if (markets.Count == 0)
+                return;
+
+            var templateTrByMaTeId = new Dictionary<string, List<TranslationMessage>>();
+            var playerTrByCompId = new Dictionary<int, List<TranslationMessage>>();
+            var writes = new List<WriteModel<Market>>();
+
+            foreach (var market in markets)
             {
-                _fixtureCollection.UpdateMany(rosterHasPlayer,
-                    Builders<Fixture>.Update.PullFilter(f => f.PlNaTr, t => t.PlId == plId && t.LaCo == delta.LaCo));
+                if (market.CompId == null || market.MaTeId == null)
+                    continue;
 
-                if (!string.IsNullOrEmpty(delta.Tx))
-                    _fixtureCollection.UpdateMany(rosterHasPlayer,
-                        Builders<Fixture>.Update.Push(f => f.PlNaTr, new PlayerTranslationMDB { PlId = plId, LaCo = delta.LaCo, PlNa = delta.Tx }));
+                if (!templateTrByMaTeId.TryGetValue(market.MaTeId, out var maTeTr))
+                    templateTrByMaTeId[market.MaTeId] = maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", null);
+
+                if (!playerTrByCompId.TryGetValue(market.CompId.Value, out var plTr))
+                    playerTrByCompId[market.CompId.Value] = plTr = _translationCache.GetTranslations($"Pl:{market.CompId.Value}", null);
+
+                var maNaTr = PlayerMarketNameComposer.Compose(plTr, maTeTr);
+
+                if (maNaTr == null)
+                    continue;
+
+                writes.Add(new UpdateOneModel<Market>(
+                    Builders<Market>.Filter.Eq(m => m.Id, market.Id),
+                    Builders<Market>.Update.Set(m => m.MaNaTr, maNaTr.Select(t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx }).ToList()))
+                { IsUpsert = false });
             }
+
+            if (writes.Count > 0)
+                _marketCollection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
         }
 
         private void UpdateTranslationArray<TDoc, TItem>(
@@ -955,7 +1007,22 @@ namespace OE.Translation.Service.Repositories
             }
 
             if (playerDeltas.Count > 0)
-                fixtureFilters.Add(Builders<Fixture>.Filter.ElemMatch(f => f.Pl, p => playerDeltas.Keys.Contains(p.PlId)));
+            {
+                var playerCompIds = playerDeltas.Keys.Select(c => (int?)c).ToList();
+
+                var fixtureIds = _marketCollection
+                    .Find(Builders<Market>.Filter.And(
+                        Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                        Builders<Market>.Filter.In(m => m.MaStId, marketStatusIds),
+                        Builders<Market>.Filter.In(m => m.CompId, playerCompIds)))
+                    .Project(m => m.FiId)
+                    .ToList()
+                    .Distinct()
+                    .ToList();
+
+                if (fixtureIds.Count > 0)
+                    fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.FiId, fixtureIds));
+            }
 
             // All three discovery queries lead with FiId IN (open fixtures) + MaStId so they ride
             // the (FiId, MaStId, MaTeId) index — only open fixtures get notified anyway (the
@@ -1094,28 +1161,27 @@ namespace OE.Translation.Service.Repositories
             payload.HoTr = fixture.HoId != null && teamDeltas.TryGetValue(fixture.HoId, out var hoTr) ? hoTr : null;
             payload.AwTr = fixture.AwId != null && teamDeltas.TryGetValue(fixture.AwId, out var awTr) ? awTr : null;
 
-            // Fixture roster (GM-528): when a changed Pl:{PlId} key is on this fixture's roster,
-            // send the FULL roster — Pl replaces the roster downstream, so a partial list would
-            // drop players. Changed players carry the delta; the rest carry their persisted
-            // PlNaTr rows so the payload stays complete. No changed player on the roster keeps
-            // Pl null and consumers keep what they have.
-            if (fixture.Pl != null && fixture.Pl.Any(p => playerDeltas.ContainsKey(p.PlId)))
-            {
-                payload.Pl = fixture.Pl.Select(p => new PlayerMessage
-                {
-                    PlId = p.PlId,
-                    PlNa = p.PlNa,
-                    Tr = playerDeltas.TryGetValue(p.PlId, out var plTr)
-                        ? plTr
-                        : fixture.PlNaTr?.Where(t => t.PlId == p.PlId)
-                            .Select(t => new TranslationMessage { LaCo = t.LaCo, Tx = t.PlNa })
-                            .ToList()
-                }).ToList();
-            }
-
             foreach (var market in payload.Ma)
             {
-                market.MaTeTr = market.MaTeId != null && marketTemplateDeltas.TryGetValue(market.MaTeId, out var maTeTr) ? maTeTr : null;
+                var templateDelta = market.MaTeId != null && marketTemplateDeltas.TryGetValue(market.MaTeId, out var maTeTr) ? maTeTr : null;
+
+                if (market.CompId != null)
+                {
+                    // Player market (GM-528): never push the raw template text — its translated
+                    // name is COMPOSED (Pl: + MaTe:, both read from the already-Apply'd cache) when
+                    // either side changed; otherwise stay null so consumers keep what they have.
+                    var affected = playerDeltas.ContainsKey(market.CompId.Value) || templateDelta != null;
+
+                    market.MaTeTr = affected && translationCache != null
+                        ? PlayerMarketNameComposer.Compose(
+                            translationCache.GetTranslations($"Pl:{market.CompId.Value}", null),
+                            translationCache.GetTranslations($"MaTe:{market.MaTeId}", null))
+                        : null;
+                }
+                else
+                {
+                    market.MaTeTr = templateDelta;
+                }
 
                 foreach (var selection in market.Se)
                 {

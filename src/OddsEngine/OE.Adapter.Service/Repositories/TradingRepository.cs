@@ -121,20 +121,6 @@ namespace OE.Adapter.Service.Repositories
             message.LeTr = _translationCache.GetTranslations($"LeId:{message.LeId}", message.LeNa);
             message.HoTr = _translationCache.GetTranslations($"Te:{message.HoId}", message.HoNa);
             message.AwTr = _translationCache.GetTranslations($"Te:{message.AwId}", message.AwNa);
-
-            // Player roster (GM-528 per-player prop markets): per-player name translations,
-            // TranslationCache2 key Pl:{PlId}. A null roster stays null — this payload simply
-            // carries no roster information.
-            if (message.Pl != null)
-            {
-                foreach (var player in message.Pl)
-                {
-                    if (player == null)
-                        continue;
-
-                    player.Tr = _translationCache.GetTranslations($"Pl:{player.PlId}", player.PlNa);
-                }
-            }
         }
 
         private void EnrichMarketTranslations(OnMarketChangeMessage message)
@@ -147,7 +133,16 @@ namespace OE.Adapter.Service.Repositories
                 if (market == null)
                     continue;
 
-                market.MaTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaTeNa);
+                var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaTeNa);
+
+                // Per-player prop market (GM-528): the translated name is COMPOSED from the
+                // player's Pl:{CompId} translation and the template translation — token-swapping
+                // the translated template is impossible (see PlayerMarketNameComposer). When
+                // either side is missing, MaTeTr stays null and consumers fall back to the
+                // English MaNa, which the producer already sets to the player-inclusive name.
+                market.MaTeTr = market.CompId.HasValue
+                    ? PlayerMarketNameComposer.Compose(_translationCache.GetTranslations($"Pl:{market.CompId.Value}", null), maTeTr)
+                    : maTeTr;
 
                 if (market.Se == null)
                     continue;
