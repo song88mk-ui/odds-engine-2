@@ -534,6 +534,32 @@ namespace OE.Translation.Service.Tests
             Assert.Null(payload.Ma[0].MaTeTr);
         }
 
+        // MaTeP: placeholder deltas (GM-528 interpolation): a translated placeholder that kept the
+        // {player} marker yields the interpolated name; the join stays the fallback.
+        [Fact]
+        public void ApplyTranslationDeltas_PlayerTemplateDelta_InterpolatesFromCache()
+        {
+            var fixture = MakeFixture();
+            var payload = MakePayload();
+            payload.Ma[0].CompId = 150762;
+            var placeholderDelta = Delta("第一局{player}达到50分 是/否");
+            var cache = new StubTranslationCache(new Dictionary<string, List<TranslationMessage>>
+            {
+                ["Pl:150762"] = Delta("费罗扎，海鸥"),
+                ["MaTe:MT1"] = Delta("第一局首位达到50分的球员 是/否"),
+                ["MaTeP:MT1"] = placeholderDelta
+            });
+
+            MongoTranslationRepository.ApplyTranslationDeltas(
+                payload, fixture,
+                sportDeltas: new(), segmentDeltas: new(), leagueDeltas: new(), teamDeltas: new(),
+                marketTemplateDeltas: new(), selectionTemplateDeltas: new(),
+                translationCache: cache,
+                playerTemplateDeltas: new Dictionary<string, List<TranslationMessage>> { ["MT1"] = placeholderDelta });
+
+            Assert.Equal("第一局费罗扎，海鸥达到50分 是/否", payload.Ma[0].MaTeTr!.Single().Tx);
+        }
+
         [Fact]
         public void ApplyTranslationDeltas_PlayerMarket_UnrelatedDelta_StaysNull()
         {

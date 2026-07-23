@@ -156,6 +156,19 @@ namespace OE.Translation.Service.Repositories
                     AddIfValid(items, $"MaTe:{market.MaTeId}", market.MaTeNa,
                         throttleKey: MarketTemplateVariantId.Compute(market.MaTeId, market.MaTeNa));
 
+                    // Placeholder template for player-prop markets (GM-528 interpolation):
+                    // MaTeP:{MaTeId} -> the generic template with the vendor's player-slot phrase
+                    // replaced by {player} ("1st Innings {player} to Reach 50 Runs Yes/No"), so
+                    // the translation keeps a substitutable marker. Seeded only for templates the
+                    // feed actually uses as player markets (CompId present); templates without a
+                    // single recognizable slot (e.g. two-player "Player A and Player B") derive
+                    // null and keep the join-format fallback. Seeded PROCESSED=1 — deliberately
+                    // OFF the DeepL worklist until {player}-marker survival is confirmed; see
+                    // IsPlayerPlaceholderKey.
+                    if (market.CompId.HasValue)
+                        AddIfValid(items, $"MaTeP:{market.MaTeId}",
+                            PlayerMarketNameComposer.DerivePlaceholderSource(market.MaTeNa));
+
                     if (market.Se == null)
                         continue;
 
@@ -392,12 +405,13 @@ namespace OE.Translation.Service.Repositories
                         // Genuine name change (non-MaTe keys only — MaTe wording changes branch
                         // to a variant row above): stale targets are cleared and the row goes
                         // back on the pipeline's worklist (PROCESSED = 0) so every configured
-                        // language is re-translated from the new SOURCE_TEXT.
+                        // language is re-translated from the new SOURCE_TEXT. MaTeP: rows stay
+                        // off the worklist even on a wording change — see IsPlayerPlaceholderKey.
                         entity.SourceText = sourceText;
                         entity.TargetTextZh = string.Empty;
                         entity.TargetTextEs = string.Empty;
                         entity.TargetTextFr = string.Empty;
-                        entity.Processed = false;
+                        entity.Processed = IsPlayerPlaceholderKey(item.id);
                     }
                     else if (!string.Equals(entity.SourceText, sourceText, StringComparison.Ordinal))
                     {
@@ -423,7 +437,7 @@ namespace OE.Translation.Service.Repositories
                         TargetTextEs = string.Empty,
                         TargetTextFr = string.Empty,
                         HasBetPlacement = false,
-                        Processed = false,
+                        Processed = IsPlayerPlaceholderKey(item.id),
                         CreatedAt = DateTime.UtcNow
                     };
 
@@ -447,6 +461,18 @@ namespace OE.Translation.Service.Repositories
             if (_cacheBackfill)
                 await BackfillTranslationCache2(context, savedEntities);
         }
+
+        // MaTeP:{MaTeId} placeholder templates are seeded PROCESSED=1: deliberately OFF
+        // update.py's DeepL worklist until {player}-marker survival through machine translation
+        // is confirmed — they are translated manually via backoffice, whose edits announce
+        // normally. This is the ONE deliberate exception to the "never set PROCESSED=1" rule
+        // (see BulkSeed's header comment): that rule protects the translate-then-announce chain
+        // of rows that SHOULD be machine-translated; MaTeP rows must not enter it at all.
+        // Handing them to DeepL later = flip the stored rows to PROCESSED=0 and drop this
+        // exception. update.py's missing-language reset skips all-empty PROCESSED=1 rows so it
+        // cannot re-open these (see reset_for_missing_languages).
+        private static bool IsPlayerPlaceholderKey(string id) =>
+            id.StartsWith("MaTeP:", StringComparison.Ordinal);
 
         private static bool IsMarketTemplateKey(string id) =>
             id.StartsWith("MaTe:", StringComparison.Ordinal);

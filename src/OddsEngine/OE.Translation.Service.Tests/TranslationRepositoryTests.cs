@@ -156,6 +156,42 @@ namespace OE.Translation.Service.Tests
             Assert.False(context.TranslationCache2.Any(r => r.StringId == "Pl:150763"));
         }
 
+        // Placeholder templates (GM-528 interpolation): a player market (CompId set) seeds
+        // MaTeP:{MaTeId} with the {player}-marked wording derived from the generic template;
+        // regular markets and slotless templates seed nothing. MaTeP rows are seeded
+        // PROCESSED=1 — deliberately OFF the DeepL worklist until marker survival is confirmed
+        // (translated manually via backoffice meanwhile).
+        [Fact]
+        public async Task MarketUpdate_PlayerMarket_SeedsPlaceholderTemplateRow_OffTheDeepLWorklist()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_PlayerMarket_SeedsPlaceholderTemplateRow_OffTheDeepLWorklist));
+
+            var message = MarketMessage();
+            message.Ma[0].CompId = 150762;
+            message.Ma[0].MaTeId = "15858";
+            message.Ma[0].MaTeNa = "1st Innings Player to Reach 50 Runs Yes/No";
+
+            await repository.OnProcessMarketSetUpdate(message);
+
+            using var context = GetContext(provider);
+            var row = context.TranslationCache2.Single(r => r.StringId == "MaTeP:15858");
+            Assert.Equal("1st Innings {player} to Reach 50 Runs Yes/No", row.SourceText);
+            Assert.True(row.Processed);
+            // The ordinary keys stay on the worklist
+            Assert.False(context.TranslationCache2.Single(r => r.StringId == "MaTe:15858").Processed);
+        }
+
+        [Fact]
+        public async Task MarketUpdate_RegularMarket_SeedsNoPlaceholderRow()
+        {
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_RegularMarket_SeedsNoPlaceholderRow));
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage());
+
+            using var context = GetContext(provider);
+            Assert.False(context.TranslationCache2.Any(r => r.StringId.StartsWith("MaTeP:")));
+        }
+
         [Fact]
         public async Task FixtureUpdate_SourceNameChange_ClearsTargetsAndReopensWorklist()
         {

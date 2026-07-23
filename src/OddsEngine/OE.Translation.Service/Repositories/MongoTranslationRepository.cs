@@ -171,10 +171,14 @@ namespace OE.Translation.Service.Repositories
                 // Pl:{CompId} translation and the template translation — never the raw template
                 // text, which would collapse the N per-player markets into one indistinguishable
                 // translated block (see PlayerMarketNameComposer, shared with the adapter's wire
-                // enrichment). Missing either side -> no stamp; English MaNa (player-inclusive)
-                // remains the fallback.
+                // enrichment). Interpolated via the MaTeP:{MaTeId} placeholder row when its
+                // translation kept the {player} marker; join format otherwise. Missing inputs ->
+                // no stamp; English MaNa (player-inclusive) remains the fallback.
                 var maNaTr = market.CompId.HasValue
-                    ? PlayerMarketNameComposer.Compose(_translationCache.GetTranslations($"Pl:{market.CompId.Value}", null), maTeTr)
+                    ? PlayerMarketNameComposer.Compose(
+                        _translationCache.GetTranslations($"Pl:{market.CompId.Value}", null),
+                        maTeTr,
+                        _translationCache.GetTranslations($"MaTeP:{market.MaTeId}", null))
                     : maTeTr;
 
                 if (maNaTr != null)
@@ -503,7 +507,8 @@ namespace OE.Translation.Service.Repositories
                 var maNaTr = market.CompId.HasValue
                     ? PlayerMarketNameComposer.Compose(
                         _translationCache.GetTranslations($"Pl:{market.CompId.Value}", null),
-                        _translationCache.GetTranslations($"MaTe:{market.MaTeId}", null))
+                        _translationCache.GetTranslations($"MaTe:{market.MaTeId}", null),
+                        _translationCache.GetTranslations($"MaTeP:{market.MaTeId}", null))
                     : _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaNa);
 
                 if (maNaTr != null)
@@ -739,6 +744,7 @@ namespace OE.Translation.Service.Repositories
             var selectionTemplateDeltas = new Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>>();
             var competitorDeltas = new Dictionary<int, List<TranslationMessage>>();
             var playerDeltas = new Dictionary<int, List<TranslationMessage>>();
+            var playerTemplateDeltas = new Dictionary<string, List<TranslationMessage>>();
 
             var appliedKeys = 0;
 
@@ -822,6 +828,18 @@ namespace OE.Translation.Service.Repositories
                             Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
                             Builders<Market>.Filter.Eq(m => m.CompId, plId)));
                         break;
+                    case "MaTeP":
+                        // Placeholder-template edit (GM-528 interpolation, e.g. a backoffice
+                        // translation of "1st Innings {player} to Reach 50 Runs Yes/No"):
+                        // recompose every open player market of that template — interpolation
+                        // takes precedence over the join format inside the composer.
+                        playerTemplateDeltas[id] = entry.Value;
+                        RecomposePlayerMarketNames(Builders<Market>.Filter.And(
+                            Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                            Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
+                            Builders<Market>.Filter.Eq(m => m.MaTeId, id),
+                            Builders<Market>.Filter.Ne(m => m.CompId, null)));
+                        break;
                     case "Co" when int.TryParse(id, out var compId):
                         // Competitor-specific selection name (as-is, not a template) — mutually
                         // exclusive with SeTe: below, see docs/BusinessRules.md.
@@ -862,7 +880,7 @@ namespace OE.Translation.Service.Repositories
             }
 
             PublishTranslationOnlyOddsChanges(messageBroker, correlationId,
-                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, playerDeltas, openFixtureIds);
+                sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, playerDeltas, playerTemplateDeltas, openFixtureIds);
 
             _logger.LogInformationEx($"OnTranslationChange: completed {appliedKeys} keys in {stopwatch.ElapsedMilliseconds}ms");
         }
@@ -952,6 +970,7 @@ namespace OE.Translation.Service.Repositories
                 return;
 
             var templateTrByMaTeId = new Dictionary<string, List<TranslationMessage>>();
+            var placeholderTrByMaTeId = new Dictionary<string, List<TranslationMessage>>();
             var playerTrByCompId = new Dictionary<int, List<TranslationMessage>>();
             var writes = new List<WriteModel<Market>>();
 
@@ -966,7 +985,10 @@ namespace OE.Translation.Service.Repositories
                 if (!playerTrByCompId.TryGetValue(market.CompId.Value, out var plTr))
                     playerTrByCompId[market.CompId.Value] = plTr = _translationCache.GetTranslations($"Pl:{market.CompId.Value}", null);
 
-                var maNaTr = PlayerMarketNameComposer.Compose(plTr, maTeTr);
+                if (!placeholderTrByMaTeId.TryGetValue(market.MaTeId, out var maTePTr))
+                    placeholderTrByMaTeId[market.MaTeId] = maTePTr = _translationCache.GetTranslations($"MaTeP:{market.MaTeId}", null);
+
+                var maNaTr = PlayerMarketNameComposer.Compose(plTr, maTeTr, maTePTr);
 
                 if (maNaTr == null)
                     continue;
@@ -1010,6 +1032,7 @@ namespace OE.Translation.Service.Repositories
             Dictionary<(string MaTeId, string SeTeId), List<TranslationMessage>> selectionTemplateDeltas,
             Dictionary<int, List<TranslationMessage>> competitorDeltas,
             Dictionary<int, List<TranslationMessage>> playerDeltas,
+            Dictionary<string, List<TranslationMessage>> playerTemplateDeltas,
             List<long> openFixtureIds)
         {
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
@@ -1039,6 +1062,23 @@ namespace OE.Translation.Service.Repositories
                         Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
                         Builders<Market>.Filter.In(m => m.MaStId, marketStatusIds),
                         Builders<Market>.Filter.In(m => m.CompId, playerCompIds)))
+                    .Project(m => m.FiId)
+                    .ToList()
+                    .Distinct()
+                    .ToList();
+
+                if (fixtureIds.Count > 0)
+                    fixtureFilters.Add(Builders<Fixture>.Filter.In(f => f.FiId, fixtureIds));
+            }
+
+            if (playerTemplateDeltas.Count > 0)
+            {
+                var fixtureIds = _marketCollection
+                    .Find(Builders<Market>.Filter.And(
+                        Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                        Builders<Market>.Filter.In(m => m.MaStId, marketStatusIds),
+                        Builders<Market>.Filter.In(m => m.MaTeId, playerTemplateDeltas.Keys),
+                        Builders<Market>.Filter.Ne(m => m.CompId, null)))
                     .Project(m => m.FiId)
                     .ToList()
                     .Distinct()
@@ -1147,7 +1187,7 @@ namespace OE.Translation.Service.Repositories
                     .GroupBy(s => (s.MaTeId, s.SeTeId))
                     .ToDictionary(g => g.Key, g => g.First().SeTeNa);
 
-                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache, seTeNaByTemplate, playerDeltas);
+                ApplyTranslationDeltas(payload, fixture, sportDeltas, segmentDeltas, leagueDeltas, teamDeltas, marketTemplateDeltas, selectionTemplateDeltas, competitorDeltas, _translationCache, seTeNaByTemplate, playerDeltas, playerTemplateDeltas);
 
                 messageBroker.Publish(payload, MessageType.ON_ODDS_CHANGE, $"r.oe.sb.engine.{MessageType.ON_ODDS_CHANGE.ToLower()}", correlationId);
             }
@@ -1174,10 +1214,12 @@ namespace OE.Translation.Service.Repositories
             // SelectionTranslationComposer). Null-safe: without it, token selections simply
             // fall through to the raw selectionTemplateDeltas assignment (pre-compose behavior).
             IReadOnlyDictionary<(string MaTeId, string SeTeId), string> seTeNaByTemplate = null,
-            Dictionary<int, List<TranslationMessage>> playerDeltas = null)
+            Dictionary<int, List<TranslationMessage>> playerDeltas = null,
+            Dictionary<string, List<TranslationMessage>> playerTemplateDeltas = null)
         {
             competitorDeltas ??= new Dictionary<int, List<TranslationMessage>>();
             playerDeltas ??= new Dictionary<int, List<TranslationMessage>>();
+            playerTemplateDeltas ??= new Dictionary<string, List<TranslationMessage>>();
 
             payload.SpTr = sportDeltas.TryGetValue(fixture.SpId, out var spTr) ? spTr : null;
             payload.SegTr = segmentDeltas.TryGetValue(fixture.SegId, out var segTr) ? segTr : null;
@@ -1190,18 +1232,21 @@ namespace OE.Translation.Service.Repositories
                 if (market.CompId != null)
                 {
                     // Player market (GM-528): never push the raw template text — its translated
-                    // name is COMPOSED (Pl: + MaTe:, both read from the already-Apply'd cache) when
-                    // either side changed; otherwise stay null so consumers keep what they have.
+                    // name is COMPOSED (interpolated via MaTeP: when the marker survived, join
+                    // format otherwise; all inputs read from the already-Apply'd cache) when any
+                    // input changed; otherwise stay null so consumers keep what they have.
                     // The trigger only needs "did this base template change at all": wording
                     // scoping is meaningless here because a player market's MaNa (player-inclusive)
                     // never equals a template wording.
                     var affected = playerDeltas.ContainsKey(market.CompId.Value)
-                        || (market.MaTeId != null && marketTemplateDeltas.ContainsKey(market.MaTeId));
+                        || (market.MaTeId != null && marketTemplateDeltas.ContainsKey(market.MaTeId))
+                        || (market.MaTeId != null && playerTemplateDeltas.ContainsKey(market.MaTeId));
 
                     market.MaTeTr = affected && translationCache != null
                         ? PlayerMarketNameComposer.Compose(
                             translationCache.GetTranslations($"Pl:{market.CompId.Value}", null),
-                            translationCache.GetTranslations($"MaTe:{market.MaTeId}", null))
+                            translationCache.GetTranslations($"MaTe:{market.MaTeId}", null),
+                            translationCache.GetTranslations($"MaTeP:{market.MaTeId}", null))
                         : null;
                 }
                 else
