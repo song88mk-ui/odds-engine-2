@@ -158,11 +158,13 @@ namespace OE.Translation.Service.Tests
 
         // Placeholder templates (GM-528 interpolation): a player market (CompId set) seeds
         // MaTeP:{MaTeId} with the {player}-marked wording derived from the generic template;
-        // regular markets and slotless templates seed nothing.
+        // regular markets and slotless templates seed nothing. MaTeP rows are seeded
+        // PROCESSED=1 — deliberately OFF the DeepL worklist until marker survival is confirmed
+        // (translated manually via backoffice meanwhile).
         [Fact]
-        public async Task MarketUpdate_PlayerMarket_SeedsPlaceholderTemplateRow()
+        public async Task MarketUpdate_PlayerMarket_SeedsPlaceholderTemplateRow_OffTheDeepLWorklist()
         {
-            var (repository, provider) = CreateRepository(nameof(MarketUpdate_PlayerMarket_SeedsPlaceholderTemplateRow));
+            var (repository, provider) = CreateRepository(nameof(MarketUpdate_PlayerMarket_SeedsPlaceholderTemplateRow_OffTheDeepLWorklist));
 
             var message = MarketMessage();
             message.Ma[0].CompId = 150762;
@@ -174,7 +176,9 @@ namespace OE.Translation.Service.Tests
             using var context = GetContext(provider);
             var row = context.TranslationCache2.Single(r => r.StringId == "MaTeP:15858");
             Assert.Equal("1st Innings {player} to Reach 50 Runs Yes/No", row.SourceText);
-            Assert.False(row.Processed);
+            Assert.True(row.Processed);
+            // The ordinary keys stay on the worklist
+            Assert.False(context.TranslationCache2.Single(r => r.StringId == "MaTe:15858").Processed);
         }
 
         [Fact]
