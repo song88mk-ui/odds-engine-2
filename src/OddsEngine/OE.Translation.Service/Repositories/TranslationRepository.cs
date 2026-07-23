@@ -156,6 +156,19 @@ namespace OE.Translation.Service.Repositories
                     AddIfValid(items, $"MaTe:{market.MaTeId}", market.MaTeNa,
                         throttleKey: MarketTemplateVariantId.Compute(market.MaTeId, market.MaTeNa));
 
+                    // Placeholder template for player-prop markets (GM-528 interpolation):
+                    // MaTeP:{MaTeId} -> the generic template with the vendor's player-slot phrase
+                    // replaced by {player} ("1st Innings {player} to Reach 50 Runs Yes/No"), so
+                    // the translation keeps a substitutable marker. Seeded only for templates the
+                    // feed actually uses as player markets (CompId present); templates without a
+                    // single recognizable slot (e.g. two-player "Player A and Player B") derive
+                    // null and keep the join-format fallback. NOTE: update.py currently skips the
+                    // MaTeP: prefix (SKIP_STRING_ID_PREFIXES) until placeholder survival through
+                    // DeepL is confirmed — rows are translated manually via backoffice meanwhile.
+                    if (market.CompId.HasValue)
+                        AddIfValid(items, $"MaTeP:{market.MaTeId}",
+                            PlayerMarketNameComposer.DerivePlaceholderSource(market.MaTeNa));
+
                     if (market.Se == null)
                         continue;
 

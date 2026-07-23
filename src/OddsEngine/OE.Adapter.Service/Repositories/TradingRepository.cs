@@ -136,12 +136,16 @@ namespace OE.Adapter.Service.Repositories
                 var maTeTr = _translationCache.GetTranslations($"MaTe:{market.MaTeId}", market.MaTeNa);
 
                 // Per-player prop market (GM-528): the translated name is COMPOSED from the
-                // player's Pl:{CompId} translation and the template translation — token-swapping
-                // the translated template is impossible (see PlayerMarketNameComposer). When
-                // either side is missing, MaTeTr stays null and consumers fall back to the
-                // English MaNa, which the producer already sets to the player-inclusive name.
+                // player's Pl:{CompId} translation and the template translation — interpolated
+                // through the MaTeP:{MaTeId} placeholder row when its translation kept the
+                // {player} marker, joined otherwise (see PlayerMarketNameComposer). When inputs
+                // are missing, MaTeTr stays null and consumers fall back to the English MaNa,
+                // which the producer already sets to the player-inclusive name.
                 market.MaTeTr = market.CompId.HasValue
-                    ? PlayerMarketNameComposer.Compose(_translationCache.GetTranslations($"Pl:{market.CompId.Value}", null), maTeTr)
+                    ? PlayerMarketNameComposer.Compose(
+                        _translationCache.GetTranslations($"Pl:{market.CompId.Value}", null),
+                        maTeTr,
+                        _translationCache.GetTranslations($"MaTeP:{market.MaTeId}", null))
                     : maTeTr;
 
                 if (market.Se == null)

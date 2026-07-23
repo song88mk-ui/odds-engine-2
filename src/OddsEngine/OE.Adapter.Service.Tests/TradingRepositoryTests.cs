@@ -127,6 +127,21 @@ namespace OE.Adapter.Service.Tests
         }
 
         [Fact]
+        public void MarketChange_PlayerMarket_PlaceholderRow_InterpolatesInsteadOfJoining()
+        {
+            _cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "MaTeP:16", LaCo = "ZH", Tx = "{player}的赛果" }
+            });
+            var message = MarketMessage();
+            message.Ma[0].CompId = 150762;
+
+            _repository.ProcessOnMarketChangeMessage(_broker, message, "cid");
+
+            Assert.Equal("罗希特·夏尔马的赛果", message.Ma.Single().MaTeTr!.Single().Tx);
+        }
+
+        [Fact]
         public void MarketChange_PlayerMarket_UntranslatedPlayer_LeavesMaTeTrNull()
         {
             var message = MarketMessage();
