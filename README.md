@@ -75,6 +75,154 @@ docker run -d --name sql -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=<your-password> \
   -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
 ```
 
+## Quick start (concrete example)
+
+Goal: start real services against a local RabbitMQ and MongoDB and *see* them working.
+This repo is headless, so "working" means: the services connect, declare their
+exchange/queues, and you can watch message activity in the RabbitMQ management UI at
+`http://localhost:15672` plus structured Serilog console logs. No SQL Server is needed
+for this quick start (neither service below touches it).
+
+### 1. Start local infrastructure
+
+```bash
+docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+docker run -d --name mongo -p 27017:27017 mongo
+```
+
+The management image creates the default `guest` / `guest` user. Log in at
+`http://localhost:15672` with those credentials.
+
+### 2. Run OE.Job.KeepAlive (smallest service: RabbitMQ only)
+
+`OE.Job.KeepAlive` is the least-infrastructure service in the repo: it needs only
+RabbitMQ, and its committed `appsettings.json` already points at
+`localhost` / `guest` / `guest` / vhost `/` with no port key (so it uses 5672, non-TLS),
+so **no overrides are needed**. It publishes an `OnHeartbeat` message with routing key
+`r.oe.uof.heartbeat` to `e.central` every 5 seconds (`OE.Job.KeepAlive/Worker.cs`).
+
+One manual step first: KeepAlive does **not** declare the exchange. `MessageBroker.Connect()`
+only calls `ExchangeDeclare` when `MessageBroker:Queue` is non-empty
+(`OE.Shared/Utilities/MessageBroker.cs`), and KeepAlive's `Queue` is `""`. Publishing to a
+missing exchange kills the channel, so create `e.central` yourself (skip this if you start
+a consumer service such as Sportsbook first - see step 3 - because consumers declare it):
+
+- Management UI: Exchanges tab > Add a new exchange > Name `e.central`, Type `topic`,
+  Durability `Durable` > Add exchange.
+- Or from the CLI:
+
+```bash
+docker exec rabbitmq rabbitmqadmin declare exchange name=e.central type=topic durable=true
+```
+
+Then run it (it is `net9` and not in the .sln, so run the project directly; PowerShell):
+
+```powershell
+cd src/OddsEngine/OE.Job.KeepAlive
+dotnet run
+```
+
+Success looks like (console):
+
+```
+[INF] Connecting to RabbitMQ Server
+[INF] Connecting to RabbitMQ on ["localhost":5672]; TlsEnabled: False
+[INF] Connected, running...
+[INF] Running Heartbeat publish loop()
+```
+
+In the management UI, open Exchanges > `e.central`: the "Message rates" graph shows a
+steady publish-in rate of about 0.2 msg/s (one heartbeat every 5 s). Note: no queue is
+bound to `r.oe.uof.heartbeat` in this setup, so the broker drops each heartbeat after the
+exchange - you see activity on the exchange graph, not in any queue. That is expected.
+
+### 3. Run OE.Sportsbook.Service (RabbitMQ + MongoDB, declares its own queue)
+
+This is the smallest service that both *consumes* (visible queue + consumer in the UI)
+and *publishes*. It needs RabbitMQ and MongoDB. Its committed `appsettings.json` points
+at shared staging infrastructure, so override host/credentials (do not reuse the
+committed values). PowerShell, each on its own line:
+
+```powershell
+cd src/OddsEngine/OE.Sportsbook.Service
+$env:MessageBroker__Host = "localhost"
+$env:MessageBroker__Port = "5672"
+$env:MessageBroker__Username = "guest"
+$env:MessageBroker__Password = "guest"
+${env:Custom__MongoDB-Sportsbook} = "mongodb://localhost:27017/sportsbook"
+dotnet run
+```
+
+Notes on those exact names:
+
+- `__` is the .NET config section separator, so `MessageBroker__Host` overrides
+  `MessageBroker:Host` (read in `OE.Shared/Utilities/MessageBroker.cs`) and
+  `Custom__MongoDB-Sportsbook` overrides `Custom:MongoDB-Sportsbook` (read in
+  `OE.Sportsbook.Service/Program.cs`).
+- The Mongo key contains a hyphen, so PowerShell needs the `${env:...}` brace syntax for
+  that one variable.
+- Overriding `Port` to `5672` matters: the committed value is `5671`, which auto-enables
+  TLS in `MessageBroker.cs`.
+- `VirtualHost` (`/`), `Exchange` (`e.central`), `Queue` (`q.sb.engine`), and
+  `RoutingKey` (`r.oe.adapter.#.11`) are already correct in the committed file and need
+  no override.
+
+MongoDB must be up **before** the service starts: `Program.Main` creates indexes on the
+`Sportsbook` database (`Fixture`, `Market`, `Selection` collections) via
+`MongoIndexBootstrapper` before the worker runs.
+
+Success looks like (console):
+
+```
+[INF] Prefetch SportsBook data
+[INF] Connecting to RabbitMQ Server
+[INF] Connecting to RabbitMQ on ["localhost":5672]; TlsEnabled: False
+[INF] Connected. Processing Incoming messages
+```
+
+In the management UI you should now see, all declared by the service at startup:
+
+- Exchanges: `e.central` (topic, durable),
+- Queues: `q.sb.engine` (durable) with 1 consumer named `OE.Sportsbook.Service.<guid>`,
+- Bindings on `q.sb.engine`: routing key `r.oe.adapter.#.11` from `e.central`.
+
+In MongoDB (`mongosh`): `use Sportsbook` then `db.Fixture.getIndexes()` shows the
+bootstrapped indexes.
+
+### 4. Push a test message through the pipeline
+
+There is no upstream feed on a dev machine, so hand-publish one message from the
+management UI: Exchanges > `e.central` > Publish message:
+
+- Routing key: `r.oe.adapter.test.11` (must match the `r.oe.adapter.#.11` binding),
+- Properties: `type` = `OnFixtureChange` (the worker dispatches on the AMQP `type`
+  property using the constants in `OE.Shared/Constants/MessageType.cs`),
+- Payload: an `OnFixtureChangeMessage` JSON body (see
+  `OE.Shared/Messages/OutgoingAdapterMessages/`).
+
+You will see the delivery on the `q.sb.engine` message-rate graph, and in the service
+log either `FixtureId:... OnFixtureChange ... sending odds change` followed by a publish
+of `r.oe.sb.engine.onoddschange` back to `e.central`, or - if the payload is incomplete -
+`Error processing message: ...` with the payload echoed. Either way the consume path is
+visibly working. (Whether a minimal `{}` payload processes cleanly end-to-end has not
+been verified; expect the error log in that case.)
+
+### What this quick start cannot show
+
+- Real odds data: the BetGenius / UOF feed receivers live in sibling repos, so nothing
+  arrives on `e.central` unless you publish it yourself or run those receivers.
+- `OE.Websocket.Service` end-to-end delivery: the SignalR `/platform` hub host is not in
+  this repo; without a hub listening at `Custom:WebSocketAPI` the service cannot deliver.
+- SQL-backed services (`OE.Adapter.Service`, `OE.Translation.*`, `OE.Job.Cleanup`): the
+  `Translation` / `Betting` schemas are not in this repo, so a fresh local SQL Server is
+  not enough. Start SQL Server only when you have a schema to restore.
+- Confirmed Mongo writes: the connection string convention uses `w=0` (unacknowledged),
+  so write failures are silent; check collections manually with `mongosh`.
+
+Still observable regardless: connections and channels in the management UI Overview,
+exchange/queue/binding declarations, the heartbeat publish rate, hand-published message
+consumption, and structured Serilog console logs from every service.
+
 ## Configuration
 
 Each service has its own `appsettings.json`. Configuration is read imperatively via
