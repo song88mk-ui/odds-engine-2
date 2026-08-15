@@ -60,8 +60,11 @@ See [docs/knowledge/FrequentlyModifiedAreas.md](docs/knowledge/FrequentlyModifie
   ([Verified] / [Verified-sibling:X] / [Unknown]).
 
 ## Tooling
-- Build: `dotnet build src/OddsEngine/OddsEngine.sln`. No test projects exist in-repo (confirm before
-  claiming coverage). Git history: feature tickets `GM-####`, infra `DEVOPS-###`.
+- Build: `dotnet build src/OddsEngine/OddsEngine.sln`. Test projects exist for some services
+  (`OE.Shared.Test`, `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`,
+  `OE.Translation.Service.Tests`, `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`) — not
+  every service has one; confirm before claiming coverage. CI runs these on PRs via the `test` job.
+  Git history: feature tickets `GM-####`, infra `DEVOPS-###`.
 
 ## Asset index
 `.claude/` — commands, skills, checklists, playbooks, templates, prompts. See

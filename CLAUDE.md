@@ -114,7 +114,10 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
    sharding changes).
 10. **Implement the smallest possible change.**
 11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`; state how
-    behavior was checked — no test projects exist in-repo).
+    behavior was checked. Test projects exist for some services — `OE.Shared.Test`,
+    `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
+    `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests` — run `dotnet test` against the
+    relevant project(s) when present; not every service has one).
 12. **Update documentation** if architectural knowledge changed (`/update-docs`; keep CLAUDE.md /
     AGENTS.md / commands / skills / playbooks in sync).
 13. **Summarize changes, risks, and validation results.**

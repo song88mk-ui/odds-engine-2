@@ -14,6 +14,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Test ${{ matrix.project }}
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project:
+          - OE.Shared.Test
+          - OE.Adapter.Service.Tests
+          - OE.Sportsbook.Service.Tests
+          - OE.Translation.Service.Tests
+          - OE.Translation.Job.Tests
+          - OE.Websocket.Service.Tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Add NuGet source
+        run: |
+          dotnet nuget add source --username FlyingCockatoo --password ${{ secrets.NUGET_PASSWORD }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/FlyingCockatoo/index.json"
+
+      - name: Test ${{ matrix.project }}
+        run: dotnet test src/OddsEngine/${{ matrix.project }}/${{ matrix.project }}.csproj --configuration Release
+
   build:
     name: Build ${{ matrix.app.path }}
     runs-on: ubuntu-latest
