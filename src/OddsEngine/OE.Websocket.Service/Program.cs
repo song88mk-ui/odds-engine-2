@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using OE.Shared.Utilities;
 using OE.Websocket.Service;
+using OE.WebSocket.Service.Clients;
 using OE.WebSocket.Service.Repository;
 using OE.WebSocket.Service.Telemetry;
 using Serilog;
@@ -20,6 +21,8 @@ Host.CreateDefaultBuilder(args)
 
         services.AddSingleton<IMessageBroker, MessageBroker>();
         services.AddSingleton<IMemCache, MemCache>();
+        services.AddSingleton<IClientRegistry, ClientRegistry>();
+        services.AddSingleton<IClientPresence, ClientPresence>();
         services.AddSingleton<ISportsbookRepository, SportsbookRepository>();
         services.AddHostedService<Worker>();
     })
