@@ -4,6 +4,7 @@ using OE.Shared.Extensions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
 using OE.Shared.Utilities;
+using OE.WebSocket.Service.Clients;
 using OE.WebSocket.Service.Messages;
 using OE.WebSocket.Service.Telemetry;
 using System.Diagnostics;
@@ -18,18 +19,15 @@ namespace OE.WebSocket.Service.Repository
     {
         #region Fields
 
-        private static string _clientCode = string.Empty;
         private readonly bool _isOEEnabled;
 
         private readonly IConfiguration _configuration;
         private readonly IMemCache _memCache;
-        private readonly HttpClient _httpClient;
         private readonly ILogger<SportsbookRepository> _logger;
 
         private readonly ActivitySource _activitySource;
         private readonly Counter<long> _publishedToWebSocketCounter;
 
-        private List<Tuple<int, List<string>>> _mainMarketTemplates = new List<Tuple<int, List<string>>>();
         private readonly List<int> _fixtureStatus = new List<int> { (int)FixtureStatus.Prematch, (int)FixtureStatus.Live };
         private static List<string> _asianClCo = new List<string>();
         // TODO: doc: what are these numbers?
@@ -52,21 +50,6 @@ namespace OE.WebSocket.Service.Repository
 
             _asianClCo = _configuration["Custom:AsianClientCodes"].ToString().Split(',').ToList();
 
-            if (_httpClient == null)
-            {
-                _httpClient = new HttpClient
-                {
-                    BaseAddress = new Uri(_configuration["Custom:PlatformAPI"]),
-                    Timeout = TimeSpan.FromSeconds(5)
-                };
-
-                _httpClient.DefaultRequestHeaders.Add("x-client-id", _configuration["Custom:ClientId"]);
-                _httpClient.DefaultRequestHeaders.Add("x-api-key", _configuration["Custom:APIKey"]);
-            }
-
-            if (string.IsNullOrEmpty(_clientCode))
-                _clientCode = _configuration["Custom:ClientCode"].ToLower();
-
             _isOEEnabled = Convert.ToBoolean(_configuration["Custom:IsOEEnabled"]);
         }
 
@@ -74,11 +57,11 @@ namespace OE.WebSocket.Service.Repository
 
         #region Methods
 
-        public async Task ProcessOddsChangeForMainMarkets(OnMarketChangeMessage message, HubConnection hubConnection)
+        public async Task ProcessOddsChangeForMainMarkets(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection)
         {
             try
             {
-                var mainMarkets = _mainMarketTemplates.Where(c => c.Item1 == message.SpId).FirstOrDefault() ?? new Tuple<int, List<string>>(message.SpId, new List<string>());
+                var mainMarkets = client.MainMarketTemplates.Where(c => c.Item1 == message.SpId).FirstOrDefault() ?? new Tuple<int, List<string>>(message.SpId, new List<string>());
 
                 var finalMarkets = new List<MarketMessage>();
 
@@ -92,14 +75,14 @@ namespace OE.WebSocket.Service.Repository
 
                 if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
-                    await ProcessMatchOddsChangeForMainMarkets(message, hubConnection, finalMarkets);
+                    await ProcessMatchOddsChangeForMainMarkets(client, message, hubConnection, finalMarkets);
                 }
                 else
                 {
                     if (_isOEEnabled)
-                        await ProcessMatchOddsChangeForMainMarketsOE(message, hubConnection, finalMarkets);
+                        await ProcessMatchOddsChangeForMainMarketsOE(client, message, hubConnection, finalMarkets);
                     else
-                        await ProcessMatchOddsChangeForMainMarkets(message, hubConnection, finalMarkets);
+                        await ProcessMatchOddsChangeForMainMarkets(client, message, hubConnection, finalMarkets);
                 }
             }
             catch (Exception e)
@@ -108,20 +91,20 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessOddsChangeForAllMarkets(OnMarketChangeMessage message, HubConnection hubConnection)
+        public async Task ProcessOddsChangeForAllMarkets(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection)
         {
             try
             {
                 if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
-                    await ProcessMatchOddsChangeForAllMarkets(message, hubConnection);
+                    await ProcessMatchOddsChangeForAllMarkets(client, message, hubConnection);
                 }
                 else
                 {
                     if (_isOEEnabled)
-                        await ProcessMatchOddsChangeForAllMarketsOE(message, hubConnection);
+                        await ProcessMatchOddsChangeForAllMarketsOE(client, message, hubConnection);
                     else
-                        await ProcessMatchOddsChangeForAllMarkets(message, hubConnection);
+                        await ProcessMatchOddsChangeForAllMarkets(client, message, hubConnection);
                 }
             }
             catch (Exception e)
@@ -130,7 +113,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBetStopGlobal(OnBetStopGlobalMessage message, HubConnection hubConnection)
+        public async Task ProcessBetStopGlobal(ClientContext client, OnBetStopGlobalMessage message, HubConnection hubConnection)
         {
             try
             {
@@ -142,8 +125,8 @@ namespace OE.WebSocket.Service.Repository
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
                             new KeyValuePair<string, object?>("method", "PublishBetStopGlobal"),
-                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-                await PublishToWebSocket("PublishBetStopGlobal", hubConnection, payload);
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishBetStopGlobal", hubConnection, payload);
             }
             catch (Exception e)
             {
@@ -151,7 +134,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBetStopFixture(OnBetStopFixtureMessage message, HubConnection hubConnection)
+        public async Task ProcessBetStopFixture(ClientContext client, OnBetStopFixtureMessage message, HubConnection hubConnection)
         {
             try
             {
@@ -159,7 +142,7 @@ namespace OE.WebSocket.Service.Repository
 
                 var payload = new OutgoingBetStopFixture
                 {
-                    Gr = GetGroups(_clientCode, message),
+                    Gr = GetGroups(client, message),
                     Pa = new BetStopFixture
                     {
                         FiId = message.FiId.ToString(),
@@ -171,8 +154,8 @@ namespace OE.WebSocket.Service.Repository
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
                             new KeyValuePair<string, object?>("method", "PublishBetStopFixture"),
-                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-                await PublishToWebSocket("PublishBetStopFixture", hubConnection, payload);
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishBetStopFixture", hubConnection, payload);
 
             }
             catch (Exception e)
@@ -181,7 +164,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBetStatus(IncomingBetStatus message, HubConnection hubConnection)
+        public async Task ProcessBetStatus(ClientContext client, IncomingBetStatus message, HubConnection hubConnection)
         {
             try
             {
@@ -197,8 +180,8 @@ namespace OE.WebSocket.Service.Repository
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
                             new KeyValuePair<string, object?>("method", "PublishBetStatus"),
-                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-                await PublishToWebSocket("PublishBetStatus", hubConnection, payload);
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishBetStatus", hubConnection, payload);
             }
             catch (Exception e)
             {
@@ -206,7 +189,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessCashOutChange(IncomingCashOutChange message, HubConnection hubConnection)
+        public async Task ProcessCashOutChange(ClientContext client, IncomingCashOutChange message, HubConnection hubConnection)
         {
             try
             {
@@ -222,8 +205,8 @@ namespace OE.WebSocket.Service.Repository
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
                             new KeyValuePair<string, object?>("method", "PublishCashOutChange"),
-                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-                await PublishToWebSocket("PublishCashOutChange", hubConnection, payload);
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishCashOutChange", hubConnection, payload);
             }
             catch (Exception e)
             {
@@ -231,7 +214,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessWalletChange(IncomingWalletChange message, HubConnection hubConnection)
+        public async Task ProcessWalletChange(ClientContext client, IncomingWalletChange message, HubConnection hubConnection)
         {
             try
             {
@@ -244,8 +227,8 @@ namespace OE.WebSocket.Service.Repository
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
                             new KeyValuePair<string, object?>("method", "PublishWalletChange"),
-                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-                await PublishToWebSocket("PublishWalletChange", hubConnection, payload);
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishWalletChange", hubConnection, payload);
             }
             catch (Exception ex)
             {
@@ -253,25 +236,25 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessTopFixtures(OnMarketChangeMessage message)
+        public async Task ProcessTopFixtures(ClientContext client, OnMarketChangeMessage message)
         {
             try
             {
                 if (message.FiTyId == (int)FixtureType.Outright) return;
                 if (message.SpId.IsVirtualSportId()) return;
 
-                var isTopFixtureExisting = _memCache.GetCache<TopCache>("TF");
+                var isTopFixtureExisting = _memCache.GetCache<TopCache>($"{client.ClientCode}:TF");
 
                 if (isTopFixtureExisting == null)
                 {
-                    _memCache.AddOrUpdateCache("TF", new TopCache { Id = 0 }, DateTimeOffset.UtcNow.AddMinutes(5));
+                    _memCache.AddOrUpdateCache($"{client.ClientCode}:TF", new TopCache { Id = 0 }, DateTimeOffset.UtcNow.AddMinutes(5));
 
-                    var result = await GetTopFixtures();
+                    var result = await GetTopFixtures(client);
 
                     if (result.StatusCode == StatusCode.Success)
                     {
                         if (result.Result.Fixtures.Count > 0)
-                            _memCache.AddOrUpdateCache("TFL", new TopFixture { FiIds = result.Result.Fixtures.Select(s => Convert.ToInt64(s.FiId)).ToList() }, DateTimeOffset.UtcNow.AddHours(1));
+                            _memCache.AddOrUpdateCache($"{client.ClientCode}:TFL", new TopFixture { FiIds = result.Result.Fixtures.Select(s => Convert.ToInt64(s.FiId)).ToList() }, DateTimeOffset.UtcNow.AddHours(1));
                     }
                 }
             }
@@ -281,25 +264,25 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessTopLeagues(OnMarketChangeMessage message)
+        public async Task ProcessTopLeagues(ClientContext client, OnMarketChangeMessage message)
         {
             try
             {
                 if (message.FiTyId == (int)FixtureType.Outright) return;
                 if (message.SpId.IsVirtualSportId()) return;
 
-                var isTopFixtureExisting = _memCache.GetCache<TopCache>($"TL:{message.SpId}");
+                var isTopFixtureExisting = _memCache.GetCache<TopCache>($"{client.ClientCode}:TL:{message.SpId}");
 
                 if (isTopFixtureExisting == null)
                 {
-                    _memCache.AddOrUpdateCache($"TL:{message.SpId}", new TopCache { Id = 0 }, DateTimeOffset.UtcNow.AddMinutes(5));
+                    _memCache.AddOrUpdateCache($"{client.ClientCode}:TL:{message.SpId}", new TopCache { Id = 0 }, DateTimeOffset.UtcNow.AddMinutes(5));
 
-                    var result = await GetTopLeagues(message.SpId);
+                    var result = await GetTopLeagues(client, message.SpId);
 
                     if (result.StatusCode == StatusCode.Success)
                     {
                         if (result.Result.TopLeagues.Count > 0)
-                            _memCache.AddOrUpdateCache($"TLL:{message.SpId}", new TopLeague { SegmentLeagueIds = result.Result.TopLeagues.Select(s => new Tuple<int, int>(s.SegmentId, s.LeagueId)).ToList() }, DateTimeOffset.UtcNow.AddHours(1));
+                            _memCache.AddOrUpdateCache($"{client.ClientCode}:TLL:{message.SpId}", new TopLeague { SegmentLeagueIds = result.Result.TopLeagues.Select(s => new Tuple<int, int>(s.SegmentId, s.LeagueId)).ToList() }, DateTimeOffset.UtcNow.AddHours(1));
                     }
                 }
             }
@@ -309,18 +292,18 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessMarketCount(OnMarketChangeMessage message)
+        public async Task ProcessMarketCount(ClientContext client, OnMarketChangeMessage message)
         {
             using var activity = _activitySource.StartActivity("ProcessMarketCount");
             try
             {
-                var clientId = _configuration["Custom:ClientId"];
+                var clientId = client.ClientId;
 
-                activity?.SetTag("client.id", _configuration["Custom:ClientId"]);
+                activity?.SetTag("client.id", client.ClientId);
                 activity?.SetTag("fixture.id", message.FiId.ToString());
                 activity?.SetTag("fixture.name", message.FiNa);
                 activity?.SetTag("fixture.status", message.FiStNa);
-                var key = $"mc:{message.FiId}";
+                var key = $"{client.ClientCode}:mc:{message.FiId}";
 
                 if (!_fixtureStatus.Contains(message.FiStId))
                 {
@@ -331,7 +314,7 @@ namespace OE.WebSocket.Service.Repository
                 var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToHashSet();
                 var marketToAdd = _isOEEnabled == false || message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright
                     ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToHashSet()
-                    : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(_clientCode.ToUpper())).Select(s => s.MaId).ToHashSet();
+                    : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(client.ClientCode.ToUpper())).Select(s => s.MaId).ToHashSet();
 
                 var cache = _memCache.GetCache<MarketCount>(key);
 
@@ -340,7 +323,7 @@ namespace OE.WebSocket.Service.Repository
 
                 if (cache == null)
                 {
-                    var result = await GetFixtureDetails(message.FiId);
+                    var result = await GetFixtureDetails(client, message.FiId);
                     if (result.StatusCode != StatusCode.Success)
                     {
                         _logger.LogError("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus} {resultMessage}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, result.StatusCode, result.Message);
@@ -377,7 +360,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessFavorites(IncomingVisitFavorites message)
+        public async Task ProcessFavorites(ClientContext client, IncomingVisitFavorites message)
         {
             try
             {
@@ -386,9 +369,9 @@ namespace OE.WebSocket.Service.Repository
                     string key;
 
                     if (favorite.HierarchyId == 2)
-                        key = $"fli:{favorite.SportId}:{favorite.Id}";
+                        key = $"{client.ClientCode}:fli:{favorite.SportId}:{favorite.Id}";
                     else
-                        key = $"ffi:{favorite.SportId}:{favorite.Id}";
+                        key = $"{client.ClientCode}:ffi:{favorite.SportId}:{favorite.Id}";
 
                     var cache = _memCache.GetCache<Favorites>(key);
 
@@ -423,7 +406,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessRemoveFavorites(IncomingVisitFavorites message)
+        public async Task ProcessRemoveFavorites(ClientContext client, IncomingVisitFavorites message)
         {
             try
             {
@@ -432,9 +415,9 @@ namespace OE.WebSocket.Service.Repository
                     string key;
 
                     if (favorite.HierarchyId == 2)
-                        key = $"fli:{favorite.SportId}:{favorite.Id}";
+                        key = $"{client.ClientCode}:fli:{favorite.SportId}:{favorite.Id}";
                     else
-                        key = $"ffi:{favorite.SportId}:{favorite.Id}";
+                        key = $"{client.ClientCode}:ffi:{favorite.SportId}:{favorite.Id}";
 
                     var cache = _memCache.GetCache<Favorites>(key);
 
@@ -457,11 +440,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBoostedFixtures(IncomingVisitBoostedFixtures message)
+        public async Task ProcessBoostedFixtures(ClientContext client, IncomingVisitBoostedFixtures message)
         {
             try
             {
-                _memCache.AddOrUpdateCache($"bf", message.FixtureIds, DateTimeOffset.UtcNow.AddDays(1));
+                _memCache.AddOrUpdateCache($"{client.ClientCode}:bf", message.FixtureIds, DateTimeOffset.UtcNow.AddDays(1));
 
                 await Task.CompletedTask;
             }
@@ -471,18 +454,20 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessMainMarketTemplates()
+        public async Task ProcessMainMarketTemplates(ClientContext client)
         {
             try
             {
-                var result = await GetSelectorMarketTemplates();
+                var result = await GetSelectorMarketTemplates(client);
+
+                client.MainMarketTemplates.Clear();
 
                 foreach (var item in result.Result.GroupBy(g => g.SportId).ToList())
                 {
                     var marketTemplates = item.SelectMany(s => s.MarketTemplates).Select(s => s.MaTeId).Distinct().ToList();
-                    _mainMarketTemplates.Add(new Tuple<int, List<string>>(item.Key, marketTemplates));
+                    client.MainMarketTemplates.Add(new Tuple<int, List<string>>(item.Key, marketTemplates));
                 }
-                _logger.LogDebug("ProcessMainMarketTemplates: {@marketTemplates}", JsonSerializer.Serialize(_mainMarketTemplates));
+                _logger.LogDebug("ProcessMainMarketTemplates: {@marketTemplates}", JsonSerializer.Serialize(client.MainMarketTemplates));
             }
             catch (Exception e)
             {
@@ -490,20 +475,20 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessMarketSortOrder()
+        public async Task ProcessMarketSortOrder(ClientContext client)
         {
             try
             {
-                var result = await GetMarketSortOrder();
+                var result = await GetMarketSortOrder(client);
 
                 foreach (var item in result.Result.MarketTemplateGroups)
                 {
                     var key = string.Empty;
 
                     if (item.FiStId == 0)
-                        key = $"pmso:{item.SportId}";
+                        key = $"{client.ClientCode}:pmso:{item.SportId}";
                     else
-                        key = $"lmso:{item.SportId}";
+                        key = $"{client.ClientCode}:lmso:{item.SportId}";
 
                     _memCache.AddOrUpdateCache(key, new ClientMarketSortOrder { MaTeIds = item.MaTeIds.Split(',').ToList() }, DateTimeOffset.UtcNow.AddYears(1));
                 }
@@ -514,14 +499,14 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessFixtureSortOrder()
+        public async Task ProcessFixtureSortOrder(ClientContext client)
         {
             try
             {
-                var result = await GetFixtureSortOrder();
+                var result = await GetFixtureSortOrder(client);
 
                 foreach (var item in result.Result.Fixtures)
-                    _memCache.AddOrUpdateCache($"fso:{item.SportId}:{item.SegmentId}:{item.LeagueId}", new FixtureSortOrder { SortOrder = item.SortOrder }, DateTimeOffset.UtcNow.AddYears(1));
+                    _memCache.AddOrUpdateCache($"{client.ClientCode}:fso:{item.SportId}:{item.SegmentId}:{item.LeagueId}", new FixtureSortOrder { SortOrder = item.SortOrder }, DateTimeOffset.UtcNow.AddYears(1));
             }
             catch (Exception e)
             {
@@ -529,13 +514,13 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBetBuilderMarketTemplates()
+        public async Task ProcessBetBuilderMarketTemplates(ClientContext client)
         {
             try
             {
-                var result = await GetBetBuilderMarketTemplatesDTO();
+                var result = await GetBetBuilderMarketTemplatesDTO(client);
 
-                var key = $"bbmt";
+                var key = $"{client.ClientCode}:bbmt";
 
                 _memCache.AddOrUpdateCache(key, result.Result, DateTimeOffset.UtcNow.AddYears(1));
             }
@@ -545,13 +530,13 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessMarketTemplatePlayerProps()
+        public async Task ProcessMarketTemplatePlayerProps(ClientContext client)
         {
             try
             {
-                var result = await GetMarketTemplatePlayerPropsDTO();
+                var result = await GetMarketTemplatePlayerPropsDTO(client);
 
-                var key = $"mtpp";
+                var key = $"{client.ClientCode}:mtpp";
 
                 _memCache.AddOrUpdateCache(key, result.Result, DateTimeOffset.UtcNow.AddYears(1));
             }
@@ -561,7 +546,7 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessPayableChange(IncomingPayableChange message, HubConnection hubConnection)
+        public async Task ProcessPayableChange(ClientContext client, IncomingPayableChange message, HubConnection hubConnection)
         {
             try
             {
@@ -574,8 +559,8 @@ namespace OE.WebSocket.Service.Repository
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
                             new KeyValuePair<string, object?>("method", "PublishPayableChange"),
-                            new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-                await PublishToWebSocket("PublishPayableChange", hubConnection, payload);
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishPayableChange", hubConnection, payload);
             }
             catch (Exception ex)
             {
@@ -587,11 +572,11 @@ namespace OE.WebSocket.Service.Repository
 
         #region Utilities
 
-        private async Task PublishToWebSocket<T>(string method, HubConnection hubConnection, T payload)
+        private async Task PublishToWebSocket<T>(ClientContext client, string method, HubConnection hubConnection, T payload)
         {
             try
             {
-                await hubConnection.SendAsync(method, _clientCode, payload);
+                await hubConnection.SendAsync(method, client.ClientCode, payload);
             }
             catch (Exception e)
             {
@@ -599,11 +584,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<TWResponseDTO>> GetTopFixtures()
+        private async Task<BaseResponseDTO<TWResponseDTO>> GetTopFixtures(ClientContext client)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v2/sportsbook/topfixtures");
+                var response = await client.HttpClient.GetAsync($"v2/sportsbook/topfixtures");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -631,11 +616,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<TopLeaguesResponseDTO>> GetTopLeagues(int sportId)
+        private async Task<BaseResponseDTO<TopLeaguesResponseDTO>> GetTopLeagues(ClientContext client, int sportId)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/sports/topleagues?sportId={sportId}");
+                var response = await client.HttpClient.GetAsync($"v1/sportsbook/sports/topleagues?sportId={sportId}");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<TopLeaguesResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -663,11 +648,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<TWResponseDTO>> GetFixtureDetails(long FiId)
+        private async Task<BaseResponseDTO<TWResponseDTO>> GetFixtureDetails(ClientContext client, long FiId)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/fixturedetails?fixtureId={FiId}");
+                var response = await client.HttpClient.GetAsync($"v1/sportsbook/fixturedetails?fixtureId={FiId}");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -677,11 +662,11 @@ namespace OE.WebSocket.Service.Repository
                         return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
                     else
                     {
-                        var headers = string.Join("; ", _httpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {string.Join(",", h.Value)}"));
-                        Uri requestUri = _httpClient.BaseAddress != null
-                            ? new Uri(_httpClient.BaseAddress, $"v1/sportsbook/fixturedetails?fixtureId={FiId}")
+                        var headers = string.Join("; ", client.HttpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {string.Join(",", h.Value)}"));
+                        Uri requestUri = client.HttpClient.BaseAddress != null
+                            ? new Uri(client.HttpClient.BaseAddress, $"v1/sportsbook/fixturedetails?fixtureId={FiId}")
                             : new Uri($"v1/sportsbook/fixturedetails?fixtureId={FiId}", UriKind.Relative);
-                        _httpClient.DefaultRequestHeaders.TryGetValues("x-api-key", out var apiKey);
+                        client.HttpClient.DefaultRequestHeaders.TryGetValues("x-api-key", out var apiKey);
 
                         _logger.LogError("GetFixtureDetails {key} {fixtureId} {FiIdreqUrl} {reqHeader} {reasonPhrase}", apiKey?.FirstOrDefault(), FiId.ToString(), requestUri.ToString(), headers, response.ReasonPhrase);
 
@@ -703,11 +688,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>> GetSelectorMarketTemplates()
+        private async Task<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>> GetSelectorMarketTemplates(ClientContext client)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/selectormarkettemplates");
+                var response = await client.HttpClient.GetAsync($"v1/sportsbook/selectormarkettemplates");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -735,21 +720,21 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private BetBuilderMarketTemplatesDTO GetBetBuilderMarketTemplates()
+        private BetBuilderMarketTemplatesDTO GetBetBuilderMarketTemplates(ClientContext client)
         {
-            return _memCache.GetCache<BetBuilderMarketTemplatesDTO>($"bbmt") ?? new BetBuilderMarketTemplatesDTO();
+            return _memCache.GetCache<BetBuilderMarketTemplatesDTO>($"{client.ClientCode}:bbmt") ?? new BetBuilderMarketTemplatesDTO();
         }
 
-        private List<MarketTemplatePlayerPropsResponseDTO> GetMarketTemplatePlayerProps()
+        private List<MarketTemplatePlayerPropsResponseDTO> GetMarketTemplatePlayerProps(ClientContext client)
         {
-            return _memCache.GetCache<List<MarketTemplatePlayerPropsResponseDTO>>($"mtpp") ?? new List<MarketTemplatePlayerPropsResponseDTO>();
+            return _memCache.GetCache<List<MarketTemplatePlayerPropsResponseDTO>>($"{client.ClientCode}:mtpp") ?? new List<MarketTemplatePlayerPropsResponseDTO>();
         }
 
-        private async Task<BaseResponseDTO<BetBuilderMarketTemplatesDTO>> GetBetBuilderMarketTemplatesDTO()
+        private async Task<BaseResponseDTO<BetBuilderMarketTemplatesDTO>> GetBetBuilderMarketTemplatesDTO(ClientContext client)
         {
             try
             {
-                var response = await _httpClient.PostAsync($"v1/sportsbook/betbuilder/markettemplates", new StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json"));
+                var response = await client.HttpClient.PostAsync($"v1/sportsbook/betbuilder/markettemplates", new StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json"));
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<BetBuilderMarketTemplatesDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -777,11 +762,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>> GetMarketSortOrder()
+        private async Task<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>> GetMarketSortOrder(ClientContext client)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/marketsortorder");
+                var response = await client.HttpClient.GetAsync($"v1/sportsbook/marketsortorder");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -809,11 +794,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>> GetFixtureSortOrder()
+        private async Task<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>> GetFixtureSortOrder(ClientContext client)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/fixturesortorder");
+                var response = await client.HttpClient.GetAsync($"v1/sportsbook/fixturesortorder");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -841,11 +826,11 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private async Task<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>> GetMarketTemplatePlayerPropsDTO()
+        private async Task<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>> GetMarketTemplatePlayerPropsDTO(ClientContext client)
         {
             try
             {
-                var response = await _httpClient.GetAsync($"v1/sportsbook/client/markettemplateplayerprops");
+                var response = await client.HttpClient.GetAsync($"v1/sportsbook/client/markettemplateplayerprops");
 
                 if (response.IsSuccessStatusCode)
                     return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
@@ -873,9 +858,9 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        private int GetMarketCount(long FiId)
+        private int GetMarketCount(ClientContext client, long FiId)
         {
-            var key = $"mc:{FiId}";
+            var key = $"{client.ClientCode}:mc:{FiId}";
 
             var cache = _memCache.GetCache<MarketCount>(key);
 
@@ -885,7 +870,7 @@ namespace OE.WebSocket.Service.Repository
                 return cache.MarketIds.Count();
         }
 
-        private List<Tuple<string, int>> GetMarketSortOrder(List<MarketMessage> markets, int sportId, int FiStId)
+        private List<Tuple<string, int>> GetMarketSortOrder(ClientContext client, List<MarketMessage> markets, int sportId, int FiStId)
         {
             var result = new List<Tuple<string, int>>();
 
@@ -895,10 +880,10 @@ namespace OE.WebSocket.Service.Repository
             ClientMarketSortOrder cache = null;
 
             if (FiStId == 0)
-                cache = _memCache.GetCache<ClientMarketSortOrder>($"pmso:{sportId}");
+                cache = _memCache.GetCache<ClientMarketSortOrder>($"{client.ClientCode}:pmso:{sportId}");
 
             if (FiStId == 1)
-                cache = _memCache.GetCache<ClientMarketSortOrder>($"lmso:{sportId}");
+                cache = _memCache.GetCache<ClientMarketSortOrder>($"{client.ClientCode}:lmso:{sportId}");
 
             if (cache != null)
             {
@@ -918,9 +903,9 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
-        private int GetFixtureSortOrder(int sportId, int segmentId, int leagueId)
+        private int GetFixtureSortOrder(ClientContext client, int sportId, int segmentId, int leagueId)
         {
-            var result = _memCache.GetCache<FixtureSortOrder>($"fso:{sportId}:{segmentId}:{leagueId}");
+            var result = _memCache.GetCache<FixtureSortOrder>($"{client.ClientCode}:fso:{sportId}:{segmentId}:{leagueId}");
 
             if (result == null)
                 return 1000;
@@ -957,7 +942,7 @@ namespace OE.WebSocket.Service.Repository
             {
                 foreach (var selection in selections)
                 {
-                    if (sportId == 1 && _MaTeIds.Contains(MaTeId) && _asianClCo.Contains(_clientCode.ToUpper()))
+                    if (sportId == 1 && _MaTeIds.Contains(MaTeId) && _asianClCo.Contains(clientCode))
                     {
                         result.Add(new ClientOdds
                         {
@@ -1184,8 +1169,10 @@ namespace OE.WebSocket.Service.Repository
             return Math.Truncate(retval * 100) / 100;
         }
 
-        private List<string> GetGroupsForMainMarkets(string clientCode, OnMarketChangeMessage message)
+        private List<string> GetGroupsForMainMarkets(ClientContext client, OnMarketChangeMessage message)
         {
+            var clientCode = client.ClientCode;
+
             var result = new List<string>
             {
             };
@@ -1253,7 +1240,7 @@ namespace OE.WebSocket.Service.Repository
                 result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:fixtures");
             }
 
-            var topFixtures = _memCache.GetCache<TopFixture>("TFL");
+            var topFixtures = _memCache.GetCache<TopFixture>($"{clientCode}:TFL");
 
             if (topFixtures != null)
             {
@@ -1261,7 +1248,7 @@ namespace OE.WebSocket.Service.Repository
                     result.Add($"endpoint:{clientCode}:topfixtures");
             }
 
-            var topLeagues = _memCache.GetCache<TopLeague>($"TLL:{message.SpId}");
+            var topLeagues = _memCache.GetCache<TopLeague>($"{clientCode}:TLL:{message.SpId}");
 
             if (topLeagues != null)
             {
@@ -1271,7 +1258,7 @@ namespace OE.WebSocket.Service.Repository
                     result.Add($"endpoint:{clientCode}:sports:{message.SpId}:topleaguefixtures");
             }
 
-            var leagueFavorites = _memCache.GetCache<Favorites>($"fli:{message.SpId}:{message.LeId}");
+            var leagueFavorites = _memCache.GetCache<Favorites>($"{clientCode}:fli:{message.SpId}:{message.LeId}");
 
             if (leagueFavorites != null)
             {
@@ -1281,7 +1268,7 @@ namespace OE.WebSocket.Service.Repository
                 });
             }
 
-            var fixtureFavorites = _memCache.GetCache<Favorites>($"ffi:{message.SpId}:{message.FiId}");
+            var fixtureFavorites = _memCache.GetCache<Favorites>($"{clientCode}:ffi:{message.SpId}:{message.FiId}");
 
             if (fixtureFavorites != null)
             {
@@ -1294,14 +1281,16 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
-        private List<string> GetGroupsForAllMarkets(string clientCode, OnMarketChangeMessage message)
+        private List<string> GetGroupsForAllMarkets(ClientContext client, OnMarketChangeMessage message)
         {
+            var clientCode = client.ClientCode;
+
             var result = new List<string>
             {
                 $"endpoint:{clientCode}:fixturedetails:{message.FiId}"
             };
 
-            var boostedFixtures = _memCache.GetCache<List<long>>("bf");
+            var boostedFixtures = _memCache.GetCache<List<long>>($"{clientCode}:bf");
 
             if (boostedFixtures != null && boostedFixtures.Contains(message.FiId))
                 result.Add($"endpoint:{clientCode}:boostedfixtures");
@@ -1311,8 +1300,10 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
-        private List<string> GetGroups(string clientCode, OnBetStopFixtureMessage message)
+        private List<string> GetGroups(ClientContext client, OnBetStopFixtureMessage message)
         {
+            var clientCode = client.ClientCode;
+
             var result = new List<string>
             {
                 $"endpoint:{clientCode}:fixturedetails:{message.FiId}"
@@ -1349,7 +1340,7 @@ namespace OE.WebSocket.Service.Repository
             result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:fixtures");
             result.Add($"endpoint:{clientCode}:sports:{message.SpId}:segments:{message.SegId}:leagues:{message.LeId}:fixtures");
 
-            var topLeagues = _memCache.GetCache<TopLeague>($"TLL:{message.SpId}");
+            var topLeagues = _memCache.GetCache<TopLeague>($"{clientCode}:TLL:{message.SpId}");
 
             if (topLeagues != null)
             {
@@ -1359,7 +1350,7 @@ namespace OE.WebSocket.Service.Repository
                     result.Add($"endpoint:{clientCode}:sports:{message.SpId}:topleaguefixtures");
             }
 
-            var topFixtures = _memCache.GetCache<TopFixture>("TFL");
+            var topFixtures = _memCache.GetCache<TopFixture>($"{clientCode}:TFL");
 
             if (topFixtures != null)
             {
@@ -1367,7 +1358,7 @@ namespace OE.WebSocket.Service.Repository
                     result.Add($"endpoint:{clientCode}:topfixtures");
             }
 
-            var leagueFavorites = _memCache.GetCache<Favorites>($"fli:{message.SpId}:{message.LeId}");
+            var leagueFavorites = _memCache.GetCache<Favorites>($"{clientCode}:fli:{message.SpId}:{message.LeId}");
 
             if (leagueFavorites != null)
             {
@@ -1377,7 +1368,7 @@ namespace OE.WebSocket.Service.Repository
                 });
             }
 
-            var fixtureFavorites = _memCache.GetCache<Favorites>($"ffi:{message.SpId}:{message.FiId}");
+            var fixtureFavorites = _memCache.GetCache<Favorites>($"{clientCode}:ffi:{message.SpId}:{message.FiId}");
 
             if (fixtureFavorites != null)
             {
@@ -1387,7 +1378,7 @@ namespace OE.WebSocket.Service.Repository
                 });
             }
 
-            var boostedFixtures = _memCache.GetCache<List<long>>("bf");
+            var boostedFixtures = _memCache.GetCache<List<long>>($"{clientCode}:bf");
 
             if (boostedFixtures != null && boostedFixtures.Contains(message.FiId))
                 result.Add($"endpoint:{clientCode}:boostedfixtures");
@@ -1432,12 +1423,12 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
-        private async Task ProcessMatchOddsChangeForMainMarketsOE(OnMarketChangeMessage message, HubConnection hubConnection, List<MarketMessage> finalMarkets)
+        private async Task ProcessMatchOddsChangeForMainMarketsOE(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection, List<MarketMessage> finalMarkets)
         {
-            if (message.ClCo == null || message.ClCo.Contains(_clientCode.ToUpper()) == false)
+            if (message.ClCo == null || message.ClCo.Contains(client.ClientCode.ToUpper()) == false)
                 return;
 
-            var betBuilderMarketTemplates = GetBetBuilderMarketTemplates();
+            var betBuilderMarketTemplates = GetBetBuilderMarketTemplates(client);
             var betBuilderSportIds = betBuilderMarketTemplates.BetBuilderMarketTemplates.Select(s => s.SportId).Distinct().ToList();
 
             var isBetBuilder = false;
@@ -1451,11 +1442,11 @@ namespace OE.WebSocket.Service.Repository
             }
 
             var markets = new List<OutgoingMarket>();
-            var marketTemplateGroup = GetMarketTemplatePlayerProps();
+            var marketTemplateGroup = GetMarketTemplatePlayerProps(client);
 
             foreach (var market in finalMarkets)
             {
-                if (market.ClCo == null || !market.ClCo.Contains(_clientCode.ToUpper()))
+                if (market.ClCo == null || !market.ClCo.Contains(client.ClientCode.ToUpper()))
                     continue;
 
                 var selections = new List<OutgoingSelection>();
@@ -1471,12 +1462,12 @@ namespace OE.WebSocket.Service.Repository
 
                     margin = (Math.Round(activeSelections.Sum(s => 100 / s.Od)) - 100) / 100;
 
-                    clientOdds = GetClientOdds(message.SpId, activeSelections.Count, margin, market.Se, market.ClCoMa, _clientCode.ToUpper(), market.MaTeId, marketTemplateGroup.Where(c => c.SportId == message.SpId).ToList());
+                    clientOdds = GetClientOdds(message.SpId, activeSelections.Count, margin, market.Se, market.ClCoMa, client.ClientCode.ToUpper(), market.MaTeId, marketTemplateGroup.Where(c => c.SportId == message.SpId).ToList());
                 }
 
                 foreach (var selection in market.Se)
                 {
-                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == _clientCode.ToUpper() && c.SelectionId == selection.SeId);
+                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == client.ClientCode.ToUpper() && c.SelectionId == selection.SeId);
 
                     selections.Add(new OutgoingSelection
                     {
@@ -1503,8 +1494,8 @@ namespace OE.WebSocket.Service.Repository
                     MaId = market.MaId.ToString(),
                     MaNa = market.MaNa,
                     Li = market.Li,
-                    MaStId = market.ClCo.Contains(_clientCode.ToUpper()) ? market.MaStId : (int)MarketStatus.Inactive,
-                    MaStNa = market.ClCo.Contains(_clientCode.ToUpper()) ? market.MaStNa : MarketStatus.Inactive.ToString(),
+                    MaStId = market.ClCo.Contains(client.ClientCode.ToUpper()) ? market.MaStId : (int)MarketStatus.Inactive,
+                    MaStNa = market.ClCo.Contains(client.ClientCode.ToUpper()) ? market.MaStNa : MarketStatus.Inactive.ToString(),
                     SoOr = market.SoOr,
                     //IsIn = market.IsInsert,
                     IsBeBu = isMarketBetBuilder,
@@ -1521,7 +1512,7 @@ namespace OE.WebSocket.Service.Repository
 
             var payload = new OutgoingOddsChange
             {
-                Gr = GetGroupsForMainMarkets(_clientCode, message),
+                Gr = GetGroupsForMainMarkets(client, message),
                 Pa = new OddsChangeFixture
                 {
                     SpId = message.SpId,
@@ -1545,8 +1536,8 @@ namespace OE.WebSocket.Service.Repository
                     CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
-                    SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
-                    MaCo = GetMarketCount(message.FiId),
+                    SoOr = GetFixtureSortOrder(client, message.SpId, message.SegId, message.LeId),
+                    MaCo = GetMarketCount(client, message.FiId),
                     IsBeBu = isBetBuilder,
                     Ma = markets,
                     SpTr = ToOutgoingTranslations(message.SpTr),
@@ -1559,17 +1550,17 @@ namespace OE.WebSocket.Service.Repository
 
             if (_publishedToWebSocketCounter.Enabled)
             {
-                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
+                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", client.ClientCode));
             }
 
-            await PublishToWebSocket("PublishOddsChangeForMainMarkets", hubConnection, payload);
+            await PublishToWebSocket(client, "PublishOddsChangeForMainMarkets", hubConnection, payload);
         }
 
-        private async Task ProcessMatchOddsChangeForMainMarkets(OnMarketChangeMessage message, HubConnection hubConnection, List<MarketMessage> finalMarkets)
+        private async Task ProcessMatchOddsChangeForMainMarkets(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection, List<MarketMessage> finalMarkets)
         {
             var payload = new OutgoingOddsChange
             {
-                Gr = GetGroupsForMainMarkets(_clientCode, message),
+                Gr = GetGroupsForMainMarkets(client, message),
                 Pa = new OddsChangeFixture
                 {
                     SpId = message.SpId,
@@ -1593,8 +1584,8 @@ namespace OE.WebSocket.Service.Repository
                     CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
-                    SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
-                    MaCo = GetMarketCount(message.FiId),
+                    SoOr = GetFixtureSortOrder(client, message.SpId, message.SegId, message.LeId),
+                    MaCo = GetMarketCount(client, message.FiId),
                     IsBeBu = false,
                     SpTr = ToOutgoingTranslations(message.SpTr),
                     SegTr = ToOutgoingTranslations(message.SegTr),
@@ -1635,7 +1626,7 @@ namespace OE.WebSocket.Service.Repository
 
             if (_publishedToWebSocketCounter.Enabled)
             {
-                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
+                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", client.ClientCode));
             }
 
             if (message.FiStId == (int)FixtureStatus.Closed)
@@ -1643,14 +1634,14 @@ namespace OE.WebSocket.Service.Repository
             if (message.FiStId == (int)FixtureStatus.Ended)
                 _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnOddsChange Ended");
 
-            await PublishToWebSocket("PublishOddsChangeForMainMarkets", hubConnection, payload);
+            await PublishToWebSocket(client, "PublishOddsChangeForMainMarkets", hubConnection, payload);
         }
 
-        private async Task ProcessMatchOddsChangeForAllMarkets(OnMarketChangeMessage message, HubConnection hubConnection)
+        private async Task ProcessMatchOddsChangeForAllMarkets(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection)
         {
             var payload = new OutgoingOddsChange
             {
-                Gr = GetGroupsForAllMarkets(_clientCode, message),
+                Gr = GetGroupsForAllMarkets(client, message),
                 Pa = new OddsChangeFixture
                 {
                     SpId = message.SpId,
@@ -1674,8 +1665,8 @@ namespace OE.WebSocket.Service.Repository
                     CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
-                    SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
-                    MaCo = GetMarketCount(message.FiId),
+                    SoOr = GetFixtureSortOrder(client, message.SpId, message.SegId, message.LeId),
+                    MaCo = GetMarketCount(client, message.FiId),
                     IsBeBu = false,
                     StUr = message.StUr,
                     SpTr = ToOutgoingTranslations(message.SpTr),
@@ -1717,16 +1708,16 @@ namespace OE.WebSocket.Service.Repository
             if (_publishedToWebSocketCounter.Enabled)
                 _publishedToWebSocketCounter.Add(1,
                         new KeyValuePair<string, object?>("method", "PublishOddsChangeForAllMarkets"),
-                        new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-            await PublishToWebSocket("PublishOddsChangeForAllMarkets", hubConnection, payload);
+                        new KeyValuePair<string, object?>("client.code", client.ClientCode));
+            await PublishToWebSocket(client, "PublishOddsChangeForAllMarkets", hubConnection, payload);
         }
 
-        private async Task ProcessMatchOddsChangeForAllMarketsOE(OnMarketChangeMessage message, HubConnection hubConnection)
+        private async Task ProcessMatchOddsChangeForAllMarketsOE(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection)
         {
-            if (message.ClCo == null || message.ClCo.Contains(_clientCode.ToUpper()) == false)
+            if (message.ClCo == null || message.ClCo.Contains(client.ClientCode.ToUpper()) == false)
                 return;
 
-            var betBuilderMarketTemplates = GetBetBuilderMarketTemplates();
+            var betBuilderMarketTemplates = GetBetBuilderMarketTemplates(client);
             var betBuilderSportIds = betBuilderMarketTemplates.BetBuilderMarketTemplates.Select(s => s.SportId).Distinct().ToList();
 
             var isBetBuilder = false;
@@ -1742,12 +1733,12 @@ namespace OE.WebSocket.Service.Repository
 
             var markets = new List<OutgoingMarket>();
 
-            var marketSortOrder = GetMarketSortOrder(message.Ma, message.SpId, message.FiStId);
-            var marketTemplateGroup = GetMarketTemplatePlayerProps();
+            var marketSortOrder = GetMarketSortOrder(client, message.Ma, message.SpId, message.FiStId);
+            var marketTemplateGroup = GetMarketTemplatePlayerProps(client);
 
             foreach (var market in message.Ma)
             {
-                if (market.ClCo == null || !market.ClCo.Contains(_clientCode.ToUpper()))
+                if (market.ClCo == null || !market.ClCo.Contains(client.ClientCode.ToUpper()))
                     continue;
 
                 var selections = new List<OutgoingSelection>();
@@ -1763,12 +1754,12 @@ namespace OE.WebSocket.Service.Repository
 
                     margin = (Math.Round(activeSelections.Sum(s => 100 / s.Od)) - 100) / 100;
 
-                    clientOdds = GetClientOdds(message.SpId, activeSelections.Count, margin, market.Se, market.ClCoMa, _clientCode.ToUpper(), market.MaTeId, marketTemplateGroup.Where(c => c.SportId == message.SpId).ToList());
+                    clientOdds = GetClientOdds(message.SpId, activeSelections.Count, margin, market.Se, market.ClCoMa, client.ClientCode.ToUpper(), market.MaTeId, marketTemplateGroup.Where(c => c.SportId == message.SpId).ToList());
                 }
 
                 foreach (var selection in market.Se)
                 {
-                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == _clientCode.ToUpper() && c.SelectionId == selection.SeId);
+                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == client.ClientCode.ToUpper() && c.SelectionId == selection.SeId);
 
                     selections.Add(new OutgoingSelection
                     {
@@ -1819,8 +1810,8 @@ namespace OE.WebSocket.Service.Repository
                     MaId = market.MaId.ToString(),
                     MaNa = market.MaNa,
                     Li = market.Li,
-                    MaStId = market.ClCo.Contains(_clientCode.ToUpper()) ? market.MaStId : (int)MarketStatus.Inactive,
-                    MaStNa = market.ClCo.Contains(_clientCode.ToUpper()) ? market.MaStNa : MarketStatus.Inactive.ToString(),
+                    MaStId = market.ClCo.Contains(client.ClientCode.ToUpper()) ? market.MaStId : (int)MarketStatus.Inactive,
+                    MaStNa = market.ClCo.Contains(client.ClientCode.ToUpper()) ? market.MaStNa : MarketStatus.Inactive.ToString(),
                     SoOr = marketSortOrder.Where(c => c.Item1 == market.MaTeId).Select(s => s.Item2).FirstOrDefault(),
                     //IsIn = market.IsInsert,
                     IsBeBu = isMarketBetBuilder,
@@ -1837,7 +1828,7 @@ namespace OE.WebSocket.Service.Repository
 
             var payload = new OutgoingOddsChange
             {
-                Gr = GetGroupsForAllMarkets(_clientCode, message),
+                Gr = GetGroupsForAllMarkets(client, message),
                 Pa = new OddsChangeFixture
                 {
                     SpId = message.SpId,
@@ -1861,8 +1852,8 @@ namespace OE.WebSocket.Service.Repository
                     CuPe = message.CuPe.ToString(),
                     CuMi = message.CuMi,
                     CuSe = message.CuSe,
-                    SoOr = GetFixtureSortOrder(message.SpId, message.SegId, message.LeId),
-                    MaCo = GetMarketCount(message.FiId),
+                    SoOr = GetFixtureSortOrder(client, message.SpId, message.SegId, message.LeId),
+                    MaCo = GetMarketCount(client, message.FiId),
                     IsBeBu = isBetBuilder,
                     Ma = markets,
                     SpTr = ToOutgoingTranslations(message.SpTr),
@@ -1876,8 +1867,8 @@ namespace OE.WebSocket.Service.Repository
             if (_publishedToWebSocketCounter.Enabled)
                 _publishedToWebSocketCounter.Add(1,
                         new KeyValuePair<string, object?>("method", "PublishOddsChangeForAllMarkets"),
-                        new KeyValuePair<string, object?>("client.code", _configuration["Custom:ClientCode"] ?? "None"));
-            await PublishToWebSocket("PublishOddsChangeForAllMarkets", hubConnection, payload);
+                        new KeyValuePair<string, object?>("client.code", client.ClientCode));
+            await PublishToWebSocket(client, "PublishOddsChangeForAllMarkets", hubConnection, payload);
         }
 
         // Forwards translation deltas only when there is something to forward (count > 0);

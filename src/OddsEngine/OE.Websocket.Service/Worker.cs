@@ -2,6 +2,7 @@ using MessagePack.Resolvers;
 using MessagePack;
 using Microsoft.AspNetCore.SignalR.Client;
 using OE.Shared.Utilities;
+using OE.WebSocket.Service.Clients;
 using OE.WebSocket.Service.Messages;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.WebSocket.Service.Repository;
@@ -21,15 +22,25 @@ namespace OE.Websocket.Service
 {
     public class Worker : BackgroundService
     {
+        // How often the client list is re-read from the Platform API; bounds how long
+        // a newly onboarded client waits before this instance starts serving it.
+        private const int ClientRefreshMinutes = 5;
+
         private readonly ILogger<Worker> _logger;
 
         private readonly IConfiguration _configuration;
         private readonly IMessageBroker _messageBroker;
         private readonly ISportsbookRepository _sportsbookRepository;
+        private readonly IClientRegistry _clientRegistry;
+        private readonly IClientPresence _clientPresence;
         private readonly HubConnection _hubConnection;
 
         private readonly ActivitySource _activitySource;
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
+
+        // Pairs a single-client message with the client resolved from its routing key
+        // (or payload ClientId), so the dispatch threads do not have to re-resolve.
+        private sealed record ClientScoped<T>(ClientContext Client, T Message);
 
         private Thread _threadTopFixtures;
         private Thread _threadTopLeagues;
@@ -50,21 +61,59 @@ namespace OE.Websocket.Service
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesMarketCount = new BlockingCollection<OnMarketChangeMessage>();
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesMainMarketsOddsChange = new BlockingCollection<OnMarketChangeMessage>();
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesAllMarketsOddsChange = new BlockingCollection<OnMarketChangeMessage>();
-        private readonly BlockingCollection<IncomingBetStatus> _messagesBetStatus = new BlockingCollection<IncomingBetStatus>();
-        private readonly BlockingCollection<IncomingCashOutChange> _messagesCashOut = new BlockingCollection<IncomingCashOutChange>();
-        private readonly BlockingCollection<IncomingWalletChange> _messagesWallet = new BlockingCollection<IncomingWalletChange>();
-        private readonly BlockingCollection<IncomingVisitFavorites> _messagesFavorites = new BlockingCollection<IncomingVisitFavorites>();
-        private readonly BlockingCollection<IncomingVisitFavorites> _messagesRemoveFavorites = new BlockingCollection<IncomingVisitFavorites>();
-        private readonly BlockingCollection<IncomingVisitBoostedFixtures> _messagesBoostedFixtures = new BlockingCollection<IncomingVisitBoostedFixtures>();
-        private readonly BlockingCollection<IncomingPayableChange> _messagesPayable = new BlockingCollection<IncomingPayableChange>();
-        private readonly BlockingCollection<bool> _messagesMarketSortOrder = new BlockingCollection<bool>();
+        private readonly BlockingCollection<ClientScoped<IncomingBetStatus>> _messagesBetStatus = new BlockingCollection<ClientScoped<IncomingBetStatus>>();
+        private readonly BlockingCollection<ClientScoped<IncomingCashOutChange>> _messagesCashOut = new BlockingCollection<ClientScoped<IncomingCashOutChange>>();
+        private readonly BlockingCollection<ClientScoped<IncomingWalletChange>> _messagesWallet = new BlockingCollection<ClientScoped<IncomingWalletChange>>();
+        private readonly BlockingCollection<ClientScoped<IncomingVisitFavorites>> _messagesFavorites = new BlockingCollection<ClientScoped<IncomingVisitFavorites>>();
+        private readonly BlockingCollection<ClientScoped<IncomingVisitFavorites>> _messagesRemoveFavorites = new BlockingCollection<ClientScoped<IncomingVisitFavorites>>();
+        private readonly BlockingCollection<ClientScoped<IncomingVisitBoostedFixtures>> _messagesBoostedFixtures = new BlockingCollection<ClientScoped<IncomingVisitBoostedFixtures>>();
+        private readonly BlockingCollection<ClientScoped<IncomingPayableChange>> _messagesPayable = new BlockingCollection<ClientScoped<IncomingPayableChange>>();
+        private readonly BlockingCollection<ClientScoped<bool>> _messagesMarketSortOrder = new BlockingCollection<ClientScoped<bool>>();
+
+        // Fan-out for messages every client receives. Clients are processed in
+        // parallel but the call returns only when ALL clients finished this message
+        // (per-message barrier), so each client sees messages in consumption order.
+        private async Task ProcessForAllClients(Func<ClientContext, Task> process)
+        {
+            var clients = _clientRegistry.Clients;
+
+            if (clients.Count == 1)
+            {
+                await process(clients[0]);
+                return;
+            }
+
+            await Task.WhenAll(clients.Select(process));
+        }
+
+        // Presence-filtered variant for the two odds-change PUBLISH fan-outs only:
+        // clients with no connected users are skipped (missed odds changes self-heal
+        // on the next update). Not used for cache-maintenance fan-outs (market count,
+        // top fixtures/leagues maintain INCREMENTAL state that must never miss a
+        // message), nor for bet stops and user-specific one-offs (they do not
+        // self-heal). Also skips clients whose template data is still loading.
+        private async Task ProcessForActiveClients(Func<ClientContext, Task> process)
+        {
+            var clients = _clientRegistry.Clients.Where(c => c.IsReady && _clientPresence.IsActive(c.ClientCode)).ToList();
+
+            if (clients.Count == 0)
+                return;
+
+            if (clients.Count == 1)
+            {
+                await process(clients[0]);
+                return;
+            }
+
+            await Task.WhenAll(clients.Select(process));
+        }
 
         private async void ThreadTopFixtures()
         {
             while (true)
             {
                 var message = _messagesTopFixtures.Take();
-                await _sportsbookRepository.ProcessTopFixtures(message);
+                await ProcessForAllClients(client => _sportsbookRepository.ProcessTopFixtures(client, message));
             }
         }
         private async void ThreadTopLeagues()
@@ -72,7 +121,7 @@ namespace OE.Websocket.Service
             while (true)
             {
                 var message = _messagesTopLeagues.Take();
-                await _sportsbookRepository.ProcessTopLeagues(message);
+                await ProcessForAllClients(client => _sportsbookRepository.ProcessTopLeagues(client, message));
             }
         }
         private async void ThreadMarketCount()
@@ -80,7 +129,7 @@ namespace OE.Websocket.Service
             while (true)
             {
                 var message = _messagesMarketCount.Take();
-                await _sportsbookRepository.ProcessMarketCount(message);
+                await ProcessForAllClients(client => _sportsbookRepository.ProcessMarketCount(client, message));
             }
         }
         private async void ThreadMainMarketsOddsChange()
@@ -88,7 +137,7 @@ namespace OE.Websocket.Service
             while (true)
             {
                 var message = _messagesMainMarketsOddsChange.Take();
-                await _sportsbookRepository.ProcessOddsChangeForMainMarkets(message, _hubConnection);
+                await ProcessForActiveClients(client => _sportsbookRepository.ProcessOddsChangeForMainMarkets(client, message, _hubConnection));
             }
         }
         private async void ThreadAllMarketsOddsChange()
@@ -96,71 +145,71 @@ namespace OE.Websocket.Service
             while (true)
             {
                 var message = _messagesAllMarketsOddsChange.Take();
-                await _sportsbookRepository.ProcessOddsChangeForAllMarkets(message, _hubConnection);
+                await ProcessForActiveClients(client => _sportsbookRepository.ProcessOddsChangeForAllMarkets(client, message, _hubConnection));
             }
         }
         private async void ThreadBetStatus()
         {
             while (true)
             {
-                var message = _messagesBetStatus.Take();
-                await _sportsbookRepository.ProcessBetStatus(message, _hubConnection);
+                var item = _messagesBetStatus.Take();
+                await _sportsbookRepository.ProcessBetStatus(item.Client, item.Message, _hubConnection);
             }
         }
         private async void ThreadCashOut()
         {
             while (true)
             {
-                var message = _messagesCashOut.Take();
-                await _sportsbookRepository.ProcessCashOutChange(message, _hubConnection);
+                var item = _messagesCashOut.Take();
+                await _sportsbookRepository.ProcessCashOutChange(item.Client, item.Message, _hubConnection);
             }
         }
         private async void ThreadWallet()
         {
             while (true)
             {
-                var message = _messagesWallet.Take();
-                await _sportsbookRepository.ProcessWalletChange(message, _hubConnection);
+                var item = _messagesWallet.Take();
+                await _sportsbookRepository.ProcessWalletChange(item.Client, item.Message, _hubConnection);
             }
         }
         private async void ThreadFavorites()
         {
             while (true)
             {
-                var message = _messagesFavorites.Take();
-                await _sportsbookRepository.ProcessFavorites(message);
+                var item = _messagesFavorites.Take();
+                await _sportsbookRepository.ProcessFavorites(item.Client, item.Message);
             }
         }
         private async void ThreadRemoveFavorites()
         {
             while (true)
             {
-                var message = _messagesRemoveFavorites.Take();
-                await _sportsbookRepository.ProcessRemoveFavorites(message);
+                var item = _messagesRemoveFavorites.Take();
+                await _sportsbookRepository.ProcessRemoveFavorites(item.Client, item.Message);
             }
         }
         private async void ThreadBoostedFixtures()
         {
             while (true)
             {
-                var message = _messagesBoostedFixtures.Take();
-                await _sportsbookRepository.ProcessBoostedFixtures(message);
+                var item = _messagesBoostedFixtures.Take();
+                await _sportsbookRepository.ProcessBoostedFixtures(item.Client, item.Message);
             }
         }
         private async void ThreadPayable()
         {
             while (true)
             {
-                var message = _messagesPayable.Take();
-                await _sportsbookRepository.ProcessPayableChange(message, _hubConnection);
+                var item = _messagesPayable.Take();
+                await _sportsbookRepository.ProcessPayableChange(item.Client, item.Message, _hubConnection);
             }
         }
         private async void ThreadMarketSortOrder()
         {
             while (true)
             {
-                var message = _messagesMarketSortOrder.Take();
-                await _sportsbookRepository.ProcessMarketSortOrder();
+                var item = _messagesMarketSortOrder.Take();
+                await _sportsbookRepository.ProcessMarketSortOrder(item.Client);
             }
         }
 
@@ -169,6 +218,8 @@ namespace OE.Websocket.Service
                 IConfiguration configuration,
                 IMessageBroker messageBroker,
                 ISportsbookRepository sportsbookRepository,
+                IClientRegistry clientRegistry,
+                IClientPresence clientPresence,
                 Instrumentation instrumentation)
         {
             _configuration = configuration;
@@ -176,6 +227,8 @@ namespace OE.Websocket.Service
             _logger = logger;
             _messageBroker = messageBroker;
             _sportsbookRepository = sportsbookRepository;
+            _clientRegistry = clientRegistry;
+            _clientPresence = clientPresence;
             //
             if (bool.Parse(_configuration["Custom:UseMessagePack"]))
             {
@@ -261,11 +314,21 @@ namespace OE.Websocket.Service
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await _sportsbookRepository.ProcessMainMarketTemplates();
-            await _sportsbookRepository.ProcessMarketSortOrder();
-            await _sportsbookRepository.ProcessFixtureSortOrder();
-            await _sportsbookRepository.ProcessBetBuilderMarketTemplates();
-            await _sportsbookRepository.ProcessMarketTemplatePlayerProps();
+            // Do not start consuming until discovery has produced at least one client;
+            // otherwise every message would be drained with nobody to serve.
+            var clients = await _clientRegistry.RefreshAsync();
+
+            while (_clientRegistry.Clients.Count == 0 && !stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogWarning("no clients discovered yet, retrying in 10s");
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                clients = await _clientRegistry.RefreshAsync();
+            }
+
+            _logger.LogInformation("serving {clientCount} client(s): {clientCodes}",
+                    _clientRegistry.Clients.Count, string.Join(",", _clientRegistry.Clients.Select(c => c.ClientCode)));
+
+            await LoadClientData(clients);
 
             _logger.LogInformation("Preparing threads");
             _threadTopFixtures = new Thread(ThreadTopFixtures);
@@ -307,6 +370,132 @@ namespace OE.Websocket.Service
 
             var connectionId = await _hubConnection.InvokeAsync<string>("GetConnectionId");
             _logger.LogInformation($"connectionId: {connectionId}");
+
+            _ = Task.Run(() => RefreshClientsLoop(stoppingToken), stoppingToken);
+            _ = Task.Run(() => PresencePollLoop(stoppingToken), stoppingToken);
+        }
+
+        // Polls the hub's /v1/activeclients endpoint so the odds fan-out can skip
+        // clients with no connected users. Any failure marks presence unavailable,
+        // which makes IsActive() fail open (publish to everyone) - so this is safe
+        // to run against a hub that does not expose the endpoint yet. Failures are
+        // logged once per outage, not per poll, to keep log volume flat.
+        private async Task PresencePollLoop(CancellationToken stoppingToken)
+        {
+            // The hub serves its HTTP endpoints on the same host as the SignalR path,
+            // so the presence URL is always derived from Custom:WebSocketAPI.
+            var hubUri = new Uri(_configuration["Custom:WebSocketAPI"]);
+            var presenceUrl = $"{hubUri.GetLeftPart(UriPartial.Authority)}/v1/activeclients";
+
+            _logger.LogInformation("polling presence at {presenceUrl}", presenceUrl);
+
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(ClientPresence.PollSeconds));
+
+            var wasAvailable = true;
+
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stoppingToken))
+                {
+                    try
+                    {
+                        var response = await httpClient.GetAsync(presenceUrl, stoppingToken);
+
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            if (wasAvailable)
+                                _logger.LogWarning("presence poll returned {statusCode}, failing open until it recovers", (int)response.StatusCode);
+
+                            wasAvailable = false;
+                            _clientPresence.MarkUnavailable();
+                            continue;
+                        }
+
+                        var body = JsonSerializer.Deserialize<ActiveClientsResponseDTO>(
+                            await response.Content.ReadAsStringAsync(stoppingToken),
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                        if (!wasAvailable)
+                            _logger.LogInformation("presence poll recovered");
+
+                        wasAvailable = true;
+                        _clientPresence.Update(body?.Clients ?? new List<string>());
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (wasAvailable)
+                            _logger.LogWarning(ex, "presence poll failed, failing open until it recovers");
+
+                        wasAvailable = false;
+                        _clientPresence.MarkUnavailable();
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // shutting down
+            }
+        }
+
+        private class ActiveClientsResponseDTO
+        {
+            public List<string> Clients { get; set; }
+        }
+
+        // Picks up clients added (or removed) in the Platform Client table without a
+        // redeploy; newly added clients get their template/sort-order data loaded
+        // before they start receiving fan-out.
+        private async Task RefreshClientsLoop(CancellationToken stoppingToken)
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(ClientRefreshMinutes));
+
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stoppingToken))
+                {
+                    try
+                    {
+                        var added = await _clientRegistry.RefreshAsync();
+                        await LoadClientData(added);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "error refreshing client registry");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // shutting down
+            }
+        }
+
+        private async Task LoadClientData(IReadOnlyList<ClientContext> clients)
+        {
+            await Task.WhenAll(clients.Select(async client =>
+            {
+                await _sportsbookRepository.ProcessMainMarketTemplates(client);
+                await _sportsbookRepository.ProcessMarketSortOrder(client);
+                await _sportsbookRepository.ProcessFixtureSortOrder(client);
+                await _sportsbookRepository.ProcessBetBuilderMarketTemplates(client);
+                await _sportsbookRepository.ProcessMarketTemplatePlayerProps(client);
+
+                client.IsReady = true;
+            }));
+        }
+
+        // Owning client for a client-suffixed routing key (r.bet.betstatus.gsa),
+        // falling back to the ClientId GUID some payloads carry. Null means this
+        // instance does not serve that client (e.g. sharded or mid-cutover) and the
+        // message is skipped.
+        private ClientContext ResolveClient(string routingKey, string clientId = null)
+        {
+            return _clientRegistry.ResolveByRoutingKey(routingKey) ?? _clientRegistry.ResolveByClientId(clientId);
         }
 
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
@@ -342,46 +531,110 @@ namespace OE.Websocket.Service
 
                         case MessageType.ON_BET_STOP_GLOBAL:
                             var onBetStopGlobal = JsonSerializer.Deserialize<OnBetStopGlobalMessage>(payload);
-                            await _sportsbookRepository.ProcessBetStopGlobal(onBetStopGlobal, _hubConnection);
+                            await ProcessForAllClients(client => _sportsbookRepository.ProcessBetStopGlobal(client, onBetStopGlobal, _hubConnection));
                             break;
                         case MessageType.ON_BET_STOP_FIXTURE:
                             var onBetStopFixture = JsonSerializer.Deserialize<OnBetStopFixtureMessage>(payload);
-                            await _sportsbookRepository.ProcessBetStopFixture(onBetStopFixture, _hubConnection);
+                            await ProcessForAllClients(client => _sportsbookRepository.ProcessBetStopFixture(client, onBetStopFixture, _hubConnection));
                             break;
 
                         case "OnBetStatus":
                             var onBetStatus = JsonSerializer.Deserialize<IncomingBetStatus>(payload);
-                            _messagesBetStatus.Add(onBetStatus);
+                            var betStatusClient = ResolveClient(e.RoutingKey, onBetStatus.ClientId);
+
+                            if (betStatusClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesBetStatus.Add(new ClientScoped<IncomingBetStatus>(betStatusClient, onBetStatus));
                             break;
 
                         case "OnCashOutChange":
                             var onCashOutChange = JsonSerializer.Deserialize<IncomingCashOutChange>(payload);
-                            _messagesCashOut.Add(onCashOutChange);
+                            var cashOutClient = ResolveClient(e.RoutingKey, onCashOutChange.ClientId);
+
+                            if (cashOutClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesCashOut.Add(new ClientScoped<IncomingCashOutChange>(cashOutClient, onCashOutChange));
                             break;
 
                         case "OnWalletChange":
                             var onWalletChange = JsonSerializer.Deserialize<IncomingWalletChange>(payload);
-                            _messagesWallet.Add(onWalletChange);
+                            var walletClient = ResolveClient(e.RoutingKey, onWalletChange.ClientId);
+
+                            if (walletClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesWallet.Add(new ClientScoped<IncomingWalletChange>(walletClient, onWalletChange));
                             break;
 
                         case "OnVisitFavorites":
                             var onVisitFavorites = JsonSerializer.Deserialize<IncomingVisitFavorites>(payload);
-                            _messagesFavorites.Add(onVisitFavorites);
+                            var favoritesClient = ResolveClient(e.RoutingKey);
+
+                            if (favoritesClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesFavorites.Add(new ClientScoped<IncomingVisitFavorites>(favoritesClient, onVisitFavorites));
                             break;
                         case "OnRemoveUserFavorites":
                             var onRemoveFavorites = JsonSerializer.Deserialize<IncomingVisitFavorites>(payload);
-                            _messagesRemoveFavorites.Add(onRemoveFavorites);
+                            var removeFavoritesClient = ResolveClient(e.RoutingKey);
+
+                            if (removeFavoritesClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesRemoveFavorites.Add(new ClientScoped<IncomingVisitFavorites>(removeFavoritesClient, onRemoveFavorites));
                             break;
                         case "OnVisitBoostedFixtures":
                             var onVisitBoostedFixtures = JsonSerializer.Deserialize<IncomingVisitBoostedFixtures>(payload);
-                            _messagesBoostedFixtures.Add(onVisitBoostedFixtures);
+                            var boostedClient = ResolveClient(e.RoutingKey);
+
+                            if (boostedClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesBoostedFixtures.Add(new ClientScoped<IncomingVisitBoostedFixtures>(boostedClient, onVisitBoostedFixtures));
                             break;
                         case "OnPayableChange":
                             var onPayableChange = JsonSerializer.Deserialize<IncomingPayableChange>(payload);
-                            _messagesPayable.Add(onPayableChange);
+                            var payableClient = ResolveClient(e.RoutingKey, onPayableChange.ClientId);
+
+                            if (payableClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesPayable.Add(new ClientScoped<IncomingPayableChange>(payableClient, onPayableChange));
                             break;
                         case "OnMarketSortOrderChange":
-                            _messagesMarketSortOrder.Add(true);
+                            var sortOrderClient = ResolveClient(e.RoutingKey);
+
+                            if (sortOrderClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesMarketSortOrder.Add(new ClientScoped<bool>(sortOrderClient, true));
                             break;
 
                     }
