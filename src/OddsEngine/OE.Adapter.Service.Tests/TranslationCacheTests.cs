@@ -150,6 +150,26 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal("足球", translated.Single().Tx);
         }
 
+        // Same "malformed item" guard as the empty-StId case above, but for a missing/empty LaCo.
+        [Fact]
+        public void Apply_MissingOrEmptyLaCo_SkipsItemWithoutThrowing()
+        {
+            var cache = Cache(nameof(Apply_MissingOrEmptyLaCo_SkipsItemWithoutThrowing), Row("SpId:1", zh: "足球"));
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "SpId:1", LaCo = "", Tx = "x" },
+                new TranslationChangeItem { StId = "SpId:1", LaCo = null!, Tx = "y" }
+            });
+
+            var translated = cache.GetTranslations("SpId:1", "Source-SpId:1");
+
+            Assert.NotNull(translated);
+            Assert.Single(translated);
+            Assert.Equal("足球", translated.Single().Tx);
+        }
+
         // Content-addressed fallback (2026-07-09): a StringId miss or a detected rename (cached
         // SOURCE_TEXT no longer matches what's arriving) reuses an existing translation for
         // identical English text under a different StringId instead of returning null.

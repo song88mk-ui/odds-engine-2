@@ -365,5 +365,47 @@ namespace OE.Sportsbook.Service.Tests
 
             Assert.Equal(150762, payload.Ma.Single().CompId);
         }
+
+        [Fact]
+        public void ToMarketAndSelectionChange_EmptyMarketList_ReturnsNoWrites()
+        {
+            var repository = CreateRepository();
+            var message = MarketChangeMessage(compId: null);
+            message.Ma = new List<MarketMessage>();
+
+            var (marketWrites, selectionWrites) = repository.ToMarketAndSelectionChange(message, "cid");
+
+            Assert.Empty(marketWrites);
+            Assert.Empty(selectionWrites);
+        }
+
+        [Fact]
+        public void ToMarketAndSelectionChange_MarketWithNoSelections_WritesMarketButNoSelections()
+        {
+            var repository = CreateRepository();
+            var message = MarketChangeMessage(compId: null);
+            message.Ma[0].Se = new List<SelectionMessage>();
+
+            var (marketWrites, selectionWrites) = repository.ToMarketAndSelectionChange(message, "cid");
+
+            Assert.Single(marketWrites);
+            Assert.Empty(selectionWrites);
+        }
+
+        // Unlike above, PrepareInternalOddsChangeMessage drops a market with an empty Se list
+        // entirely instead of persisting it — a market with no selections reaches Mongo but never
+        // appears in the published ON_ODDS_CHANGE payload. Documenting current behavior; this
+        // asymmetry looks unintentional and worth a follow-up look, not fixed here.
+        [Fact]
+        public void PrepareInternalOddsChangeMessage_MarketChange_MarketWithNoSelections_OmitsMarketFromPayload()
+        {
+            var repository = CreateRepository();
+            var message = MarketChangeMessage(compId: null);
+            message.Ma[0].Se = new List<SelectionMessage>();
+
+            var payload = repository.PrepareInternalOddsChangeMessage(message, "cid");
+
+            Assert.Empty(payload.Ma);
+        }
     }
 }
