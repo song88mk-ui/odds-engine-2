@@ -17,6 +17,11 @@ namespace OE.Shared.Repositories
 {
     public class BetGeniusRepository : IBetGeniusRepository
     {
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly IMemCache _memCache;
@@ -70,7 +75,7 @@ namespace OE.Shared.Repositories
 
                     if (response.IsSuccessStatusCode)
                     {
-                        var initialResult = JsonSerializer.Deserialize<BGAuth>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        var initialResult = JsonSerializer.Deserialize<BGAuth>(await response.Content.ReadAsStringAsync(), JsonOptions);
 
                         activity?.SetStatus(ActivityStatusCode.Ok);
 
@@ -150,7 +155,7 @@ namespace OE.Shared.Repositories
 
                     if (response.IsSuccessStatusCode)
                     {
-                        var initialResult = JsonSerializer.Deserialize<BGEvent>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        var initialResult = JsonSerializer.Deserialize<BGEvent>(await response.Content.ReadAsStringAsync(), JsonOptions);
 
                         activity?.SetStatus(ActivityStatusCode.Ok);
 
@@ -272,7 +277,7 @@ namespace OE.Shared.Repositories
 
                         var pageResult = JsonSerializer.Deserialize<BGEvents>(
                             await response.Content.ReadAsStringAsync(),
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            JsonOptions);
 
                         if (pageResult?.Data != null)
                         {

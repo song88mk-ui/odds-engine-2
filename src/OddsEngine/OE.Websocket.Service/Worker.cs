@@ -26,6 +26,11 @@ namespace OE.Websocket.Service
         // a newly onboarded client waits before this instance starts serving it.
         private const int ClientRefreshMinutes = 5;
 
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly ILogger<Worker> _logger;
 
         private readonly IConfiguration _configuration;
@@ -414,7 +419,7 @@ namespace OE.Websocket.Service
 
                         var body = JsonSerializer.Deserialize<ActiveClientsResponseDTO>(
                             await response.Content.ReadAsStringAsync(stoppingToken),
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            JsonOptions);
 
                         if (!wasAvailable)
                             _logger.LogInformation("presence poll recovered");

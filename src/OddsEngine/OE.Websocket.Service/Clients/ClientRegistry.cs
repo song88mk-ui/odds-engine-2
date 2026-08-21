@@ -11,6 +11,11 @@ namespace OE.WebSocket.Service.Clients
     // users receive duplicate pushes.
     public class ClientRegistry : IClientRegistry
     {
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly IConfiguration _configuration;
         private readonly ILogger<ClientRegistry> _logger;
         private readonly HttpClient _discoveryHttpClient;
@@ -131,7 +136,7 @@ namespace OE.WebSocket.Service.Clients
 
                 var body = JsonSerializer.Deserialize<ClientDiscoveryResponseDTO>(
                     await response.Content.ReadAsStringAsync(),
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    JsonOptions);
 
                 return body?.Result;
             }

@@ -19,6 +19,11 @@ namespace OE.WebSocket.Service.Repository
     {
         #region Fields
 
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly bool _isOEEnabled;
 
         private readonly IConfiguration _configuration;
@@ -591,11 +596,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v2/sportsbook/topfixtures");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<TWResponseDTO>
@@ -623,11 +628,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v1/sportsbook/sports/topleagues?sportId={sportId}");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<TopLeaguesResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<TopLeaguesResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<TopLeaguesResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<TopLeaguesResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<TopLeaguesResponseDTO>
@@ -655,11 +660,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v1/sportsbook/fixturedetails?fixtureId={FiId}");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<TWResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         var headers = string.Join("; ", client.HttpClient.DefaultRequestHeaders.Select(h => $"{h.Key}: {string.Join(",", h.Value)}"));
@@ -695,11 +700,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v1/sportsbook/selectormarkettemplates");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<List<SportSelectorMarketTemplateDTO>>
@@ -737,11 +742,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.PostAsync($"v1/sportsbook/betbuilder/markettemplates", new StringContent(string.Empty, System.Text.Encoding.UTF8, "application/json"));
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<BetBuilderMarketTemplatesDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<BetBuilderMarketTemplatesDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<BetBuilderMarketTemplatesDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<BetBuilderMarketTemplatesDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<BetBuilderMarketTemplatesDTO>
@@ -769,11 +774,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v1/sportsbook/marketsortorder");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<ClientMarketTemplateGroupResponseDTO>
@@ -801,11 +806,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v1/sportsbook/fixturesortorder");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<ClientFixtureSortOrderResponseDTO>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<ClientFixtureSortOrderResponseDTO>
@@ -833,11 +838,11 @@ namespace OE.WebSocket.Service.Repository
                 var response = await client.HttpClient.GetAsync($"v1/sportsbook/client/markettemplateplayerprops");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>

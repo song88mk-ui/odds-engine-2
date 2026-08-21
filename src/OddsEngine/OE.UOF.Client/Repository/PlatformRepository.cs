@@ -8,6 +8,11 @@ namespace OE.UOF.Client.Repository
 {
     public class PlatformRepository : IPlatformRepository
     {
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
         private readonly IMemCache _memCache;
         private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
@@ -59,11 +64,11 @@ namespace OE.UOF.Client.Repository
                 var response = await _httpClient.GetAsync($"v1/sportsbook/client/markettemplateplayerprops");
 
                 if (response.IsSuccessStatusCode)
-                    return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                    return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                 else
                 {
                     if (response.StatusCode == HttpStatusCode.BadRequest)
-                        return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
+                        return JsonSerializer.Deserialize<BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>>(await response.Content.ReadAsStringAsync(), JsonOptions);
                     else
                     {
                         return new BaseResponseDTO<List<MarketTemplatePlayerPropsResponseDTO>>
