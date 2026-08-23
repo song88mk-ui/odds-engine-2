@@ -34,6 +34,9 @@ jobs:
       - name: Test
         run: dotnet test src/OddsEngine/OddsEngine.sln --configuration Release
 
+      - name: Format
+        run: dotnet format src/OddsEngine/OddsEngine.sln --verify-no-changes
+
   build:
     name: Build ${{ matrix.app.path }}
     runs-on: ubuntu-latest
