@@ -117,11 +117,12 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
 | Mongo `Data/Sportsbook` schema | 2 repos | OEv2 `OE.Shared` + backoffice-final inline copy | Medium (sibling) | diff for drift (#24) |
 
 ## Inconsistent patterns (system-level)
-Mixed TFMs (net8/net9), mixed `Microsoft.Extensions.Hosting`/`MongoDB.Driver` versions, mixed
+Mixed `MongoDB.Driver` versions (3.4.0 vs 3.6.0), mixed
 `Nullable`/`ImplicitUsings`, two `Program.cs` styles, Dockerfile `ENTRYPOINT`/`CMD` + output-path
-variance, abbreviated vs full field names across message generations. Evidence/files:
-[TechnicalDebt.md](./TechnicalDebt.md) M2/M3 + [CodingStandards.md](./CodingStandards.md). Confidence: High.
-Suggested investigation: confirm intended target framework + package baseline before the next service.
+variance, abbreviated vs full field names across message generations. (TFMs and
+`Microsoft.Extensions.*` were unified on `net10.0`/10.0.11 by GM-751, 2026-08-24.) Evidence/files:
+[TechnicalDebt.md](./TechnicalDebt.md) M3 + [CodingStandards.md](./CodingStandards.md). Confidence: High.
+Suggested investigation: confirm intended `MongoDB.Driver` baseline before the next service.
 
 ## Risk heatmap
 | | Catalogue/bet-stop | Websocket delivery | Secrets | Sharding | Silent failures | External infra |

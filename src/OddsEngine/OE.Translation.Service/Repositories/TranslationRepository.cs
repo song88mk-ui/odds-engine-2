@@ -251,7 +251,9 @@ namespace OE.Translation.Service.Repositories
             {
                 var chunkIds = chunk.ToList();
 
+                // .AsQueryable() disambiguates from the in-box System.Linq.AsyncEnumerable on net10.0 (CS0121)
                 var found = await context.TranslationCache2
+                    .AsQueryable()
                     .Where(x => chunkIds.Contains(x.StringId))
                     .Select(x => x.StringId)
                     .ToListAsync();
@@ -342,6 +344,7 @@ namespace OE.Translation.Service.Repositories
             }
 
             var existing = await context.TranslationCache2
+                .AsQueryable()
                 .Where(x => ids.Contains(x.StringId))
                 .ToListAsync();
 

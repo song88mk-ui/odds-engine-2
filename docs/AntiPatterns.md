@@ -72,9 +72,9 @@ recognize them when reading/extending the code. This is the *pattern* view; the 
 - **No trace-id enricher** in Serilog — a log line can't be tied to its trace without manual correlation.
 
 ## Consistency drift (team-level)
-- Mixed TFMs (net8/net9), mixed package versions (`Microsoft.Extensions.Hosting`,
-  `MongoDB.Driver`), `OE.Job.Lookup` missing Serilog/telemetry, mixed `Nullable`/`ImplicitUsings`,
-  Dockerfile `ENTRYPOINT`/`CMD` and output-path variance, two `Program.cs` styles.
+- Mixed `MongoDB.Driver` versions (3.4.0 vs 3.6.0), `OE.Job.Lookup` missing Serilog/telemetry,
+  mixed `Nullable`/`ImplicitUsings`, Dockerfile `ENTRYPOINT`/`CMD` and output-path variance,
+  two `Program.cs` styles. (TFMs and `Microsoft.Extensions.*` versions unified by GM-751.)
 
 ---
 > **Note (per Phase-8 scope):** this documents what *exists* — it does not prescribe replacements.

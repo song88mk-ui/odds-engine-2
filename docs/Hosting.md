@@ -15,10 +15,10 @@ in-repo / [Verified-argocd] for deployment.
 ## 2. Container packaging — [Verified]
 
 Each service has a multi-stage Dockerfile:
-- **Build stage:** `mcr.microsoft.com/dotnet/sdk:8.0` (or `9.0` for Cleanup/KeepAlive), restores
+- **Build stage:** `mcr.microsoft.com/dotnet/sdk:10.0` (all services since GM-751), restores
   with GitHub Packages auth (`NUGET_PASSWORD` build-arg, for `Infra.Extensions.Telemetry` /
   `OE.Shared`), publishes.
-- **Runtime stage:** `mcr.microsoft.com/dotnet/aspnet:8.0` (or 9.0). *Note:* the `aspnet` runtime
+- **Runtime stage:** `mcr.microsoft.com/dotnet/aspnet:10.0`. *Note:* the `aspnet` runtime
   image is used even though these aren't web apps — harmless but heavier than `runtime`.
 - 7/9 images download the **AWS RDS global certificate bundle** for TLS to DocumentDB/Mongo + RDS.
 - `appsettings.*.json` (env-specific) are stripped at publish to force runtime env injection.

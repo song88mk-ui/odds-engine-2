@@ -86,7 +86,8 @@ states the decision, the evidence, the likely rationale, and the consequences. T
 ---
 
 ## Decisions that look accidental rather than intentional (flag for review)
-- Mixed TFMs (net8 vs net9) and package versions — [Likely] drift, not a decision.
+- Mixed `MongoDB.Driver` versions (3.4 vs 3.6) — [Likely] drift, not a decision. (TFM and
+  `Microsoft.Extensions.*` drift resolved by GM-751 — all executables `net10.0`.)
 - `OE.Job.KeepAlive` missing from the `.sln`; `OE.API` left as an empty shell — [Likely] oversight.
 - `KeepAlive.IsHealthy` hardcoded true — [Likely] unfinished, not intended as final design.
 See [TechnicalDebt.md](./TechnicalDebt.md).
