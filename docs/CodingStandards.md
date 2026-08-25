@@ -60,7 +60,8 @@
 - `OE.Shared` published as `<Version>-${GITHUB_RUN_NUMBER}`; services built per-directory matrix.
 
 ## Documented inconsistencies (be aware; don't propagate)
-Mixed TFMs (net8/net9), mixed `Microsoft.Extensions.Hosting`/`MongoDB.Driver` versions, `OE.Job.Lookup`
+Mixed `MongoDB.Driver` versions (3.4.0 vs 3.6.0), `OE.Job.Lookup`
 missing Serilog/telemetry, mixed `Nullable`/`ImplicitUsings`, Dockerfile `ENTRYPOINT`/`CMD` variance.
-When adding a service, prefer the **most modern, consistent** choices already present (net8.0+,
+(TFMs and `Microsoft.Extensions.*` unified on `net10.0`/10.0.11 by GM-751.)
+When adding a service, prefer the **most modern, consistent** choices already present (net10.0,
 Serilog+telemetry, nullable on). Full list: [TechnicalDebt.md](./TechnicalDebt.md).

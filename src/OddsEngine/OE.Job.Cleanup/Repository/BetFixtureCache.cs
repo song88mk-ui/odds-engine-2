@@ -36,7 +36,9 @@ namespace OE.Job.Cleanup.Repository
             {
                 var context = scope.ServiceProvider.GetRequiredService<BettingContext>();
 
+                // .AsQueryable() disambiguates from the in-box System.Linq.AsyncEnumerable on net10.0 (CS0121)
                 var fixtureIds = await context.BetSelection
+                    .AsQueryable()
                     .Select(b => b.FixtureId)
                     .Distinct()
                     .ToListAsync(cancellationToken);

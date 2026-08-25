@@ -44,13 +44,12 @@ src/OddsEngine/               OddsEngine.sln + all projects
 docs/                         Generated knowledge base (start at docs/README.md)
 ```
 
-Target frameworks: most projects are `net8.0`; `OE.Job.Cleanup` and `OE.Job.KeepAlive` are
-`net9`; `OE.Shared` is `netstandard2.1`.
+Target frameworks: all runnable projects (services, jobs, tests) are `net10.0`;
+`OE.Shared` is `netstandard2.1`.
 
 ## Prerequisites
 
-- .NET 9 SDK (builds the `net9` jobs and everything below; .NET 8 SDK alone cannot build
-  the whole solution).
+- .NET 10 SDK (builds everything; older SDKs cannot build the `net10.0` projects).
 - RabbitMQ reachable from your machine. Services declare the topic exchange `e.central`
   and their own queues/bindings at startup, so a plain broker is enough. Port `5672` is
   used as-is; setting `MessageBroker:Port` to `5671` automatically enables TLS
@@ -115,7 +114,7 @@ a consumer service such as Sportsbook first - see step 3 - because consumers dec
 docker exec rabbitmq rabbitmqadmin declare exchange name=e.central type=topic durable=true
 ```
 
-Then run it (it is `net9` and not in the .sln, so run the project directly; PowerShell):
+Then run it (it is not in the .sln, so run the project directly; PowerShell):
 
 ```powershell
 cd src/OddsEngine/OE.Job.KeepAlive

@@ -80,16 +80,15 @@ Every worker service follows the same skeleton:
 This regularity is a strong convention — new services should replicate it (see
 [CodingStandards.md](./CodingStandards.md)).
 
-## Target frameworks — [Verified] (inconsistent — see debt)
+## Target frameworks — [Verified]
 
 | Project | TFM |
 |---|---|
 | OE.Shared | `netstandard2.1` |
-| OE.Adapter.Service, OE.Sportsbook.Service, OE.UOF.Client, OE.Websocket.Service, OE.Job.Lookup, OE.Job.Settlement, OE.Job.LiveStream | `net8.0` |
-| OE.Job.Cleanup, OE.Job.KeepAlive | `net9` |
+| All services, jobs, and test projects | `net10.0` |
 
-Mixed `net8.0`/`net9` across services and matching SDK image divergence in Dockerfiles is
-tracked in [TechnicalDebt.md](./TechnicalDebt.md).
+Unified on `net10.0` + `sdk:10.0`/`aspnet:10.0` images by GM-751 (2026-08-24); the former
+`net8.0`/`net9` mix (TechnicalDebt M2) is resolved.
 
 ## SDK styles — [Verified]
 

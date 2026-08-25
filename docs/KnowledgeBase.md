@@ -72,7 +72,7 @@ for the doc map; this page is the cheat-sheet.
 - ⚠️ **EF Core 3.1** here — modern EF APIs/behaviors don't apply.
 
 ## Tech stack snapshot
-.NET 8/9 workers · netstandard2.1 shared lib · RabbitMQ (topic, manual ack, OTel-propagated) ·
+.NET 10 workers · netstandard2.1 shared lib · RabbitMQ (topic, manual ack, OTel-propagated) ·
 MongoDB (catalogue) · SQL Server + EF Core 3.1 (translations/trading) · SignalR client (push) ·
 Serilog (compact JSON) · OpenTelemetry → Tempo · Docker → AWS ECR → EKS via argocd GitOps.
 

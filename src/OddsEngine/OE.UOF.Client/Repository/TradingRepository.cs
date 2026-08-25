@@ -23,7 +23,8 @@ namespace OE.UOF.Client.Repository
             {
                 var clientId = Guid.Parse(_configuration["Custom:ClientId"]);
 
-                var configurations = context.ClientOddsFeedConfiguration.Where(c => c.ClientId == clientId).ToList();
+                // .AsQueryable() disambiguates from the in-box System.Linq.AsyncEnumerable on net10.0 (CS0121)
+                var configurations = context.ClientOddsFeedConfiguration.AsQueryable().Where(c => c.ClientId == clientId).ToList();
 
                 if (configurations.Any())
                 {
@@ -53,7 +54,7 @@ namespace OE.UOF.Client.Repository
             {
                 var clientId = Guid.Parse(_configuration["Custom:ClientId"]);
 
-                var configurations = context.ClientOddsFeedConfiguration.Where(c => c.ClientId == clientId && c.MaxFixtures.HasValue).ToList();
+                var configurations = context.ClientOddsFeedConfiguration.AsQueryable().Where(c => c.ClientId == clientId && c.MaxFixtures.HasValue).ToList();
 
                 if (configurations.Any())
                 {
@@ -64,7 +65,7 @@ namespace OE.UOF.Client.Repository
 
                     foreach (var item in configurations)
                     {
-                        var liveFixtures = context.ClientOddsFeedLiveFixture.Where(c => c.ClientId == item.ClientId && c.SportId == item.SportId && c.FixtureStartDate >= startDate && c.FixtureStartDate <= endDate).ToList();
+                        var liveFixtures = context.ClientOddsFeedLiveFixture.AsQueryable().Where(c => c.ClientId == item.ClientId && c.SportId == item.SportId && c.FixtureStartDate >= startDate && c.FixtureStartDate <= endDate).ToList();
 
                         if (liveFixtures.Any())
                         {

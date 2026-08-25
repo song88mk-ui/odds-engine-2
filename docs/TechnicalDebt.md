@@ -23,8 +23,8 @@ Phase-1 IDs (H/M/L) and Phase-6 IDs (P*) preserved.
 | ID | Finding | Evidence / Files | Conf. | Suggested investigation |
 |---|---|---|---|---|
 | M1 | EF Core 3.1 (EOL) pinned | `OE.Shared.csproj` (netstandard2.1) | High | confirm upgrade constraints from consumers |
-| M2 | Mixed TFMs net8/net9 + SDK images | per-service `.csproj`/Dockerfile | High | confirm intended target baseline |
-| M3 | Mixed package versions (`Microsoft.Extensions.Hosting`, `MongoDB.Driver` 3.4 vs 3.6) | various `.csproj` | High | confirm supported versions |
+| M2 | ~~Mixed TFMs net8/net9 + SDK images~~ **RESOLVED 2026-08-24 (GM-751)**: all executables (services, jobs, tests) unified on `net10.0`; Dockerfiles on `sdk:10.0`/`aspnet:10.0`; CI on SDK `10.0.x`. `OE.Shared` intentionally stays `netstandard2.1` (shared contract) | per-service `.csproj`/Dockerfile | High | — |
+| M3 | Mixed package versions — `Microsoft.Extensions.Hosting`/`Http`/SignalR unified at 10.0.11 by GM-751 (2026-08-24); `MongoDB.Driver` 3.4 vs 3.6 split **remains** (deliberately excluded from GM-751 — current code is not compatible with a driver major bump) | various `.csproj` | High | confirm supported `MongoDB.Driver` target before unifying |
 | M4 | Silent `catch {}` / `async void` swallow | `OE.Job.Lookup/Worker.cs:81-84`; `OE.UOF.Client/Repository/PlatformRepository.cs:33,43-45` | High | add temp logging to quantify swallowed errors |
 | M5 | `OE.Job.Lookup` no Serilog/telemetry | `OE.Job.Lookup/Program.cs` | High | confirm prod logging path for this job |
 | M6 | Loops ignore `CancellationToken` → unclean shutdown — **(2026-07-13) Cleanup's delete path now honors the token (`Cleanup(CancellationToken)`); the outer Worker loops remain** | KeepAlive/Cleanup/Settlement/LiveStream `Worker.cs`; Websocket threads | High | observe pod drain on SIGTERM |

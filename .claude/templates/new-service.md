@@ -5,7 +5,7 @@ event-driven worker) and adapt. Keep the house conventions ([docs/StartupProject
 [docs/ImplementationPatterns.md](../../docs/ImplementationPatterns.md)).
 
 ## Required pieces
-- `OE.<Area>.<Kind>.csproj` — `net8.0` (preferred), `<ProjectReference Include="..\OE.Shared\OE.Shared.csproj" />`,
+- `OE.<Area>.<Kind>.csproj` — `net10.0`, `<ProjectReference Include="..\OE.Shared\OE.Shared.csproj" />`,
   `Infra.Extensions.Telemetry`, Serilog stack, `Microsoft.Extensions.Hosting`, `MongoDB.Driver` if needed.
 - `Program.cs` — `Host.CreateDefaultBuilder` → `UseSerilog(ReadFrom.Configuration)` →
   `AddSingleton<Instrumentation>()` + `AddTelemetry(new TelemetrySettings(...))` → register

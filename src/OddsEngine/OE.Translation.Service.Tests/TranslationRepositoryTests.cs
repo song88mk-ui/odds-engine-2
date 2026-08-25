@@ -276,7 +276,7 @@ namespace OE.Translation.Service.Tests
 
             using var verify = GetContext(provider);
 
-            var rows = verify.TranslationCache2.Where(r => r.StringId.StartsWith("MaTe:259")).ToList();
+            var rows = verify.TranslationCache2.AsQueryable().Where(r => r.StringId.StartsWith("MaTe:259")).ToList();
             Assert.Single(rows);
             Assert.Equal("Over/Under", rows[0].SourceText); // re-cased to the live feed
         }

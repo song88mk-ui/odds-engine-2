@@ -40,18 +40,19 @@ Evidence: each `*.csproj` has exactly one `<ProjectReference Include="..\OE.Shar
 ### Common across services
 - **Serilog** stack (4.3.0) + `Serilog.AspNetCore` 10.0.0 + Compact formatter + Console sink.
 - **Infra.Extensions.Telemetry** `0.0.1-1` — private package providing `AddTelemetry(...)`.
-- **Microsoft.Extensions.Hosting** — version **varies** (6.0.0 / 8.0.1 / 8.0.x / 10.0.1).
+- **Microsoft.Extensions.Hosting** 10.0.11 — unified across all services by GM-751.
 
 ### Service-specific
 | Package | Used by | Why |
 |---|---|---|
 | MongoDB.Driver 3.4.0/3.6.0 | Sportsbook, Lookup, Settlement, Cleanup, LiveStream | Mongo access (driver versions differ) |
-| Microsoft.AspNetCore.SignalR.Client 8.0.22 (+ MessagePack protocol) | Websocket.Service | SignalR client to `/platform` |
-| Microsoft.Extensions.Http | Lookup, Settlement | `IHttpClientFactory` |
+| Microsoft.AspNetCore.SignalR.Client 10.0.11 (+ MessagePack protocol) | Websocket.Service | SignalR client to `/platform` |
+| Microsoft.Extensions.Http 10.0.11 | Lookup, Settlement | `IHttpClientFactory` |
 | IdGen 3.0.7 | Sportsbook.Service | **referenced but unused** (snowflake id gen) |
 
-> **Inconsistency:** `Microsoft.Extensions.Hosting` 6.0.0 in some services while TFM is net8/net9;
-> `MongoDB.Driver` split 3.4.0 vs 3.6.0; SDK images 8.0 vs 9.0. See debt doc.
+> **Inconsistency:** `MongoDB.Driver` split 3.4.0 vs 3.6.0 remains (deliberately untouched by
+> GM-751 — the driver upgrade is a separate effort). TFMs, `Microsoft.Extensions.Hosting`, and
+> SDK images were unified on .NET 10 / 10.0.11 by GM-751. See debt doc.
 
 ## 3. External infrastructure dependencies — [Verified] / [Verified-argocd]
 

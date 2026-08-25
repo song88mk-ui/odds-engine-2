@@ -119,7 +119,10 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
     `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests` — run `dotnet test` against the
     relevant project(s) when present; not every service has one).
 12. **Update documentation** if architectural knowledge changed (`/update-docs`; keep CLAUDE.md /
-    AGENTS.md / commands / skills / playbooks in sync).
+    AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
+    change whenever the change affects anything the README documents** (projects/frameworks,
+    prerequisites, build/run/test instructions, configuration, endpoints) — the README must never
+    describe a repo state that no longer exists.
 13. **Summarize changes, risks, and validation results.**
 
 Playbook: [.claude/checklists/standard-workflow.md](.claude/checklists/standard-workflow.md).
