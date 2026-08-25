@@ -392,20 +392,35 @@ namespace OE.Sportsbook.Service.Tests
             Assert.Empty(selectionWrites);
         }
 
-        // Unlike above, PrepareInternalOddsChangeMessage drops a market with an empty Se list
-        // entirely instead of persisting it — a market with no selections reaches Mongo but never
-        // appears in the published ON_ODDS_CHANGE payload. Documenting current behavior; this
-        // asymmetry looks unintentional and worth a follow-up look, not fixed here.
+        // A selection-less OPEN market is junk and stays out of the published payload...
         [Fact]
-        public void PrepareInternalOddsChangeMessage_MarketChange_MarketWithNoSelections_OmitsMarketFromPayload()
+        public void PrepareInternalOddsChangeMessage_MarketChange_OpenMarketWithNoSelections_OmitsMarketFromPayload()
         {
             var repository = CreateRepository();
             var message = MarketChangeMessage(compId: null);
+            message.Ma[0].MaStId = (int)OE.Shared.Enums.MarketStatus.Active;
             message.Ma[0].Se = new List<SelectionMessage>();
 
             var payload = repository.PrepareInternalOddsChangeMessage(message, "cid");
 
             Assert.Empty(payload.Ma);
+        }
+
+        // ...but a selection-less CLOSED market is a removal signal and must be published:
+        // clients only delete a market when it arrives with a non-open MaStId (INC-21).
+        [Fact]
+        public void PrepareInternalOddsChangeMessage_MarketChange_ClosedMarketWithNoSelections_PublishesMarket()
+        {
+            var repository = CreateRepository();
+            var message = MarketChangeMessage(compId: null);
+            message.Ma[0].MaStId = (int)OE.Shared.Enums.MarketStatus.Inactive;
+            message.Ma[0].Se = new List<SelectionMessage>();
+
+            var payload = repository.PrepareInternalOddsChangeMessage(message, "cid");
+
+            var market = Assert.Single(payload.Ma);
+            Assert.Equal((int)OE.Shared.Enums.MarketStatus.Inactive, market.MaStId);
+            Assert.Empty(market.Se);
         }
     }
 }
