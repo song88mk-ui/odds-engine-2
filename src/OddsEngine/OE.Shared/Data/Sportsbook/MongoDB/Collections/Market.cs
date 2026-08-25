@@ -33,6 +33,9 @@ namespace OE.Shared.Data.Sportsbook.MongoDB.Collections
         public bool IsBo { get; set; }
         public string ClBo { get; set; }
         public bool InPl { get; set; }
+        // UTC time of the last market-change upsert. Old documents lack the field and
+        // deserialize as DateTime.MinValue, which the snapshot cutoff treats as "not recent".
+        public DateTime UpAt { get; set; }
         public List<MarketTranslationMDB> MaNaTr { get; set; }
         // Vendor market-level CompetitorOne (2026-07 player-markets, GM-528): present = per-player
         // prop market for that player; joined against Fixture.Pl. Distinct from Selection.CompId

@@ -89,7 +89,14 @@ namespace OE.Sportsbook.Service.Repositories
         {
             var marketStatusIds = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
 
-            var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == message.FiId && marketStatusIds.Contains(c.MaStId));
+            // Recently-closed markets ride along (with their non-open MaStId) so the frequent
+            // fixture snapshots keep re-broadcasting closures. A client that missed the one-shot
+            // close - or re-added the market from a stale snapshot - removes it on the next one
+            // (INC-21). The cutoff bounds payload growth; UpAt is stamped by the market upsert.
+            var closedCutoff = DateTime.UtcNow.AddMinutes(-15);
+
+            var marketFilter = Builders<Market>.Filter.Where(c => c.FiId == message.FiId
+                && (marketStatusIds.Contains(c.MaStId) || c.UpAt >= closedCutoff));
             var markets = _marketCollection.Find(marketFilter).ToList();
 
             BulkWrite(_fixtureCollection, ToFixture(message));
@@ -520,7 +527,8 @@ namespace OE.Sportsbook.Service.Repositories
                         .Set(s => s.ClCoMa, market.ClCoMa)
                         .Set(s => s.CaStId, market.CaStId)
                         .Set(s => s.CaStNa, market.CaStNa)
-                        .Set(s => s.InPl, market.InPl);
+                        .Set(s => s.InPl, market.InPl)
+                        .Set(s => s.UpAt, DateTime.UtcNow);
 
                 // CompetitorOne is the market's player identity; only set when the message carries
                 // a value so payloads without it never wipe a stored id (a market cannot stop
@@ -638,7 +646,11 @@ namespace OE.Sportsbook.Service.Repositories
 
             foreach (var market in message.Ma)
             {
-                if (market.Se.Count == 0) continue;
+                // A closed market may legitimately arrive without selections; it must still be
+                // published so clients remove it (INC-21). Only selection-less OPEN markets are junk.
+                if (market.Se.Count == 0
+                    && (market.MaStId == (int)MarketStatus.Active || market.MaStId == (int)MarketStatus.Suspended))
+                    continue;
 
                 var selections = new List<InternalSelectionMessage>();
 
@@ -792,7 +804,11 @@ namespace OE.Sportsbook.Service.Repositories
             foreach (var market in filteredMarkets)
             {
                 var marketSelections = filteredSelections.Where(s => s.MaId == market.MaId).ToList();
-                if (marketSelections.Count == 0) continue;
+                // Closed markets have no open selections (the selection query filters on open
+                // MaStId) but must still ride the snapshot so clients remove them (INC-21).
+                if (marketSelections.Count == 0
+                    && (market.MaStId == (int)MarketStatus.Active || market.MaStId == (int)MarketStatus.Suspended))
+                    continue;
 
                 var selections = new List<InternalSelectionMessage>();
 
