@@ -20,7 +20,7 @@ namespace OE.WebSocket.Service.Repository
         Task ProcessRemoveFavorites(ClientContext client, IncomingVisitFavorites message);
         Task ProcessBoostedFixtures(ClientContext client, IncomingVisitBoostedFixtures message);
         Task ProcessPayableChange(ClientContext client, IncomingPayableChange message, HubConnection hubConnection);
-        Task ProcessMainMarketTemplates(ClientContext client);
+        Task<bool> ProcessMainMarketTemplates(ClientContext client);
         Task ProcessMarketSortOrder(ClientContext client);
         Task ProcessFixtureSortOrder(ClientContext client);
         Task ProcessBetBuilderMarketTemplates(ClientContext client);

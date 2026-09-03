@@ -76,6 +76,18 @@ Cross-refs to canonical docs. Use with [FrequentlyModifiedAreas.md](./Frequently
 - Exclusive queue? Name gets an MD5-hostname suffix — multiple replicas get separate queues.
 - Connection retries 3× then throws `RetryableConnectionException`. ([../ImplementationPatterns.md](../ImplementationPatterns.md))
 
+**Websocket pod is Running but pushes nothing; its log ends with `BackgroundService failed`**
+- Pre-GM-791 signature (fixed 2026-09-03): `HttpRequestException: Connection refused
+  (websocket-api.platform.svc:3000)` from `Worker.ExecuteAsync`, then the `StopHost` Fatal line, then
+  silence. The host stopped but foreground dispatch threads kept the process alive, and there is no
+  liveness probe to restart it. Since the fix the startup connect retries with backoff and the threads
+  are background threads; if you still see this, the running image predates GM-791. Restart the pod and
+  check the hub deployment. ([../ArchitectureRisks.md](../ArchitectureRisks.md) R2)
+- A burst of `error ProcessFixtureSortOrder` / `ProcessBetBuilderMarketTemplates` /
+  `ProcessMarketTemplatePlayerProps` stack traces at startup is the Platform API answering non-200 for
+  some clients; since GM-791 these are single warnings carrying the API status. They do not stop the
+  service.
+
 **Messages pile up / redelivered repeatedly**
 - A handler throwing → `BasicNack(requeue:true)` loops the poison message. Check error logs +
   `r.error.*`/`r.oe.adapter.error`. Idempotent upserts make safe retries safe, but a deterministic
@@ -104,7 +116,9 @@ ping only. ([../TechnicalDebt.md](../TechnicalDebt.md) H4)
 ## Shutdown
 
 **Pods don't drain / hang on shutdown** — several `while(true)` loops + Websocket threads ignore the
-`CancellationToken`; Websocket may `Environment.Exit(1)`. ([../TechnicalDebt.md](../TechnicalDebt.md) H2/M6)
+`CancellationToken`; Websocket may `Environment.Exit(1)`. Since GM-791 (2026-09-03) the Websocket
+dispatch threads are background threads, so a stopped host lets the process exit; the loops still do
+not observe cancellation. ([../TechnicalDebt.md](../TechnicalDebt.md) H2/M6)
 
 ## First-look checklist for any incident
 1. Which **service + shard/client instance**? (sharding + per-client Websocket/UOF)

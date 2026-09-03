@@ -26,6 +26,12 @@ namespace OE.Websocket.Service
         // a newly onboarded client waits before this instance starts serving it.
         private const int ClientRefreshMinutes = 5;
 
+        // Upper bound on clients whose startup data (5 Platform API calls each) loads at
+        // the same time. Unbounded fan-out at 500+ clients means 500 concurrent request
+        // chains against the Platform API, which is how loads time out and clients end
+        // up half-configured.
+        internal const int LoadClientConcurrency = 16;
+
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -39,6 +45,10 @@ namespace OE.Websocket.Service
         private readonly IClientRegistry _clientRegistry;
         private readonly IClientPresence _clientPresence;
         private readonly HubConnection _hubConnection;
+
+        // Host stopping token, captured in ExecuteAsync so the Closed handler's manual
+        // reconnect loop can stop retrying when the service shuts down.
+        private CancellationToken _stoppingToken;
 
         private readonly ActivitySource _activitySource;
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
@@ -292,33 +302,86 @@ namespace OE.Websocket.Service
 
             _logger.LogError(error, "hub connection closed permanently after automatic reconnect gave up. Reconnecting manually");
 
+            try
+            {
+                await ConnectHubWithRetryAsync(_stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // shutting down
+            }
+        }
+
+        // Connects to the hub, retrying with exponential backoff (1s .. 30s) until it
+        // succeeds or the service is stopping. Shared by startup and by the Closed
+        // handler so both paths tolerate a hub that is down or restarting (GM-791: a
+        // refused first connect used to fault ExecuteAsync and stop the host).
+        private async Task ConnectHubWithRetryAsync(CancellationToken cancellationToken)
+        {
             var delay = TimeSpan.FromSeconds(1);
             var maxDelay = TimeSpan.FromSeconds(30);
 
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 try
                 {
-                    await Task.Delay(delay);
-                    await _hubConnection.StartAsync();
-                    _logger.LogInformation("hub connection re-established after manual reconnect");
+                    await _hubConnection.StartAsync(cancellationToken);
+                    _logger.LogInformation("hub connection established. State={state}", _hubConnection.State);
                     return;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "manual reconnect attempt failed, retrying in {delaySeconds}s", delay.TotalSeconds);
-                    delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, maxDelay.TotalSeconds));
+                    _logger.LogError(ex, "hub connect attempt failed, retrying in {delaySeconds}s", delay.TotalSeconds);
                 }
+
+                await Task.Delay(delay, cancellationToken);
+                delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, maxDelay.TotalSeconds));
             }
+        }
+
+        // Dispatch threads block forever in BlockingCollection.Take(), so they MUST be
+        // background threads. A foreground thread keeps the process alive after the
+        // host has stopped, which is the GM-791 zombie: host stopped after a startup
+        // failure, container stayed Running, nothing consumed, no restart.
+        internal static Thread CreateDispatchThread(ThreadStart start, string name)
+        {
+            return new Thread(start)
+            {
+                IsBackground = true,
+                Name = name
+            };
         }
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            await _hubConnection.DisposeAsync();
+            try
+            {
+                // Cancels stoppingToken so the startup connect retry and the poll loops end.
+                await base.StopAsync(cancellationToken);
+            }
+            finally
+            {
+                try
+                {
+                    await _hubConnection.DisposeAsync();
 
-            _messageBroker.Dispose();
+                    _messageBroker.Dispose();
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Error stopping service: {message}", e.Message);
+                }
+            }
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _stoppingToken = stoppingToken;
+
             // Do not start consuming until discovery has produced at least one client;
             // otherwise every message would be drained with nobody to serve.
             var clients = await _clientRegistry.RefreshAsync();
@@ -336,19 +399,19 @@ namespace OE.Websocket.Service
             await LoadClientData(clients);
 
             _logger.LogInformation("Preparing threads");
-            _threadTopFixtures = new Thread(ThreadTopFixtures);
-            _threadTopLeagues = new Thread(ThreadTopLeagues);
-            _threadMarketCount = new Thread(ThreadMarketCount);
-            _threadMainMarketsOddsChange = new Thread(ThreadMainMarketsOddsChange);
-            _threadAllMarketsOddsChange = new Thread(ThreadAllMarketsOddsChange);
-            _threadBetStatus = new Thread(ThreadBetStatus);
-            _threadCashOut = new Thread(ThreadCashOut);
-            _threadWallet = new Thread(ThreadWallet);
-            _threadFavorites = new Thread(ThreadFavorites);
-            _threadRemoveFavorites = new Thread(ThreadRemoveFavorites);
-            _threadBoostedFixtures = new Thread(ThreadBoostedFixtures);
-            _threadPayable = new Thread(ThreadPayable);
-            _threadMarketSortOrderChange = new Thread(ThreadMarketSortOrder);
+            _threadTopFixtures = CreateDispatchThread(ThreadTopFixtures, "ws-top-fixtures");
+            _threadTopLeagues = CreateDispatchThread(ThreadTopLeagues, "ws-top-leagues");
+            _threadMarketCount = CreateDispatchThread(ThreadMarketCount, "ws-market-count");
+            _threadMainMarketsOddsChange = CreateDispatchThread(ThreadMainMarketsOddsChange, "ws-main-markets-odds");
+            _threadAllMarketsOddsChange = CreateDispatchThread(ThreadAllMarketsOddsChange, "ws-all-markets-odds");
+            _threadBetStatus = CreateDispatchThread(ThreadBetStatus, "ws-bet-status");
+            _threadCashOut = CreateDispatchThread(ThreadCashOut, "ws-cashout");
+            _threadWallet = CreateDispatchThread(ThreadWallet, "ws-wallet");
+            _threadFavorites = CreateDispatchThread(ThreadFavorites, "ws-favorites");
+            _threadRemoveFavorites = CreateDispatchThread(ThreadRemoveFavorites, "ws-remove-favorites");
+            _threadBoostedFixtures = CreateDispatchThread(ThreadBoostedFixtures, "ws-boosted-fixtures");
+            _threadPayable = CreateDispatchThread(ThreadPayable, "ws-payable");
+            _threadMarketSortOrderChange = CreateDispatchThread(ThreadMarketSortOrder, "ws-market-sort-order");
 
             _logger.LogInformation("Starting threads");
             _threadTopFixtures.Start();
@@ -365,7 +428,17 @@ namespace OE.Websocket.Service
             _threadPayable.Start();
             _threadMarketSortOrderChange.Start();
 
-            await _hubConnection.StartAsync();
+            // The hub is a separate deployment that may be down or restarting while this pod
+            // starts. Keep retrying instead of faulting ExecuteAsync (which stops the host), and
+            // only then start consuming, so RabbitMQ holds the backlog until we can push it.
+            try
+            {
+                await ConnectHubWithRetryAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                return; // shutting down before the hub came up
+            }
 
             _logger.LogInformation("Connecting to broker/RabbitMQ");
             _messageBroker.Connect();
@@ -373,8 +446,16 @@ namespace OE.Websocket.Service
             _messageBroker.MessageReceived += MessageReceivedEvent;
             _logger.LogInformation("connected. processing incoming messages");
 
-            var connectionId = await _hubConnection.InvokeAsync<string>("GetConnectionId");
-            _logger.LogInformation($"connectionId: {connectionId}");
+            try
+            {
+                var connectionId = await _hubConnection.InvokeAsync<string>("GetConnectionId", stoppingToken);
+                _logger.LogInformation($"connectionId: {connectionId}");
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                // Diagnostics only: the hub dropping right here must not stop the host.
+                _logger.LogWarning(ex, "could not read hub connectionId");
+            }
 
             _ = Task.Run(() => RefreshClientsLoop(stoppingToken), stoppingToken);
             _ = Task.Run(() => PresencePollLoop(stoppingToken), stoppingToken);
@@ -466,7 +547,12 @@ namespace OE.Websocket.Service
                     try
                     {
                         var added = await _clientRegistry.RefreshAsync();
-                        await LoadClientData(added);
+
+                        // Also retry clients whose template load failed earlier; until it
+                        // succeeds they stay out of the odds fan-out (IsReady=false).
+                        var notReady = _clientRegistry.Clients.Where(c => !c.IsReady && !added.Contains(c)).ToList();
+
+                        await LoadClientData(added.Concat(notReady).ToList());
                     }
                     catch (Exception ex)
                     {
@@ -480,18 +566,34 @@ namespace OE.Websocket.Service
             }
         }
 
+        // Loads each client's startup data with bounded parallelism. A client becomes
+        // ready only once its main-market templates actually loaded: publishing with an
+        // empty template list would silently strip every main market for that client.
+        // Sort orders and bet-builder/player-props data have safe defaults when missing.
         private async Task LoadClientData(IReadOnlyList<ClientContext> clients)
         {
-            await Task.WhenAll(clients.Select(async client =>
+            if (clients.Count == 0)
+                return;
+
+            var options = new ParallelOptions { MaxDegreeOfParallelism = LoadClientConcurrency };
+
+            await Parallel.ForEachAsync(clients, options, async (client, _) =>
             {
-                await _sportsbookRepository.ProcessMainMarketTemplates(client);
+                var templatesLoaded = await _sportsbookRepository.ProcessMainMarketTemplates(client);
                 await _sportsbookRepository.ProcessMarketSortOrder(client);
                 await _sportsbookRepository.ProcessFixtureSortOrder(client);
                 await _sportsbookRepository.ProcessBetBuilderMarketTemplates(client);
                 await _sportsbookRepository.ProcessMarketTemplatePlayerProps(client);
 
-                client.IsReady = true;
-            }));
+                if (templatesLoaded)
+                    client.IsReady = true;
+            });
+
+            var notReady = clients.Count(c => !c.IsReady);
+
+            if (notReady > 0)
+                _logger.LogWarning("{notReady} of {total} client(s) not ready (template load failed); retrying in {minutes}m",
+                        notReady, clients.Count, ClientRefreshMinutes);
         }
 
         // Owning client for a client-suffixed routing key (r.bet.betstatus.gsa),

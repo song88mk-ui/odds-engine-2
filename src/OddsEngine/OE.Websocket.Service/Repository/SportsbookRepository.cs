@@ -324,7 +324,11 @@ namespace OE.WebSocket.Service.Repository
                 var cache = _memCache.GetCache<MarketCount>(key);
 
                 HashSet<long> currentMarketIds;
-                _logger.LogInformation("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {cache}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, cache == null ? "Null" : JsonSerializer.Serialize(cache));
+
+                // Runs once per client per odds change: at 500 clients this line alone is
+                // 500 log entries and 500 JSON serializations per message, so Debug-only.
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {cache}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, cache == null ? "Null" : JsonSerializer.Serialize(cache));
 
                 if (cache == null)
                 {
@@ -354,7 +358,7 @@ namespace OE.WebSocket.Service.Repository
                 var changed = cache == null || !currentMarketIds.SetEquals(cache?.MarketIds ?? Enumerable.Empty<long>());
                 if (changed)
                 {
-                    _logger.LogInformation("ProcessMarketCount {fixtureId} {fixtureName} {fixtureStatus} {marketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
+                    _logger.LogDebug("ProcessMarketCount {fixtureId} {fixtureName} {fixtureStatus} {marketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
                     _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds.ToList() }, DateTimeOffset.UtcNow.AddDays(7));
                 }
 
@@ -459,11 +463,16 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessMainMarketTemplates(ClientContext client)
+        // Returns true only when the templates were loaded from the Platform API; the
+        // Worker uses this to decide whether the client may join the odds fan-out.
+        public async Task<bool> ProcessMainMarketTemplates(ClientContext client)
         {
             try
             {
                 var result = await GetSelectorMarketTemplates(client);
+
+                if (!HasResult(result, client, nameof(ProcessMainMarketTemplates)))
+                    return false;
 
                 client.MainMarketTemplates.Clear();
 
@@ -472,11 +481,16 @@ namespace OE.WebSocket.Service.Repository
                     var marketTemplates = item.SelectMany(s => s.MarketTemplates).Select(s => s.MaTeId).Distinct().ToList();
                     client.MainMarketTemplates.Add(new Tuple<int, List<string>>(item.Key, marketTemplates));
                 }
-                _logger.LogDebug("ProcessMainMarketTemplates: {@marketTemplates}", JsonSerializer.Serialize(client.MainMarketTemplates));
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                    _logger.LogDebug("ProcessMainMarketTemplates: {@marketTemplates}", JsonSerializer.Serialize(client.MainMarketTemplates));
+
+                return true;
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "error ProcessMainMarketTemplates");
+                return false;
             }
         }
 
@@ -485,6 +499,9 @@ namespace OE.WebSocket.Service.Repository
             try
             {
                 var result = await GetMarketSortOrder(client);
+
+                if (!HasResult(result, client, nameof(ProcessMarketSortOrder)))
+                    return;
 
                 foreach (var item in result.Result.MarketTemplateGroups)
                 {
@@ -510,6 +527,9 @@ namespace OE.WebSocket.Service.Repository
             {
                 var result = await GetFixtureSortOrder(client);
 
+                if (!HasResult(result, client, nameof(ProcessFixtureSortOrder)))
+                    return;
+
                 foreach (var item in result.Result.Fixtures)
                     _memCache.AddOrUpdateCache($"{client.ClientCode}:fso:{item.SportId}:{item.SegmentId}:{item.LeagueId}", new FixtureSortOrder { SortOrder = item.SortOrder }, DateTimeOffset.UtcNow.AddYears(1));
             }
@@ -524,6 +544,9 @@ namespace OE.WebSocket.Service.Repository
             try
             {
                 var result = await GetBetBuilderMarketTemplatesDTO(client);
+
+                if (!HasResult(result, client, nameof(ProcessBetBuilderMarketTemplates)))
+                    return;
 
                 var key = $"{client.ClientCode}:bbmt";
 
@@ -540,6 +563,9 @@ namespace OE.WebSocket.Service.Repository
             try
             {
                 var result = await GetMarketTemplatePlayerPropsDTO(client);
+
+                if (!HasResult(result, client, nameof(ProcessMarketTemplatePlayerProps)))
+                    return;
 
                 var key = $"{client.ClientCode}:mtpp";
 
@@ -587,6 +613,21 @@ namespace OE.WebSocket.Service.Repository
             {
                 _logger.LogError(e, "error publishing {method} to websocket hub. HubState={hubState}", method, hubConnection.State);
             }
+        }
+
+        // The startup loaders used to dereference result.Result blindly, so a Platform API
+        // error or an empty body surfaced as a NullReference/ArgumentNull stack trace per
+        // client per endpoint (96 lines in the GM-791 log). Log the API's own status and
+        // message once, and let the caller skip.
+        private bool HasResult<T>(BaseResponseDTO<T> result, ClientContext client, string operation)
+        {
+            if (result != null && result.StatusCode == StatusCode.Success && result.Result != null)
+                return true;
+
+            _logger.LogWarning("{operation} skipped for {clientCode}: Platform API returned {statusCode} {message}",
+                    operation, client.ClientCode, result?.StatusCode, result?.Message);
+
+            return false;
         }
 
         private async Task<BaseResponseDTO<TWResponseDTO>> GetTopFixtures(ClientContext client)

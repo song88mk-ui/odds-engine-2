@@ -30,6 +30,15 @@ OE.Websocket.Service ──(SignalR client)──►  /platform hub  ◄──(S
   push only their client's data; user scoping is by **group name**.
 - It consumes RabbitMQ (`r.oe.sb.engine.*`, `r.bet.*`, `r.wallet.*`, …) and translates each into a
   hub method call on the appropriate group.
+- **Startup and reconnect (GM-791, 2026-09-03):** the initial `StartAsync` is retried with exponential
+  backoff (1s to 30s) until the hub answers or the host stops; RabbitMQ consumption starts only after the
+  hub connection is up, so the durable queue holds the backlog meanwhile. The `Closed` handler reuses
+  the same retry loop when `WithAutomaticReconnect` gives up. Dispatch threads are background threads,
+  so a stopped host can exit and be restarted by Kubernetes.
+- **Client startup data at scale (GM-791):** per-client startup loads (5 Platform API calls each) run
+  with bounded parallelism (`Worker.LoadClientConcurrency`, 16 clients at a time). A client joins the
+  odds fan-out (`IsReady`) only once its main-market templates loaded; clients whose load failed are
+  retried on the 5-minute client refresh. Bet stops and user-specific messages are not gated.
 
 ## Hub methods OEv2 calls (outbound) — [Verified]
 | Method | Triggered by (RabbitMQ) | Target group |

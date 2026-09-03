@@ -31,6 +31,24 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
   outages. **Confidence:** High.
 - **Suggested investigation:** reproduce a handler exception in a non-prod instance; observe shutdown
   draining and message loss; review restart frequency in prod.
+- **Incident 2026-09-03 (GM-791):** the hub (`websocket-api.platform.svc:3000`) refused the initial
+  connect, `ExecuteAsync` faulted, the host stopped (`BackgroundServiceExceptionBehavior=StopHost`),
+  but the 13 dispatch threads were foreground threads blocked in `Take()`, so the process never exited.
+  The container stayed Running with no consumer and, with no liveness probe in argocd, was never
+  restarted. **Mitigation shipped:** background dispatch threads, startup connect with retry/backoff,
+  `StopAsync` cancelling the stopping token. Residual: `Environment.Exit(1)`, `async void` loops, and the
+  missing liveness probe (argocd, DevOps).
+- **Scaling to 500+ clients (assessed 2026-09-03, GM-791):** startup load is now bounded (16 clients at
+  a time) and readiness is per client, so a slow Platform API degrades gracefully instead of leaving
+  half-configured clients. The hot path is still O(clients) per odds change: `ProcessForActiveClients`
+  issues one `SendAsync` per ready, present client (all serialized through the single `HubConnection`
+  lock, each MessagePack-serializing the same payload again), and `ProcessForAllClients` runs the
+  market-count/top-fixture/top-league maintenance for every client (one `fixturedetails` call per client
+  per new fixture, one cache entry per client per fixture). Presence filtering is the mitigation for the
+  publishes; the structural fix is a hub method that takes the payload once with the list of client
+  codes (cross-repo: `Platform.Websocket.API2` + OEv2). Also O(clients): one `HttpClient` per client in
+  `ClientRegistry`, and the unbounded `BlockingCollection` queues grow without limit if the hub is
+  slower than the feed. Per-client-per-message logging in `ProcessMarketCount` was moved to Debug.
 
 ### R3 🔴 Secret exposure in source control
 - **Evidence:** live RabbitMQ/BetGenius/SQL/API credentials committed; `.gitignore` excludes only
