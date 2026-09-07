@@ -218,6 +218,7 @@ namespace OE.Websocket.Service.Tests
             public Task ProcessRemoveFavorites(ClientContext client, IncomingVisitFavorites message) => Task.CompletedTask;
             public Task ProcessBoostedFixtures(ClientContext client, IncomingVisitBoostedFixtures message) => Task.CompletedTask;
             public Task ProcessPayableChange(ClientContext client, IncomingPayableChange message, HubConnection hubConnection) => Task.CompletedTask;
+            public Task ProcessWebPropsChange(ClientContext client, HubConnection hubConnection) => Task.CompletedTask;
             public Task ProcessMarketSortOrder(ClientContext client) => Task.CompletedTask;
             public Task ProcessFixtureSortOrder(ClientContext client) => Task.CompletedTask;
             public Task ProcessBetBuilderMarketTemplates(ClientContext client) => Task.CompletedTask;

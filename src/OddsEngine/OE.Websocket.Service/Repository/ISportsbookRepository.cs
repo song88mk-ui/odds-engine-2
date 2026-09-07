@@ -22,6 +22,7 @@ namespace OE.WebSocket.Service.Repository
         Task ProcessPayableChange(ClientContext client, IncomingPayableChange message, HubConnection hubConnection);
         Task<bool> ProcessMainMarketTemplates(ClientContext client);
         Task ProcessMarketSortOrder(ClientContext client);
+        Task ProcessWebPropsChange(ClientContext client, HubConnection hubConnection);
         Task ProcessFixtureSortOrder(ClientContext client);
         Task ProcessBetBuilderMarketTemplates(ClientContext client);
         Task ProcessMarketTemplatePlayerProps(ClientContext client);

@@ -70,6 +70,7 @@ namespace OE.Websocket.Service
         private Thread _threadBoostedFixtures;
         private Thread _threadPayable;
         private Thread _threadMarketSortOrderChange;
+        private Thread _threadWebPropsChange;
 
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesTopFixtures = new BlockingCollection<OnMarketChangeMessage>();
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesTopLeagues = new BlockingCollection<OnMarketChangeMessage>();
@@ -84,6 +85,7 @@ namespace OE.Websocket.Service
         private readonly BlockingCollection<ClientScoped<IncomingVisitBoostedFixtures>> _messagesBoostedFixtures = new BlockingCollection<ClientScoped<IncomingVisitBoostedFixtures>>();
         private readonly BlockingCollection<ClientScoped<IncomingPayableChange>> _messagesPayable = new BlockingCollection<ClientScoped<IncomingPayableChange>>();
         private readonly BlockingCollection<ClientScoped<bool>> _messagesMarketSortOrder = new BlockingCollection<ClientScoped<bool>>();
+        private readonly BlockingCollection<ClientScoped<bool>> _messagesWebPropsChange = new BlockingCollection<ClientScoped<bool>>();
 
         // Fan-out for messages every client receives. Clients are processed in
         // parallel but the call returns only when ALL clients finished this message
@@ -225,6 +227,14 @@ namespace OE.Websocket.Service
             {
                 var item = _messagesMarketSortOrder.Take();
                 await _sportsbookRepository.ProcessMarketSortOrder(item.Client);
+            }
+        }
+        private async void ThreadWebPropsChange()
+        {
+            while (true)
+            {
+                var item = _messagesWebPropsChange.Take();
+                await _sportsbookRepository.ProcessWebPropsChange(item.Client, _hubConnection);
             }
         }
 
@@ -412,6 +422,7 @@ namespace OE.Websocket.Service
             _threadBoostedFixtures = CreateDispatchThread(ThreadBoostedFixtures, "ws-boosted-fixtures");
             _threadPayable = CreateDispatchThread(ThreadPayable, "ws-payable");
             _threadMarketSortOrderChange = CreateDispatchThread(ThreadMarketSortOrder, "ws-market-sort-order");
+            _threadWebPropsChange = CreateDispatchThread(ThreadWebPropsChange, "ws-webprops-change");
 
             _logger.LogInformation("Starting threads");
             _threadTopFixtures.Start();
@@ -427,6 +438,7 @@ namespace OE.Websocket.Service
             _threadBoostedFixtures.Start();
             _threadPayable.Start();
             _threadMarketSortOrderChange.Start();
+            _threadWebPropsChange.Start();
 
             // The hub is a separate deployment that may be down or restarting while this pod
             // starts. Keep retrying instead of faulting ExecuteAsync (which stops the host), and
@@ -742,6 +754,18 @@ namespace OE.Websocket.Service
                             }
 
                             _messagesMarketSortOrder.Add(new ClientScoped<bool>(sortOrderClient, true));
+                            break;
+
+                        case "OnWebPropsChange":
+                            var webPropsClient = ResolveClient(e.RoutingKey);
+
+                            if (webPropsClient == null)
+                            {
+                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesWebPropsChange.Add(new ClientScoped<bool>(webPropsClient, true));
                             break;
 
                     }

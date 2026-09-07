@@ -599,6 +599,24 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
+        public async Task ProcessWebPropsChange(ClientContext client, HubConnection hubConnection)
+        {
+            try
+            {
+                var payload = new OutgoingWebPropsChange { Ch = true };
+
+                if (_publishedToWebSocketCounter.Enabled)
+                    _publishedToWebSocketCounter.Add(1,
+                            new KeyValuePair<string, object?>("method", "PublishWebPropsChange"),
+                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                await PublishToWebSocket(client, "PublishWebPropsChange", hubConnection, payload);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "error ProcessWebPropsChange");
+            }
+        }
+
         #endregion
 
         #region Utilities
