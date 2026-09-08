@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OE.Translation.Job\OE.Translation.Job.csproj" />
+    <ProjectReference Include="..\OE.Shared.Test\OE.Shared.Test.csproj" />
   </ItemGroup>
 
   <ItemGroup>

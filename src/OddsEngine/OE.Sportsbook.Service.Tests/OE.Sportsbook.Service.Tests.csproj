@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OE.Sportsbook.Service\OE.Sportsbook.Service.csproj" />
+    <ProjectReference Include="..\OE.Shared.Test\OE.Shared.Test.csproj" />
   </ItemGroup>
 
   <ItemGroup>

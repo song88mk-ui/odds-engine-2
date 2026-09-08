@@ -256,5 +256,159 @@ namespace OE.Translation.Service.Tests
             using var context = GetContext(provider);
             Assert.Equal(250, context.TranslationCache2.Single(r => r.StringId == "Te:H1").TargetTextZh.Length);
         }
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public void SourceHash_MatchesSqlServerHashbytesOfNvarcharText_MutationCheck()
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+                Assert.Equal("not-the-arsenal-hash", TranslationRepository.SourceHash("Arsenal")));
+        }
+
+        [Fact]
+        public async Task Backfill_FillsEmptyTargetsByHash_ForAllSchemaLanguages_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_FillsEmptyTargetsByHash_ForAllSchemaLanguages) + "_MutationCheck");
+
+            AddLegacyTranslation(provider, "Arsenal", "ZH", "阿森纳");
+            AddLegacyTranslation(provider, "Arsenal", "ES", "Arsenal ES");
+            AddLegacyTranslation(provider, "Arsenal", "FR", "Arsenal FR");
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using var context = GetContext(provider);
+            var row = context.TranslationCache2.Single(r => r.StringId == "Te:H1");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", row.TargetTextZh));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", row.TargetTextEs));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", row.TargetTextFr));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(row.Processed));
+
+            var untouched = context.TranslationCache2.Single(r => r.StringId == "Te:A1");
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not-empty", untouched.TargetTextZh));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not-empty", untouched.TargetTextEs));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not-empty", untouched.TargetTextFr));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(untouched.Processed));
+        }
+
+        [Fact]
+        public async Task Backfill_WorksOnTheMarketTemplatePath_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_WorksOnTheMarketTemplatePath) + "_MutationCheck");
+
+            AddLegacyTranslation(provider, "Match Result", "ZH", "赛果");
+
+            await repository.OnProcessMarketSetUpdate(MarketMessage());
+
+            using var context = GetContext(provider);
+            var row = context.TranslationCache2.Single(r => r.StringId == "MaTe:16");
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", row.TargetTextZh));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(row.Processed));
+        }
+
+        [Fact]
+        public async Task Backfill_NeverOverwritesAPipelineWrittenTarget_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_NeverOverwritesAPipelineWrittenTarget) + "_MutationCheck");
+
+            using (var context = GetContext(provider))
+            {
+                // The external pipeline already translated ZH under the new key space.
+                context.TranslationCache2.Add(new TranslationCache2
+                {
+                    StringId = "Te:H1",
+                    SourceLanguage = "EN",
+                    SourceText = "Arsenal",
+                    TargetTextZh = "现有翻译",
+                    TargetTextEs = string.Empty,
+                    TargetTextFr = string.Empty,
+                    CreatedAt = DateTime.UtcNow
+                });
+                context.SaveChanges();
+            }
+
+            AddLegacyTranslation(provider, "Arsenal", "ZH", "旧翻译");
+            AddLegacyTranslation(provider, "Arsenal", "ES", "Arsenal ES");
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using var verify = GetContext(provider);
+            var row = verify.TranslationCache2.Single(r => r.StringId == "Te:H1");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("旧翻译", row.TargetTextZh)); // pipeline value must be kept, not the legacy one
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(string.Empty, row.TargetTextEs)); // empty column must have been backfilled
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(row.Processed));
+        }
+
+        [Fact]
+        public async Task Backfill_FlagOff_LeavesTargetsEmpty_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_FlagOff_LeavesTargetsEmpty) + "_MutationCheck", cacheBackfill: false);
+
+            AddLegacyTranslation(provider, "Arsenal", "ZH", "阿森纳");
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using var context = GetContext(provider);
+            var row = context.TranslationCache2.Single(r => r.StringId == "Te:H1");
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("阿森纳", row.TargetTextZh));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(row.Processed));
+        }
+
+        [Fact]
+        public async Task Backfill_NormalizesLegacyLanguageCasing_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_NormalizesLegacyLanguageCasing) + "_MutationCheck");
+
+            AddLegacyTranslation(provider, "Arsenal", "zh", "阿森纳");
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using var context = GetContext(provider);
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+                Assert.Equal("wrong", context.TranslationCache2.Single(r => r.StringId == "Te:H1").TargetTextZh));
+        }
+
+        [Fact]
+        public async Task Backfill_SkipsUnsupportedLanguagesAndUntranslatedLegacyRows_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_SkipsUnsupportedLanguagesAndUntranslatedLegacyRows) + "_MutationCheck");
+
+            AddLegacyTranslation(provider, "Arsenal", "JA", "アーセナル"); // no column in the flat schema
+            AddLegacyTranslation(provider, "Arsenal", "ZH", null);        // legacy worklist row, not translated
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using var context = GetContext(provider);
+            var row = context.TranslationCache2.Single(r => r.StringId == "Te:H1");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not-empty", row.TargetTextZh));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not-empty", row.TargetTextEs));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not-empty", row.TargetTextFr));
+        }
+
+        [Fact]
+        public async Task Backfill_TruncatesLegacyTargetTextToColumnLimit_MutationCheck()
+        {
+            var (repository, provider) = CreateRepository(nameof(Backfill_TruncatesLegacyTargetTextToColumnLimit) + "_MutationCheck");
+
+            AddLegacyTranslation(provider, "Arsenal", "ZH", new string('翻', 400));
+
+            await repository.OnProcessFixtureSetUpdate(FixtureMessage());
+
+            using var context = GetContext(provider);
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+                Assert.Equal(0, context.TranslationCache2.Single(r => r.StringId == "Te:H1").TargetTextZh.Length));
+        }
+
+        #endregion
     }
 }

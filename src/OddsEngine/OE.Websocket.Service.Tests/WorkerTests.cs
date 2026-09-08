@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
+using OE.Shared.Test;
 using OE.Shared.Utilities;
 using OE.WebSocket.Service.Clients;
 using OE.WebSocket.Service.Messages;
@@ -44,8 +45,9 @@ namespace OE.Websocket.Service.Tests
 
             await worker.StartAsync(CancellationToken.None);
 
-            // Long enough for discovery, client data load and at least one failed connect.
-            await Task.Delay(TimeSpan.FromMilliseconds(700));
+            // Wait for the actual signal (client data load completing) instead of a
+            // fixed delay, which is a flake risk if CI load shifts discovery+load timing.
+            await WaitUntilAsync(() => registry.Clients.All(c => c.IsReady), TimeSpan.FromSeconds(5));
 
             // Still retrying: ExecuteAsync has not faulted (which would stop the host)
             // and RabbitMQ consumption has not started before the hub is reachable.
@@ -67,11 +69,83 @@ namespace OE.Websocket.Service.Tests
             var worker = BuildWorker(new FakeMessageBroker(), repository, registry);
 
             await worker.StartAsync(CancellationToken.None);
-            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            await WaitUntilAsync(() => repository.LoadAttempts >= registry.Clients.Count, TimeSpan.FromSeconds(5));
             await worker.StopAsync(CancellationToken.None);
 
             Assert.All(registry.Clients, c => Assert.False(c.IsReady));
         }
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public void DispatchThreads_AreBackgroundThreads_MutationCheck()
+        {
+            var thread = Worker.CreateDispatchThread(() => { }, "ws-test");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(thread.IsBackground));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong-name", thread.Name));
+        }
+
+        [Fact]
+        public async Task HubUnreachableAtStartup_KeepsRetrying_AndStopsCleanly_MutationCheck()
+        {
+            var broker = new FakeMessageBroker();
+            var registry = new FakeClientRegistry();
+            var worker = BuildWorker(broker, registry: registry);
+
+            await worker.StartAsync(CancellationToken.None);
+
+            await WaitUntilAsync(() => registry.Clients.All(c => c.IsReady), TimeSpan.FromSeconds(5));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(worker.ExecuteTask!.IsCompleted));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, broker.ConnectCalls));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.All(registry.Clients, c => Assert.False(c.IsReady)));
+
+            await worker.StopAsync(CancellationToken.None);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(worker.ExecuteTask.IsCompletedSuccessfully));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, broker.ConnectCalls));
+        }
+
+        [Fact]
+        public async Task TemplateLoadFailure_LeavesClientOutOfTheFanOut_MutationCheck()
+        {
+            var repository = new FakeSportsbookRepository { TemplatesLoaded = false };
+            var registry = new FakeClientRegistry();
+            var worker = BuildWorker(new FakeMessageBroker(), repository, registry);
+
+            await worker.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => repository.LoadAttempts >= registry.Clients.Count, TimeSpan.FromSeconds(5));
+            await worker.StopAsync(CancellationToken.None);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.All(registry.Clients, c => Assert.True(c.IsReady)));
+        }
+
+        [Fact]
+        public async Task ClientDataLoad_IsBounded_AndMarksEveryClientReady_MutationCheck()
+        {
+            var repository = new FakeSportsbookRepository { LoadDelay = TimeSpan.FromMilliseconds(5) };
+            var registry = new FakeClientRegistry(clientCount: 120);
+            var worker = BuildWorker(new FakeMessageBroker(), repository, registry);
+
+            await worker.StartAsync(CancellationToken.None);
+
+            await WaitUntilAsync(() => registry.Clients.All(c => c.IsReady), TimeSpan.FromSeconds(10));
+
+            await worker.StopAsync(CancellationToken.None);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.All(registry.Clients, c => Assert.False(c.IsReady)));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotInRange(repository.MaxInFlight, 1, Worker.LoadClientConcurrency));
+        }
+
+        #endregion
 
         [Fact]
         public async Task ClientDataLoad_IsBounded_AndMarksEveryClientReady()
@@ -82,14 +156,19 @@ namespace OE.Websocket.Service.Tests
 
             await worker.StartAsync(CancellationToken.None);
 
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (registry.Clients.Any(c => !c.IsReady) && DateTime.UtcNow < deadline)
-                await Task.Delay(50);
+            await WaitUntilAsync(() => registry.Clients.All(c => c.IsReady), TimeSpan.FromSeconds(10));
 
             await worker.StopAsync(CancellationToken.None);
 
             Assert.All(registry.Clients, c => Assert.True(c.IsReady));
             Assert.InRange(repository.MaxInFlight, 1, Worker.LoadClientConcurrency);
+        }
+
+        private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+        {
+            var deadline = DateTime.UtcNow + timeout;
+            while (!condition() && DateTime.UtcNow < deadline)
+                await Task.Delay(20);
         }
 
         private static Worker BuildWorker(
@@ -114,31 +193,6 @@ namespace OE.Websocket.Service.Tests
                 registry ?? new FakeClientRegistry(),
                 new FakeClientPresence(),
                 new Instrumentation());
-        }
-
-        private sealed class FakeMessageBroker : IMessageBroker
-        {
-            public int ConnectCalls { get; private set; }
-
-            public event EventHandler<BasicDeliverEventArgs>? MessageReceived;
-
-            public void Connect() => ConnectCalls++;
-            public void ConnectWithManualAck() => ConnectCalls++;
-            public void ExternalConnect() { }
-            public void ExternalConnect(MessageBrokerModel model) { }
-            public void Acknowledge(BasicDeliverEventArgs e) { }
-            public void NAcknowledge(BasicDeliverEventArgs e) { }
-            public void ExternalPublish<T>(T payload, string messageType, string routingKey, string correlationId) { }
-            public void ExternalPublish(string payload, string messageType, string routingKey, string correlationId) { }
-            public void Publish<T>(T payload, string messageType, string routingKey, string correlationId) { }
-            public void Publish(string payload, string messageType, string routingKey, string correlationId) { }
-            public void CPublish<T>(T payload, string messageType, string routingKey, string correlationId) { }
-            public void CPublish(string payload, string messageType, string routingKey, string correlationId) { }
-            public IModel BindQueue(string queueName, Dictionary<string, object> options) => throw new NotSupportedException();
-            public void Dispose() { }
-
-            // Keeps the compiler quiet about the never-raised event.
-            public void Raise(BasicDeliverEventArgs e) => MessageReceived?.Invoke(this, e);
         }
 
         private sealed class FakeClientRegistry : IClientRegistry
@@ -177,9 +231,13 @@ namespace OE.Websocket.Service.Tests
 
             private int _inFlight;
             private int _maxInFlight;
+            private int _loadAttempts;
 
             // Highest number of clients whose template load overlapped.
             public int MaxInFlight => Volatile.Read(ref _maxInFlight);
+
+            // How many clients have had a template load attempted so far.
+            public int LoadAttempts => Volatile.Read(ref _loadAttempts);
 
             public async Task<bool> ProcessMainMarketTemplates(ClientContext client)
             {
@@ -201,6 +259,7 @@ namespace OE.Websocket.Service.Tests
                 finally
                 {
                     Interlocked.Decrement(ref _inFlight);
+                    Interlocked.Increment(ref _loadAttempts);
                 }
             }
 

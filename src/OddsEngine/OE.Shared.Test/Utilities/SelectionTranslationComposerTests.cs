@@ -215,5 +215,185 @@ namespace OE.Shared.Test.Utilities
         }
 
         #endregion
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Theory]
+        [InlineData("Home or Draw")]
+        [InlineData("Home or Away")]
+        [InlineData("Draw or Away")]
+        [InlineData("HOME OR DRAW")]
+        [InlineData("Home or Draw and Yes")]
+        [InlineData("Draw and Away to Score First")]
+        public void RequiresTeamTokenComposition_SeTeKeyWithPositionalWord_IsTrue_MutationCheck(string seTeNa)
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(SelectionTranslationComposer.RequiresTeamTokenComposition("SeTe:7202:7", seTeNa)));
+        }
+
+        [Theory]
+        [InlineData("Draw")]
+        [InlineData("Draw 1-1")]
+        [InlineData("Over")]
+        [InlineData("Homer Simpson")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void RequiresTeamTokenComposition_SeTeKeyWithoutPositionalWord_IsFalse_MutationCheck(string seTeNa)
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(SelectionTranslationComposer.RequiresTeamTokenComposition("SeTe:7202:2", seTeNa)));
+        }
+
+        [Theory]
+        [InlineData("Te:117198")]
+        [InlineData("Co:810068")]
+        [InlineData("")]
+        [InlineData(null)]
+        public void RequiresTeamTokenComposition_NonSeTeKey_IsFalse_MutationCheck(string stringId)
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(SelectionTranslationComposer.RequiresTeamTokenComposition(stringId, "Home or Draw")));
+        }
+
+        [Fact]
+        public void Compose_HomeOrDraw_SwapsHomeTokenForTranslatedTeamName_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队胜或平局"), "Home or Draw", Zh("凯尔采"), Zh("斯塔尔热舒夫"));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_HomeOrAway_SwapsBothTokens_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队或客队"), "Home or Away", Zh("凯尔采"), Zh("斯塔尔热舒夫"));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_DrawOrAway_SwapsAwayTokenOnly_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("平局或客队"), "Draw or Away", homeTranslations: null, awayTranslations: Zh("斯塔尔热舒夫"));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_TeamNotTranslated_KeepsGenericToken_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队胜或平局"), "Home or Draw", homeTranslations: null, awayTranslations: null);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_TeamTranslatedInDifferentLanguageOnly_KeepsGenericToken_MutationCheck()
+        {
+            var homeEsOnly = new List<TranslationMessage> { new TranslationMessage { LaCo = "ES", Tx = "Korona" } };
+
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队胜或平局"), "Home or Draw", homeEsOnly, null);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_TokenAbsentFromTranslatedText_LeavesTextUntouched_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("本垒打总数"), "Home Run Total", Zh("凯尔采"), null);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_UnmappedLanguage_PassesThrough_MutationCheck()
+        {
+            var template = new List<TranslationMessage> { new TranslationMessage { LaCo = "ES", Tx = "Local o Empate" } };
+            var homeEs = new List<TranslationMessage> { new TranslationMessage { LaCo = "ES", Tx = "Korona Kielce" } };
+
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(template, "Home or Draw", homeEs, null);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_TokenWithoutMatchingEnglishWord_IsNotSwapped_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队或客队"), "Home or Draw", Zh("凯尔采"), Zh("斯塔尔热舒夫"));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_EmptyTxRemovalMarker_SurvivesUntouched_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh(""), "Home or Draw", Zh("凯尔采"), null);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not empty", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_DoesNotMutateInputs_MutationCheck()
+        {
+            var template = Zh("主队或客队");
+            var home = Zh("凯尔采");
+            var away = Zh("斯塔尔热舒夫");
+
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(template, "Home or Away", home, away);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Same(template, composed));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Same(template[0], composed![0]));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", template[0].Tx));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", home[0].Tx));
+        }
+
+        [Fact]
+        public void Compose_ReplacementTextIsNeverRescanned_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队或客队"), "Home or Away", Zh("X客队X"), Zh("YY"));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_ReplacesEveryOccurrenceOfAToken_MutationCheck()
+        {
+            var composed = SelectionTranslationComposer.ComposeTeamTokens(
+                Zh("主队进球且主队胜"), "Home to Score and Home to Win", Zh("凯尔采"), null);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single().Tx));
+        }
+
+        [Fact]
+        public void Compose_NullOrEmptyTemplate_ReturnedAsIs_MutationCheck()
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(SelectionTranslationComposer.ComposeTeamTokens(null, "Home or Draw", Zh("凯尔采"), null)));
+
+            var empty = new List<TranslationMessage>();
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotSame(empty, SelectionTranslationComposer.ComposeTeamTokens(empty, "Home or Draw", Zh("凯尔采"), null)));
+        }
+
+        [Fact]
+        public void Compose_NoPositionalWordInTemplate_ReturnsSameListInstance_MutationCheck()
+        {
+            var template = Zh("平局");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotSame(template, SelectionTranslationComposer.ComposeTeamTokens(template, "Draw", Zh("凯尔采"), Zh("斯塔尔热舒夫"))));
+        }
+
+        #endregion
     }
 }

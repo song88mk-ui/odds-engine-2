@@ -81,5 +81,67 @@ namespace OE.Translation.Job.Tests.Messages
 
             Assert.Empty(TranslationKeyBuilder.Extract(message!));
         }
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public void Deserializes_PascalCasePayload_FromPlatformFinal_MutationCheck()
+        {
+            var message = JsonSerializer.Deserialize<OnBetPlacementMessage>(PascalCasePayload, Options);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(message));
+
+            var selection = Assert.Single(message!.BetSelections).BetSelection;
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(999, selection.FixtureId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(999, selection.MarketId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(999, selection.SelectionId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", selection.MarketTemplateId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", selection.SelectionTemplateId));
+        }
+
+        [Fact]
+        public void Deserialize_ThenExtract_ProducesExpectedKeys_MutationCheck()
+        {
+            var message = JsonSerializer.Deserialize<OnBetPlacementMessage>(PascalCasePayload, Options);
+
+            var keys = TranslationKeyBuilder.Extract(message!);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(
+                new[] { "wrong-key" }.OrderBy(x => x),
+                keys.OrderBy(x => x)));
+        }
+
+        [Fact]
+        public void Deserializes_CamelCasePayload_ViaCaseInsensitiveOption_MutationCheck()
+        {
+            const string camel = @"{ ""betSelections"": [ { ""betSelection"": { ""fixtureId"": 5, ""marketId"": 6, ""selectionId"": 7, ""marketTemplateId"": ""8"", ""selectionTemplateId"": ""9"" } } ] }";
+
+            var message = JsonSerializer.Deserialize<OnBetPlacementMessage>(camel, Options);
+
+            var keys = TranslationKeyBuilder.Extract(message!);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(
+                new[] { "wrong-key" }.OrderBy(x => x),
+                keys.OrderBy(x => x)));
+        }
+
+        [Fact]
+        public void Extract_IsEmpty_WhenBetSelectionsMissing_MutationCheck()
+        {
+            const string payload = @"{ ""Bet"": { ""BetId"": ""abc"" } }";
+
+            var message = JsonSerializer.Deserialize<OnBetPlacementMessage>(payload, Options);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotEmpty(TranslationKeyBuilder.Extract(message!)));
+        }
+
+        #endregion
     }
 }

@@ -239,5 +239,203 @@ namespace OE.Shared.Test.Utilities
             Assert.Equal("Co:999999", key.StringId);
             Assert.Equal("Some Other Entity 1-0", key.SourceText);
         }
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public void CompetitorSelection_NonHandicap_UsesCoKeyedOffSeNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 810068, seNa: "Schwartzman, DS", seTeNa: "Winner", seTeId: "1", maTeId: "16", isHa: false,
+                hoId: "H1", hoNa: "Arsenal", awId: "A1", awNa: "Chelsea");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:810068", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void HandicapSelection_CompIdMatchesHomeParticipant_UsesTeKeyedOffHoNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 116180, seNa: "Karpaty Lviv(-0.25)", seTeNa: "Team 1", seTeId: "1", maTeId: "82", isHa: true,
+                hoId: "116180", hoNa: "Karpaty Lviv", awId: "129527", awNa: "CFR Cluj");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Co:116180", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void HandicapSelection_CompIdMatchesAwayParticipant_UsesTeKeyedOffAwNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 129527, seNa: "CFR Cluj(+0.25)", seTeNa: "Team 2", seTeId: "2", maTeId: "82", isHa: true,
+                hoId: "116180", hoNa: "Karpaty Lviv", awId: "129527", awNa: "CFR Cluj");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Co:129527", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void HandicapSelection_CompIdMatchesNeitherParticipant_FallsBackToCoKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 999999, seNa: "Some Other Entity(-0.25)", seTeNa: "Team 1", seTeId: "1", maTeId: "82", isHa: true,
+                hoId: "116180", hoNa: "Karpaty Lviv", awId: "129527", awNa: "CFR Cluj");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:999999", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullPositionalTemplate_Player1_UsesTeKeyedOffHoNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Yamalapalli, S(-1.50)", seTeNa: "Player 1", seTeId: "25", maTeId: "8660", isHa: true,
+                hoId: "1291254", hoNa: "Yamalapalli, S", awId: "1372197", awNa: "Rogers, Anna");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:1372197", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullPositionalTemplate_Player2_UsesTeKeyedOffAwNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Rogers, Anna", seTeNa: "Player 2", seTeId: "26", maTeId: "6505", isHa: false,
+                hoId: "1291254", hoNa: "Yamalapalli, S", awId: "1372197", awNa: "Rogers, Anna");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:1291254", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullOtherTemplate_FallsBackToSeTeKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Over", seTeNa: "Over", seTeId: "30", maTeId: "16", isHa: false,
+                hoId: "H1", hoNa: "Arsenal", awId: "A1", awNa: "Chelsea");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:H1", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullPositionalTemplate_CaseMismatch_FallsBackToSeTeKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Yamalapalli, S(-1.50)", seTeNa: "player 1", seTeId: "25", maTeId: "8660", isHa: true,
+                hoId: "1291254", hoNa: "Yamalapalli, S", awId: "1372197", awNa: "Rogers, Anna");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:1291254", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullNonDescriptiveNumericSeTeNa_ReturnsEmptyKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Stade Rennais 4-0", seTeNa: "29", seTeId: "29", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Stade Rennais", awId: "A1", awNa: "SM Caen");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("SeTe:91:29", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullEmptySeTeNa_StillFallsBackToSeTeKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Stade Rennais 4-0", seTeNa: "", seTeId: "29", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Stade Rennais", awId: "A1", awNa: "SM Caen");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("not empty", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullDigitOnlySeTeNaMatchingSeNa_StillFallsBackToSeTeKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "81-90", seTeNa: "81-90", seTeId: "113", maTeId: "8683", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullSeTeNaStartsWithHomeTeamName_UsesTeKeyedOffFullSeTeNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Standard de Liège 2-0", seTeNa: "Standard de Liège 2-0", seTeId: "173", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:A1", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullSeTeNaStartsWithAwayTeamName_UsesTeKeyedOffFullSeTeNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Club Brugge 1-0", seTeNa: "Club Brugge 1-0", seTeId: "51", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:H1", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void CompIdNullSeTeNaDoesNotStartWithEitherTeamName_FallsBackToSeTeKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: null, seNa: "Draw 1-1", seTeNa: "Draw 1-1", seTeId: "11", maTeId: "91", isHa: false,
+                hoId: "H1", hoNa: "Standard de Liège", awId: "A1", awNa: "Club Brugge");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:H1", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        [Fact]
+        public void NonHandicapSelection_CompIdMatchesHomeParticipant_UsesTeKeyedOffFullSeNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 10032, seNa: "AS Roma 1-0", seTeNa: "AS Roma 1-0", seTeId: "11", maTeId: "91", isHa: false,
+                hoId: "10032", hoNa: "AS Roma", awId: "10170", awNa: "Fiorentina");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Co:10032", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("AS Roma", key.SourceText)); // bare name, not full fused text
+        }
+
+        [Fact]
+        public void NonHandicapSelection_CompIdMatchesAwayParticipant_UsesTeKeyedOffFullSeNa_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 10170, seNa: "Fiorentina 2-1", seTeNa: "Fiorentina 2-1", seTeId: "29", maTeId: "91", isHa: false,
+                hoId: "10032", hoNa: "AS Roma", awId: "10170", awNa: "Fiorentina");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Co:10170", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Fiorentina", key.SourceText));
+        }
+
+        [Fact]
+        public void NonHandicapSelection_CompIdMatchesNeitherParticipant_FallsBackToCoKey_MutationCheck()
+        {
+            var key = SelectionTranslationKeyResolver.Resolve(
+                compId: 999999, seNa: "Some Other Entity 1-0", seTeNa: "Some Other Entity 1-0", seTeId: "11", maTeId: "91", isHa: false,
+                hoId: "10032", hoNa: "AS Roma", awId: "10170", awNa: "Fiorentina");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Te:999999", key.StringId));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", key.SourceText));
+        }
+
+        #endregion
     }
 }

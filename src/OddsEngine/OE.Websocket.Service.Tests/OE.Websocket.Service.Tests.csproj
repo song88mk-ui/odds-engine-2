@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OE.Websocket.Service\OE.Websocket.Service.csproj" />
+    <ProjectReference Include="..\OE.Shared.Test\OE.Shared.Test.csproj" />
   </ItemGroup>
 
   <ItemGroup>

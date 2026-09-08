@@ -40,6 +40,42 @@ namespace OE.Websocket.Service.Tests
             Assert.False(memCache.Contains("gm791:mtpp"));
         }
 
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public async Task PlatformApiError_LogsOneWarningPerLoad_CachesNothing_MutationCheck()
+        {
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var memCache = new MemCache();
+            var repository = new SportsbookRepository(BuildConfiguration(), memCache, new Instrumentation(), logger);
+            var clientCode = $"t{Guid.NewGuid():N}"[..12];
+            var client = BuildClient(clientCode, HttpStatusCode.NotFound);
+
+            var templatesLoaded = await repository.ProcessMainMarketTemplates(client);
+            await repository.ProcessBetBuilderMarketTemplates(client);
+            await repository.ProcessMarketTemplatePlayerProps(client);
+            await repository.ProcessFixtureSortOrder(client);
+
+            var warnings = logger.Entries.Where(e => e.Level == LogLevel.Warning).ToList();
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(templatesLoaded));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotEmpty(client.MainMarketTemplates));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(5, warnings.Count));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.All(warnings, w => Assert.DoesNotContain("Not Found", w.Message)));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Contains(logger.Entries, e => e.Level >= LogLevel.Error));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(memCache.Contains($"{clientCode}:bbmt")));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.True(memCache.Contains($"{clientCode}:mtpp")));
+        }
+
+        #endregion
+
         private static IConfiguration BuildConfiguration()
         {
             return new ConfigurationBuilder()

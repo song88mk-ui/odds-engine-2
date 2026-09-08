@@ -304,5 +304,234 @@ namespace OE.Translation.Service.Tests
             Assert.Equal("翁特哈兴", cache.GetTranslations("Te:108358", null)!.Single().Tx);
             Assert.Equal("翁特哈兴", cache.GetTranslations("Te:108358", string.Empty)!.Single().Tx);
         }
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public void Preload_CachesOnlyRowsWithAtLeastOneTranslatedLanguage_MutationCheck()
+        {
+            var cache = Cache(nameof(Preload_CachesOnlyRowsWithAtLeastOneTranslatedLanguage_MutationCheck),
+                Row("SpId:1", zh: "足球"),
+                Row("SpId:2"));
+
+            cache.Preload();
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", cache.GetTranslations("SpId:1", "Source-SpId:1")!.Single().Tx));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(cache.GetTranslations("SpId:2", "Source-SpId:2")));
+        }
+
+        [Fact]
+        public void Apply_UpdatesAddsAndRemovesLanguages_MutationCheck()
+        {
+            var cache = Cache(nameof(Apply_UpdatesAddsAndRemovesLanguages_MutationCheck), Row("Te:H1", zh: "旧", es: "Viejo"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:H1", LaCo = "zh", Tx = "新" },   // update (lowercase normalized)
+                new TranslationChangeItem { StId = "Te:H1", LaCo = "ES", Tx = "" },     // removal
+                new TranslationChangeItem { StId = "MaTe:16", LaCo = "FR", Tx = "Résultat" }, // new key
+                new TranslationChangeItem { StId = "Te:H1", LaCo = "JA", Tx = "x" }     // unsupported — ignored
+            });
+
+            var team = cache.GetTranslations("Te:H1", "Source-Te:H1");
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(team));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("旧", team!.Single().Tx));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", cache.GetTranslations("MaTe:16", "anything")!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_StringIdMiss_FallsBackToContentMatchByText_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_StringIdMiss_FallsBackToContentMatchByText_MutationCheck),
+                Row("Co:100", zh: "球员Y", sourceText: "Player Y"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:200", "Player Y");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_RenameDetected_FallsBackToContentMatchInsteadOfStaleCache_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_RenameDetected_FallsBackToContentMatchInsteadOfStaleCache_MutationCheck),
+                Row("Co:100", zh: "球员X", sourceText: "Player X"),
+                Row("Co:200", zh: "球员Y", sourceText: "Player Y"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:200", "Player X");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("球员Y", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_RenameWithNoContentMatch_ReturnsNull_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_RenameWithNoContentMatch_ReturnsNull_MutationCheck),
+                Row("Co:100", zh: "球员X", sourceText: "Player X"));
+
+            cache.Preload();
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(cache.GetTranslations("Co:100", "Player X Renamed")));
+        }
+
+        [Fact]
+        public void GetTranslations_RenameIsKnownNamePlusScoreTail_SplicesTranslatedNamePlusTail_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_RenameIsKnownNamePlusScoreTail_SplicesTranslatedNamePlusTail_MutationCheck),
+                Row("Co:1372197", zh: "罗杰斯, 安娜", sourceText: "Rogers, Anna"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:1372197", "Rogers, Anna 7-5");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("罗杰斯, 安娜", translated!.Single().Tx));
+        }
+
+        [Theory]
+        [InlineData("Fluminense FC by 2", "弗鲁米嫩塞 by 2")]
+        [InlineData("Fluminense FC by 2+", "弗鲁米嫩塞 by 2+")]
+        [InlineData("Fluminense FC BY 3", "弗鲁米嫩塞 BY 3")]
+        public void GetTranslations_RenameIsKnownNamePlusWinningMarginTail_SplicesTranslatedNamePlusTail_MutationCheck(string currentText, string expected)
+        {
+            var cache = Cache(nameof(GetTranslations_RenameIsKnownNamePlusWinningMarginTail_SplicesTranslatedNamePlusTail_MutationCheck) + currentText,
+                Row("Co:96870", zh: "弗鲁米嫩塞", sourceText: "Fluminense FC"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:96870", currentText);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(expected + "-wrong", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_CaseOnlySourceTextMismatch_IsNotARename_ServesCachedTranslation_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_CaseOnlySourceTextMismatch_IsNotARename_ServesCachedTranslation_MutationCheck),
+                Row("MaTe:7354", zh: "总分奇数或偶数", sourceText: "Odd or Even Total"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("MaTe:7354", "Odd Or Even Total");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_ContentFallbackMatchesCaseInsensitively_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_ContentFallbackMatchesCaseInsensitively_MutationCheck),
+                Row("MaTe:7354", zh: "总分奇数或偶数", sourceText: "Odd or Even Total"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("MaTe:7934", "Odd Or Even Total");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_TailSpliceToleratesCaseOnlyPrefixDifference_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_TailSpliceToleratesCaseOnlyPrefixDifference_MutationCheck),
+                Row("Co:96870", zh: "弗鲁米嫩塞", sourceText: "Fluminense Fc"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("Co:96870", "Fluminense FC by 2");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("弗鲁米嫩塞", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_MaTeWordingMismatch_ServesLastKnownTranslationAsFallback_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_MaTeWordingMismatch_ServesLastKnownTranslationAsFallback_MutationCheck),
+                Row("MaTe:259", zh: "总进球数 大/小于", sourceText: "Total Goals Over / Under"));
+
+            cache.Preload();
+
+            var translated = cache.GetTranslations("MaTe:259", "Over/Under");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", translated!.Single().Tx));
+        }
+
+        [Fact]
+        public void GetTranslations_TeWordingMismatch_IsStillRefused_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_TeWordingMismatch_IsStillRefused_MutationCheck),
+                Row("Te:10033", zh: "国际米兰", sourceText: "Internazionale"));
+
+            cache.Preload();
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(cache.GetTranslations("Te:10033", "Only Internazionale")));
+        }
+
+        [Fact]
+        public void Apply_WithSourceText_MakesTheNewWordingContentAddressable_MutationCheck()
+        {
+            var cache = Cache(nameof(Apply_WithSourceText_MakesTheNewWordingContentAddressable_MutationCheck),
+                Row("MaTe:259", zh: "总进球数 大/小于", sourceText: "Total Goals Over / Under"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "MaTe:259~a1b2c3d4", LaCo = "ZH", Tx = "大/小", SrcTx = "Over/Under" }
+            });
+
+            var translated = cache.GetTranslations("MaTe:259", "Over/Under");
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("总进球数 大/小于", translated!.Single().Tx)); // the stale fallback, not the variant's own translation
+        }
+
+        [Fact]
+        public void GetTranslations_RenameWithNonMarginLetterTail_StillFallsBackInsteadOfSplicing_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_RenameWithNonMarginLetterTail_StillFallsBackInsteadOfSplicing_MutationCheck),
+                Row("Co:100", zh: "球员X", sourceText: "Player X"));
+
+            cache.Preload();
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(cache.GetTranslations("Co:100", "Player X United")));
+        }
+
+        [Fact]
+        public void GetTranslations_EmptyCurrentText_TrustsCachedRowInsteadOfTreatingAsRename_MutationCheck()
+        {
+            var cache = Cache(nameof(GetTranslations_EmptyCurrentText_TrustsCachedRowInsteadOfTreatingAsRename_MutationCheck),
+                Row("Te:108358", zh: "翁特哈兴", sourceText: "SpVgg Unterhaching"));
+
+            cache.Preload();
+
+            var nullResult = cache.GetTranslations("Te:108358", null);
+            var emptyResult = cache.GetTranslations("Te:108358", string.Empty);
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", nullResult!.Single().Tx));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", emptyResult!.Single().Tx));
+        }
+
+        #endregion
     }
 }

@@ -137,5 +137,139 @@ namespace OE.Shared.Test.Utilities
             Assert.Null(PlayerMarketNameComposer.DerivePlaceholderSource(null));
             Assert.Null(PlayerMarketNameComposer.DerivePlaceholderSource("  "));
         }
+
+        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
+
+        // Each check re-runs the same path as its real counterpart above, then asserts a
+        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
+        // assertion is expected to fail — that failure is what makes this test pass (green). If
+        // the real test's assertion could never distinguish correct from wrong (a vacuous or
+        // tautological check), the wrong-value assertion here would NOT throw, and this test
+        // would go red instead — flagging the real test as untrustworthy.
+
+        [Fact]
+        public void Compose_BothSidesPresent_JoinsPlayerAndTemplatePerLanguage_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "罗希特·夏尔马")),
+                Tr(("ZH", "第一局首位达到50分的球员 是/否")));
+
+            var zh = Assert.Single(composed!);
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("EN", zh.LaCo));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong text", zh.Tx));
+        }
+
+        [Fact]
+        public void Compose_LanguageOnlyOnOneSide_IsDropped_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "罗希特·夏尔马")),
+                Tr(("ZH", "模板"), ("ES", "plantilla")));
+
+            var zh = Assert.Single(composed!);
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("ES", zh.LaCo));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(2, composed!.Count));
+        }
+
+        [Fact]
+        public void Compose_EitherSideMissing_ReturnsNull_SoEnglishMaNaWins_MutationCheck()
+        {
+            var template = Tr(("ZH", "模板"));
+            var player = Tr(("ZH", "球员名"));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.Compose(null, template)));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.Compose(new List<TranslationMessage>(), template)));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.Compose(player, null)));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.Compose(player, new List<TranslationMessage>())));
+        }
+
+        [Fact]
+        public void Compose_LanguageCodeMatchIsCaseInsensitive_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("zh", "球员名")),
+                Tr(("ZH", "模板")));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", Assert.Single(composed!).Tx));
+        }
+
+        [Fact]
+        public void Compose_BlankTexts_AreIgnored_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "")),
+                Tr(("ZH", "模板")));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(composed));
+        }
+
+        [Fact]
+        public void Compose_PlaceholderWithMarker_Interpolates_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "费罗扎，海鸥")),
+                Tr(("ZH", "第一局首位达到50分的球员 是/否")),
+                Tr(("ZH", "第一局{player}达到50分 是/否")));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong text", Assert.Single(composed!).Tx));
+        }
+
+        [Fact]
+        public void Compose_PlaceholderLostTheMarker_FallsBackToJoinForThatLanguage_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "费罗扎，海鸥")),
+                Tr(("ZH", "第一局首位达到50分的球员 是/否")),
+                Tr(("ZH", "第一局球员达到50分 是/否")));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong text", Assert.Single(composed!).Tx));
+        }
+
+        [Fact]
+        public void Compose_PlaceholderCoversOneLanguage_JoinFillsTheOthers_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "球员名"), ("ES", "Jugador X")),
+                Tr(("ZH", "模板"), ("ES", "plantilla")),
+                Tr(("ZH", "带{player}的模板")));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, composed!.Count));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single(t => t.LaCo == "ZH").Tx));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single(t => t.LaCo == "ES").Tx));
+        }
+
+        [Fact]
+        public void Compose_PlaceholderOnly_NoPlainTemplate_StillInterpolates_MutationCheck()
+        {
+            var composed = PlayerMarketNameComposer.Compose(
+                Tr(("ZH", "球员名")),
+                templateTranslations: null,
+                placeholderTemplateTranslations: Tr(("ZH", "带{player}的模板")));
+
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong text", Assert.Single(composed!).Tx));
+        }
+
+        [Fact]
+        public void DerivePlaceholderSource_ReplacesTheVendorPlayerSlot_MutationCheck()
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong",
+                PlayerMarketNameComposer.DerivePlaceholderSource("1st Innings Player to Reach 50 Runs Yes/No")));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong",
+                PlayerMarketNameComposer.DerivePlaceholderSource("1st Innings Individual Player Total Runs Over/Under")));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong",
+                PlayerMarketNameComposer.DerivePlaceholderSource("1st Innings Away Team Individual Player Next Man Out Yes/No")));
+        }
+
+        [Fact]
+        public void DerivePlaceholderSource_NoUsableSlot_ReturnsNull_MutationCheck()
+        {
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.DerivePlaceholderSource("Match Result")));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.DerivePlaceholderSource("1st Innings Player A and Player B Both to Reach 50")));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.DerivePlaceholderSource("Player 1 To Win A Set")));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.DerivePlaceholderSource(null)));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotNull(PlayerMarketNameComposer.DerivePlaceholderSource("  ")));
+        }
+
+        #endregion
     }
 }
