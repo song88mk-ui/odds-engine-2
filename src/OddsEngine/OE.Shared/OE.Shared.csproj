@@ -12,14 +12,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Api" Version="1.15.3" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.1.32" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="3.1.32" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.5" />
-    <PackageReference Include="MongoDB.Bson" Version="3.4.0" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.14.0" />
+    <PackageReference Include="MongoDB.Bson" Version="3.11.1" />
     <PackageReference Include="RabbitMQ.Client" Version="5.2.0" />
     <PackageReference Include="System.Runtime.Caching" Version="9.0.5" />
-    <PackageReference Include="System.Text.Json" Version="9.0.5" />
+    <PackageReference Include="System.Text.Json" Version="10.0.3" />
   </ItemGroup>
 
 </Project>

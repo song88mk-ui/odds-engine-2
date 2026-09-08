@@ -43,8 +43,6 @@ namespace OE.Sportsbook.Service.Repositories
         private const string BETTING_STATUS_MODEL_ID = "betstop";
         private const string CACHE_PREFIX = "sb:translation:";
 
-        private static IdGenerator _defaultIdGenerator;
-
         private bool _IsBetStopGlobally = false;
 
         // Change-detection gate for the websocket path: last translations published per entity

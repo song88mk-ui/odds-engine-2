@@ -12,8 +12,8 @@ namespace OE.Shared.Messages.OutgoingAdapterMessages
         }
         public int SpId { get; set; }
         public List<MarketBetCancellationMessage> Ma { get; set; }
-        public long TiSe { get; set; }
-        public long TiRe { get; set; }
+        // TiSe/TiRe are inherited from OutgoingAdapterMessageBase. They were previously redeclared
+        // here, which shadowed the base slots and left them permanently 0 for any base-typed read.
         public string Raw { get; set; }
     }
     public class MarketBetCancellationMessage

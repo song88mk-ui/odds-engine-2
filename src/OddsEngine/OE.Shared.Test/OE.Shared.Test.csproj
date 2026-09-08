@@ -12,6 +12,10 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="3.1.32" />
+    <!-- EntityFrameworkCore.InMemory 3.1.32 drags Microsoft.Extensions.DependencyInjection 3.1.32,
+         which collides (CS0433 on ServiceCollection) with the DependencyInjection.Abstractions
+         10.0.0 that Microsoft.Data.SqlClient 7.0.2 pulls in through OE.Shared. Pin the modern one. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />

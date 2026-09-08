@@ -34,6 +34,12 @@ namespace OE.Shared.Extensions
                 SettlementStatus.Void => BetStatus.Void,
                 SettlementStatus.Cancelled => BetStatus.Cancelled,
                 SettlementStatus.CashedOut => BetStatus.CashedOut,
+                // Unreachable via the Enum.IsDefined guard above; present so that adding a
+                // SettlementStatus member without mapping it fails loudly instead of silently.
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(settlementStatusId),
+                    $"Unmapped SettlementStatus: {settlementStatus}"
+                ),
             };
         }
     }
