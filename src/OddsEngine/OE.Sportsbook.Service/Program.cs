@@ -27,7 +27,7 @@ namespace OE.Sportsbook.Service
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .UseSerilog((context, _ , serilog) =>
+                .UseSerilog((context, _, serilog) =>
                 {
                     serilog.ReadFrom.Configuration(context.Configuration);
                 })
@@ -47,7 +47,7 @@ namespace OE.Sportsbook.Service
                     // MongoDB
                     services.AddSingleton<IMongoClient>(sp =>
                         new MongoClient(hostContext.Configuration["Custom:MongoDB-Sportsbook"]));
-                    
+
                     services.AddSingleton<IMongoDatabase>(sp =>
                     {
                         var client = sp.GetRequiredService<IMongoClient>();

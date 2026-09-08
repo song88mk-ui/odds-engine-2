@@ -7,7 +7,7 @@ using OE.WebSocket.Service.Telemetry;
 using Serilog;
 
 Host.CreateDefaultBuilder(args)
-    .UseSerilog((context, _ , serilog) =>
+    .UseSerilog((context, _, serilog) =>
     {
         serilog.ReadFrom.Configuration(context.Configuration);
     })

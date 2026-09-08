@@ -110,18 +110,19 @@ namespace OE.Shared.Providers.BGLiveStream
                 }
 
                 _logger.LogInformation($"GetLiveStream: GetBetGeniusFixture Result : {JsonSerializer.Serialize(result)}");
-                
+
                 var fixture = result.Result;
                 if (fixture?.LiveStreams == null || !fixture.LiveStreams.Any())
                 {
                     _logger.LogInformation("GetLiveStream: No LiveStreams available");
                     return (false, string.Empty);
                 }
-                    
-                var liveStreams = fixture.LiveStreams.Select(s => 
-                    new { 
-                        Id = s.Id, 
-                        Pe = s.Permissions.Select(s => $"{s.Device}:{s.Region}").ToList(), 
+
+                var liveStreams = fixture.LiveStreams.Select(s =>
+                    new
+                    {
+                        Id = s.Id,
+                        Pe = s.Permissions.Select(s => $"{s.Device}:{s.Region}").ToList(),
                         Ot = s.Deliveries
                     });
 

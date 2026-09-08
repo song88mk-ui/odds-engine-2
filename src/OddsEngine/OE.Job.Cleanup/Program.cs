@@ -19,7 +19,7 @@ namespace OE.Job.Cleanup
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                .UseSerilog((context, _ , serilog) =>
+                .UseSerilog((context, _, serilog) =>
                 {
                     serilog.ReadFrom.Configuration(context.Configuration);
                 })

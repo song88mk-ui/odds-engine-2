@@ -132,7 +132,7 @@ namespace OE.Shared.Test.Messages
             var message = JsonSerializer.Deserialize<OnMarketChangeMessage>(json);
 
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(message));
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, message!.Pl.Count));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Single(message!.Pl));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("Wrong Name", message!.Pl[0].PlNa));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(999999, message!.Ma.Single().CompId));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.NotEqual(message!.Ma.Single().CompId, message.Pl[0].PlId));

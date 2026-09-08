@@ -224,7 +224,7 @@ namespace OE.Adapter.Service.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError($"{messageType} {JsonSerializer.Serialize<T>(payload)} {ex.Message}" );
+                _logger.LogError($"{messageType} {JsonSerializer.Serialize<T>(payload)} {ex.Message}");
                 _logger.LogError($"{messageType} {ex.StackTrace}");
                 throw;
             }

@@ -638,7 +638,7 @@ namespace OE.Websocket.Service
                         case MessageType.ON_ODDS_CHANGE:
                             var onOddsChange = JsonSerializer.Deserialize<OnMarketChangeMessage>(payload);
 
-                            if(onOddsChange.FiStId == (int)FixtureStatus.Closed)
+                            if (onOddsChange.FiStId == (int)FixtureStatus.Closed)
                                 _logger.LogInformation($"FixtureId:{onOddsChange.PrFiId} {msgType} Fixture closed");
 
                             _messagesMarketCount.Add(onOddsChange);

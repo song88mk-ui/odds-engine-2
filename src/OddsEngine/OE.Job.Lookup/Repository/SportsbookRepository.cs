@@ -155,7 +155,7 @@ namespace OE.Job.Lookup.Repository
 
             foreach (var market in message.Ma)
             {
-                foreach(var selection in market.Se)
+                foreach (var selection in market.Se)
                 {
                     var selectionLookupId = $"{message.SpId}:{market.MaTeId}:{selection.SeTeId}";
 

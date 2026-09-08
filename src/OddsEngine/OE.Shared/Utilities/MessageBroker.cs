@@ -32,7 +32,7 @@ namespace OE.Shared.Utilities
         private readonly IConfiguration _configuration;
 
         private string _hostName = string.Empty;
-        private int    _hostPort = 5672; // default non-tls
+        private int _hostPort = 5672; // default non-tls
         private string _userName = string.Empty;
         private string _password = string.Empty;
         private string _virtualHost = string.Empty;
@@ -41,15 +41,15 @@ namespace OE.Shared.Utilities
         private string _consumerName = string.Empty;
         private string _routingKey = string.Empty;
         private ushort _prefetchCount = 1000;
-        private bool   _isExclusive = false;
-        private bool   _isPriority = false;
+        private bool _isExclusive = false;
+        private bool _isPriority = false;
 
         private ConnectionFactory _externalConnectionFactory;
         private IConnection _externalConnection;
         private IModel _externalModel;
 
         private string _externalHostName = string.Empty;
-        private int    _externalPort = 5672; // default non-tls
+        private int _externalPort = 5672; // default non-tls
         private string _externalUserName = string.Empty;
         private string _externalPassword = string.Empty;
         private string _externalVirtualHost = string.Empty;
@@ -111,7 +111,7 @@ namespace OE.Shared.Utilities
 
         public void Connect()
         {
-            _isExclusive = _configuration.GetValue<bool>("MessageBroker:IsExclusive",  false);
+            _isExclusive = _configuration.GetValue<bool>("MessageBroker:IsExclusive", false);
             _isPriority = _configuration.GetValue<bool>("MessageBroker:IsPriority", false);
             _hostName = _configuration["MessageBroker:Host"];
             _hostPort = _configuration.GetValue<int>("MessageBroker:Port", 5672);
@@ -134,9 +134,9 @@ namespace OE.Shared.Utilities
                 {
                     byte[] bytes = hasher.ComputeHash(Encoding.UTF8.GetBytes(Environment.MachineName));
                     StringBuilder sb = new StringBuilder();
-                    foreach(byte b in bytes)
+                    foreach (byte b in bytes)
                         sb.Append(b.ToString("x2"));
-                    suffix = sb.ToString().Substring(0,5);
+                    suffix = sb.ToString().Substring(0, 5);
                 }
             }
             _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{suffix}" : _configuration["MessageBroker:Queue"];
@@ -224,7 +224,7 @@ namespace OE.Shared.Utilities
             bool isPriority = options.TryGetValue("priority", out var vIsPriority)
                 ? Convert.ToBoolean(vIsPriority) : false;
             ushort prefetchCount = options.TryGetValue("prefetch", out var vPrefetchCount)
-                ? Convert.ToUInt16(vPrefetchCount): Convert.ToUInt16(1000);
+                ? Convert.ToUInt16(vPrefetchCount) : Convert.ToUInt16(1000);
 
             string routingKeys = options.TryGetValue("routingKeys", out var vRoutingKeys)
                 ? vRoutingKeys.ToString() : "";
@@ -282,18 +282,18 @@ namespace OE.Shared.Utilities
                     _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}; ManualAck",
                             _hostName, _hostPort, _hostPort == 5671 ? true : false);
 
-                    _connectionFactory = new ConnectionFactory
-                    {
-                        HostName = _hostName,
-                        Port = _hostPort,
-                        UserName = _userName,
-                        Password = _password,
-                        VirtualHost = _virtualHost,
-                        RequestedHeartbeat = 60,
-                        NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _hostPort == 5671 ? true : false, ServerName = _hostName },
-                        ClientProperties = clientProperties
-                    };
+                _connectionFactory = new ConnectionFactory
+                {
+                    HostName = _hostName,
+                    Port = _hostPort,
+                    UserName = _userName,
+                    Password = _password,
+                    VirtualHost = _virtualHost,
+                    RequestedHeartbeat = 60,
+                    NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
+                    Ssl = new SslOption { Enabled = _hostPort == 5671 ? true : false, ServerName = _hostName },
+                    ClientProperties = clientProperties
+                };
 
                 _connection = _connectionFactory.CreateConnection();
 
@@ -370,30 +370,30 @@ namespace OE.Shared.Utilities
 
         public void Publish<T>(T payload, string messageType, string routingKey, string correlationId)
         {
-          var activityName = $"{routingKey} send";
-          using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
-          {
-            var properties = _model.CreateBasicProperties();
-            properties.CorrelationId = correlationId;
-            properties.DeliveryMode = 2;
-            properties.Type = messageType;
-
-            ActivityContext contextToInject = default;
-            if (activity != null)
+            var activityName = $"{routingKey} send";
+            using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
             {
-              contextToInject = activity.Context;
+                var properties = _model.CreateBasicProperties();
+                properties.CorrelationId = correlationId;
+                properties.DeliveryMode = 2;
+                properties.Type = messageType;
+
+                ActivityContext contextToInject = default;
+                if (activity != null)
+                {
+                    contextToInject = activity.Context;
+                }
+                else if (Activity.Current != null)
+                {
+                    contextToInject = Activity.Current.Context;
+                }
+
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+
+                var payloadBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+
+                _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
             }
-            else if (Activity.Current != null)
-            {
-              contextToInject = Activity.Current.Context;
-            }
-
-            Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
-
-            var payloadBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
-
-            _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
-          }
         }
 
         public void CPublish<T>(T payload, string messageType, string routingKey, string correlationId)
@@ -412,11 +412,11 @@ namespace OE.Shared.Utilities
                 ActivityContext contextToInject = default;
                 if (activity != null)
                 {
-                  contextToInject = activity.Context;
+                    contextToInject = activity.Context;
                 }
                 else if (Activity.Current != null)
                 {
-                  contextToInject = Activity.Current.Context;
+                    contextToInject = Activity.Current.Context;
                 }
 
                 Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
@@ -429,30 +429,30 @@ namespace OE.Shared.Utilities
 
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
         {
-          var activityName = $"{routingKey} send";
-          using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
-          {
-            var properties = _model.CreateBasicProperties();
-            properties.CorrelationId = correlationId;
-            properties.DeliveryMode = 2;
-            properties.Type = messageType;
-
-            ActivityContext contextToInject = default;
-            if (activity != null)
+            var activityName = $"{routingKey} send";
+            using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
             {
-              contextToInject = activity.Context;
+                var properties = _model.CreateBasicProperties();
+                properties.CorrelationId = correlationId;
+                properties.DeliveryMode = 2;
+                properties.Type = messageType;
+
+                ActivityContext contextToInject = default;
+                if (activity != null)
+                {
+                    contextToInject = activity.Context;
+                }
+                else if (Activity.Current != null)
+                {
+                    contextToInject = Activity.Current.Context;
+                }
+
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+
+                var payloadBytes = Encoding.UTF8.GetBytes(payload);
+
+                _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
             }
-            else if (Activity.Current != null)
-            {
-              contextToInject = Activity.Current.Context;
-            }
-
-            Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
-
-            var payloadBytes = Encoding.UTF8.GetBytes(payload);
-
-            _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
-          }
         }
 
         public void CPublish(string payload, string messageType, string routingKey, string correlationId)
@@ -471,11 +471,11 @@ namespace OE.Shared.Utilities
                 ActivityContext contextToInject = default;
                 if (activity != null)
                 {
-                  contextToInject = activity.Context;
+                    contextToInject = activity.Context;
                 }
                 else if (Activity.Current != null)
                 {
-                  contextToInject = Activity.Current.Context;
+                    contextToInject = Activity.Current.Context;
                 }
 
                 Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
@@ -488,15 +488,15 @@ namespace OE.Shared.Utilities
 
         private void InjectTraceContextIntoBasicProperties(IBasicProperties props, string key, string value)
         {
-          try
-          {
-            if (props.Headers == null)
+            try
             {
-              props.Headers = new Dictionary<string, object>();
+                if (props.Headers == null)
+                {
+                    props.Headers = new Dictionary<string, object>();
+                }
+                props.Headers[key] = value;
             }
-            props.Headers[key] = value;
-          }
-          catch (Exception) {}
+            catch (Exception) { }
         }
 
         private void PrepareExternalConnection()
@@ -548,7 +548,7 @@ namespace OE.Shared.Utilities
             if (_connection?.IsOpen == true)
                 return _connection;
 
-            lock(_lock)
+            lock (_lock)
             {
                 if (_connection?.IsOpen == true)
                     return _connection;
@@ -563,7 +563,7 @@ namespace OE.Shared.Utilities
                         if (_connection != null)
                         {
                             try { _connection.Dispose(); }
-                            catch {}
+                            catch { }
                             _connection = null;
                         }
                         Connect();
@@ -575,7 +575,7 @@ namespace OE.Shared.Utilities
                         {
                             _connection = null;
                             throw new RetryableConnectionException(
-                                    $"Failed to establish connection after {maxRetries} attempts.",e);
+                                    $"Failed to establish connection after {maxRetries} attempts.", e);
                         }
 
                         Thread.Sleep(delay);
@@ -586,7 +586,8 @@ namespace OE.Shared.Utilities
             }
         }
 
-        private static bool RetryableException(Exception e) {
+        private static bool RetryableException(Exception e)
+        {
             return e is TimeoutException
                 || e is IOException
                 || e.InnerException is SocketException;

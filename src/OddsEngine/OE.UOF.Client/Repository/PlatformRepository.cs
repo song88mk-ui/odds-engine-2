@@ -88,7 +88,7 @@ namespace OE.UOF.Client.Repository
                 };
             }
         }
-        
+
         #endregion
     }
 }

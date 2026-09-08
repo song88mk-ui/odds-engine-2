@@ -7,7 +7,7 @@
             Gr = new List<string>();
         }
         public List<string> Gr { get; set; }
-        public OddsChangeFixture Pa { get; set; } 
+        public OddsChangeFixture Pa { get; set; }
     }
     public class OddsChangeFixture
     {

@@ -437,7 +437,7 @@ namespace OE.Adapter.Service.Tests
             var translated = cache.GetTranslations("SpId:1", "Source-SpId:1");
 
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(translated));
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, translated!.Count));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Single(translated!));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", translated!.Single(t => t.LaCo == "ZH").Tx));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", translated!.Single(t => t.LaCo == "FR").Tx));
 

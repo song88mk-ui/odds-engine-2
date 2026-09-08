@@ -191,7 +191,7 @@ namespace OE.Sportsbook.Service.Repositories
                 _logger.LogErrorEx($"ProcessOnMarketSettlementMessage Error: {ex.Message}--> {JsonSerializer.Serialize(message)}");
                 throw;
             }
-            
+
         }
 
         public void ProcessOnBetSettlementMessage(IMessageBroker messageBroker, OnBetSettlementMessage message, string correlationId)

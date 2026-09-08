@@ -66,7 +66,7 @@ namespace OE.Job.Cleanup.Repository
             // status: ended, closed, cancelled, abandoned, unknown, postponed, interrupted etc
             // non virtual sports
             // started 30 days ago (retentionValue)
-            var statusToBeDeleted = new[]{ 2,3,4,5,6,7,8,9,10,99}; // > 2 will include MatchABoutToStart, so we exclude it?
+            var statusToBeDeleted = new[] { 2, 3, 4, 5, 6, 7, 8, 9, 10, 99 }; // > 2 will include MatchABoutToStart, so we exclude it?
 
             var batchSize = _configuration.GetValue<int>("Custom:BatchSize", 5000);
             var batchDelayMs = _configuration.GetValue<int>("Custom:BatchDelayMs", 2000);
@@ -147,10 +147,10 @@ namespace OE.Job.Cleanup.Repository
     public class FixtureProjection
     {
         [BsonId]
-        public string    Id    { get; set; }
-        public long     FiId   { get; set; }
-        public string   FiSp   { get; set; }
-        public int      SpId   { get; set; }
+        public string Id { get; set; }
+        public long FiId { get; set; }
+        public string FiSp { get; set; }
+        public int SpId { get; set; }
         public DateTime FiStDa { get; set; }
     }
 }

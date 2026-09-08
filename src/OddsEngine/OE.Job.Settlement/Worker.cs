@@ -72,7 +72,7 @@ namespace OE.Job.Settlement
                 catch (Exception ex)
                 {
                     if (_jobSuccessResult.Enabled)
-                            _jobSuccessResult.Record(0);
+                        _jobSuccessResult.Record(0);
 
                     _logger.LogError($"Error: {ex.Message}");
                     await Task.Delay(300000, stoppingToken);

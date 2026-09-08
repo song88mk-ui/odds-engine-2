@@ -122,7 +122,7 @@ namespace OE.Translation.Job.Tests.Translation
 
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.DoesNotContain("MaTe:20", keys));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.DoesNotContain("SeTe:20:30", keys));
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(0, keys.Count));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Empty(keys));
         }
 
         [Fact]

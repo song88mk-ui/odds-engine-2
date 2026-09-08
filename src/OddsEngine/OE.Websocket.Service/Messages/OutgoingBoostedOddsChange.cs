@@ -10,7 +10,7 @@ namespace OE.WebSocket.Service.Messages
             Gr = new List<string>();
         }
         public List<string> Gr { get; set; }
-        public OddsChangeBoostedFixture Pa { get; set; } 
+        public OddsChangeBoostedFixture Pa { get; set; }
     }
     public class OddsChangeBoostedFixture
     {

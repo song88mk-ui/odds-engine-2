@@ -6,7 +6,7 @@ using OE.UOF.Client.Repository;
 using Serilog;
 
 Host.CreateDefaultBuilder(args)
-    .UseSerilog((context, _ , serilog) =>
+    .UseSerilog((context, _, serilog) =>
     {
         serilog.ReadFrom.Configuration(context.Configuration);
     })

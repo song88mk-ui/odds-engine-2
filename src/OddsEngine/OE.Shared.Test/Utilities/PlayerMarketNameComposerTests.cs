@@ -233,7 +233,7 @@ namespace OE.Shared.Test.Utilities
                 Tr(("ZH", "模板"), ("ES", "plantilla")),
                 Tr(("ZH", "带{player}的模板")));
 
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, composed!.Count));
+            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Single(composed!));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single(t => t.LaCo == "ZH").Tx));
             Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal("wrong", composed!.Single(t => t.LaCo == "ES").Tx));
         }

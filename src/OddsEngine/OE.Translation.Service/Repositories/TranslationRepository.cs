@@ -564,7 +564,7 @@ namespace OE.Translation.Service.Repositories
                                 candidateBackfilled++;
                                 break;
 
-                            // Any other language has no column in the flat schema — skipped.
+                                // Any other language has no column in the flat schema — skipped.
                         }
                     }
                 }

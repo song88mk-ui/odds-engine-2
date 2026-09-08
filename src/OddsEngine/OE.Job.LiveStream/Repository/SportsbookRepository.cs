@@ -67,9 +67,9 @@ namespace OE.Job.LiveStream.Repository
                 _logger.LogInformation($"ProcessLiveStream: Exiting");
 
 
-            foreach(var ch in Enum.GetValues(typeof(ChannelType)))
+            foreach (var ch in Enum.GetValues(typeof(ChannelType)))
             {
-                if((int)ch != (int)ChannelType.BG) continue;
+                if ((int)ch != (int)ChannelType.BG) continue;
 
                 _logger.LogInformation($"ProcessLiveStream: {ch}");
 
@@ -123,14 +123,14 @@ namespace OE.Job.LiveStream.Repository
 
         private WriteModel<Fixture>[] ToFixture(string id, bool isLiveStream, string liveStream)
         {
-           return new WriteModel<Fixture>[]
-           {
+            return new WriteModel<Fixture>[]
+            {
                 new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq(f => f.Id, id),
                     Builders<Fixture>.Update
                         .Set(s => s.LiId, isLiveStream.ToString())
                         .Set(s => s.GeAl, liveStream))
                 { IsUpsert = true }
-           };
+            };
         }
     }
 
