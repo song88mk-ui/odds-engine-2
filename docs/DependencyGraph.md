@@ -39,7 +39,7 @@ Evidence: each `*.csproj` has exactly one `<ProjectReference Include="..\OE.Shar
 
 ### Common across services
 - **Serilog** stack (4.3.0) + `Serilog.AspNetCore` 10.0.0 + Compact formatter + Console sink.
-- **Infra.Extensions.Telemetry** `0.0.1-1` — private package providing `AddTelemetry(...)`.
+- **Infra.Extensions.Telemetry** `0.1.1-5` — private package providing `AddTelemetry(...)`.
 - **Microsoft.Extensions.Hosting** 10.0.11 — unified across all services by GM-751.
 
 ### Service-specific
