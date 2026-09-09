@@ -49,7 +49,8 @@ KeepAlive (heartbeat, 5s).
    bet-stop**. This couples `OE.Adapter.Service` (router) + `OE.Sportsbook.Service` (binding) +
    argocd instance count — change all together. ([docs/Architecture.md](docs/Architecture.md) ADR-003)
 2. **Committed `appsettings.json` ≠ production config.** Prod = argocd env vars (`__`) + AWS Secrets
-   Manager. To know real config, read `argocd/apps/oddsengine/<service>/<env>.yaml`.
+   Manager. To know real config, read `argocd/apps/oddsengine/<service>/<env>.yaml` — this path
+   lives in a **separate GitOps repository**, not in this checkout.
    ([docs/Configuration.md](docs/Configuration.md))
 3. **`OE.Shared` is a shared contract** with bet-genius + backoffice-final (+ platform readers).
    Editing message DTOs, the Mongo schema, enums, or routing keys is a **cross-repo breaking change**.
@@ -95,6 +96,8 @@ KeepAlive (heartbeat, 5s).
   is built by CI; `OE.API` is dead — no code).
 - Local run: `dotnet run` from a service folder; needs local RabbitMQ + MongoDB (+ SQL for
   Sportsbook/UOF). Uses committed `appsettings.json` + git-ignored `appsettings.Development.json`.
+- `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
+  (nullable-reference assignment warning) — don't be surprised it's silent on that class of bug.
 - CI builds each changed service to ECR; argocd deploys. ([docs/Hosting.md](docs/Hosting.md))
 
 ## MANDATORY development workflow (Phase 12 — applies to EVERY task)
@@ -144,11 +147,33 @@ Playbook: [.claude/checklists/standard-workflow.md](.claude/checklists/standard-
   architectural changes.
 
 ## Gotchas (top of the list)
-- `_IsBetStopGlobally` is not thread-safe (H3); Websocket spawns unmanaged threads + `Environment.Exit(1)`
-  (H2); translations are **no longer in the pipeline** — not persisted to Mongo docs **and** no longer
-  embedded in published messages or pushed on SignalR (Corrected 2026-06-30: translations removed from
-  pipeline; the SQL read path / `TranslationRepository` is now orphaned/uncalled); UOF entitlement
-  validation is disabled (H5). See [docs/TechnicalDebt.md](docs/TechnicalDebt.md).
+- `_IsBetStopGlobally` is not thread-safe (H3).
+- Websocket spawns unmanaged threads + `Environment.Exit(1)` (H2).
+- UOF entitlement validation is disabled (H5).
+- See [docs/TechnicalDebt.md](docs/TechnicalDebt.md) for the full register.
+
+### ⚠️ Translations are back in the pipeline — and `/docs` still says they aren't
+`/docs` is **stale on this topic**: 21 files carry a "Corrected 2026-06-30: translations removed from
+pipeline" note (29 occurrences — `grep -rl "Corrected 2026-06-30" docs/`). That note was true of the
+*old* path only. Trust this section over `/docs` until they're reconciled (**DEVOPS-361**) — and delete
+this paragraph once that lands.
+
+**Dead (the note is right about this):** the SQL path — `OE.Sportsbook.Service`'s
+`TranslationRepository`/`TranslationContext` are gone, and nothing writes the `sb:translation:*`
+MemCache any more. One live remnant: `ProcessCacheInvalidationMessage` still deletes by that prefix on
+`ON_DELETE_CACHE` (`OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:340`
+`ProcessCacheInvalidationMessage`), so that handler now purges a namespace nothing populates.
+
+**Live (the note is wrong about this):** `OE.Translation.Service` owns a message-driven path moved in
+from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment at
+`OE.Translation.Service/Repositories/MongoTranslationRepository.cs:682`). It:
+- **persists to Mongo** — `*NaTr` fields on the `Fixture`/`Market`/`Selection` collections (the
+  `*Lookup` collections carry none); see `WriteFixtureTranslations` / `WriteMarketTranslations` /
+  `ProcessTranslationChange` in that same file;
+- **publishes and pushes over SignalR** — translation-only `ON_ODDS_CHANGE` messages built in
+  `PublishTranslationOnlyOddsChanges`, mapped into `OutgoingOddsChange`'s
+  `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` at
+  `OE.Websocket.Service/Repository/SportsbookRepository.cs:1547-1927`.
 
 ## Claude assets
 Commands, skills, checklists, playbooks, templates, prompts live in `.claude/` — see
