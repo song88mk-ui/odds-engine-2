@@ -18,13 +18,13 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 | `OE.Translation.Service.Tests` | 92 | Translation persistence and the translation-only odds-change path |
 | `OE.Adapter.Service.Tests` | 54 | Adapter routing, trading repository, translation cache |
 | `OE.Sportsbook.Service.Tests` | 40 | Catalogue writes, translation gate, worker dispatch |
-| `OE.Websocket.Service.Tests` | 38 | Client registry and presence, outgoing message shapes |
+| `OE.Websocket.Service.Tests` | 132 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
 | `OE.Job.Lookup.Tests` | 7 | Lookup worker |
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 452 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running.
+All 546 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running.
 
 ```bash
 # everything
@@ -79,11 +79,11 @@ them is signal rather than noise.
 |---|---|---|---|---|
 | `OE.Job.Lookup` | 5.45% | 6 | 6 | 98 |
 | `OE.Job.Settlement` | 6.74% | 6 | 31 | 52 |
-| `OE.Websocket.Service` | 11.41% | 142 | 181 | 968 |
 | `OE.Sportsbook.Service` | 18.75% | 63 | 60 | 213 |
 | `OE.Translation.Service` | 34.74% | 303 | 111 | 462 |
 | `OE.Job.KeepAlive` | 38.71% | 10 | 10 | 9 |
 | `OE.Shared` | 41.17% | 303 | 165 | 268 |
+| `OE.Websocket.Service` | 43.56% | 565 | 281 | 451 |
 | `OE.Adapter.Service` | 55.43% | 147 | 58 | 61 |
 | `OE.Translation.Job` | 58.09% | 77 | 26 | 31 |
 
@@ -93,14 +93,59 @@ assertions in tested code.
 
 Largest single gaps, in priority order:
 
-1. `OE.Websocket.Service`, 968 uncovered mutants. Owns the SignalR wire contract, which CLAUDE.md
-   flags as a breaking change to touch, and it is the least covered service in the repo.
-2. `OE.Translation.Service`, 462 uncovered.
+1. `OE.Translation.Service`, 462 uncovered.
+2. `OE.Websocket.Service`, 451 uncovered, down from 968 (GM-808). What is left is listed under
+   "Websocket coverage" below.
 3. `OE.Sportsbook.Service`, 213 uncovered, in the catalogue-write hot path.
 4. `OE.Shared/Utilities/MessageBroker.cs`, 234 uncovered of 273. The publish and acknowledge paths
    are now tested; `Connect`, `ConnectWithManualAck`, `BindQueue`, `PrepareExternalConnection` and
    `GetConnection` all open real AMQP connections and would need an integration test with a live
    broker, which this repository does not have.
+
+## Websocket coverage (GM-808)
+
+`OE.Websocket.Service` went from 11.4% to 43.6%, and `SportsbookRepository.cs` alone from 10.6% to
+54.5%. The service owns the SignalR wire contract that CLAUDE.md flags as a cross-repo breaking
+change, and none of it was executed by a test before: not the group routing, not the client odds
+maths, not the payload mapping.
+
+The blocker was `HubConnection`. It is not sealed and `SendCoreAsync` is virtual, so
+`OE.Websocket.Service.Tests/RecordingHubConnection.cs` subclasses it and records the published
+payload with no hub, no transport and no network. That is what makes the four `ProcessMatchOddsChange*`
+mappers testable. The private members are reached by reflection
+(`SportsbookRepositoryInternals.cs`) rather than widened to `internal`, so no production code
+changed; a renamed member fails the reflection lookup instead of silently passing.
+
+Note the survivor count rose from 180 to 281 at the same time. That is expected and is not a
+regression: mutants that were previously never executed are now executed, and the ones the
+assertions do not detect land in "survived" instead of "no coverage". Real behaviour is covered;
+some assertions are still weaker than they could be.
+
+Still uncovered in `OE.Websocket.Service/Repository/SportsbookRepository.cs`:
+
+| Member | Line | No coverage |
+|---|---|---|
+| `ProcessMatchOddsChangeForAllMarketsOE` (bet-builder block) | 1779 | 54 |
+| `ProcessMatchOddsChangeForAllMarkets` | 1704 | 24 |
+| `ProcessMarketCount` | 300 | 19 |
+| `GetFixtureDetails` (HTTP error branches) | 715 | 17 |
+| `ProcessWebPropsChange` / `ProcessCashOutChange` / `ProcessWalletChange` | 602 / 197 / 222 | 31 |
+
+`Worker.cs` was not touched by GM-808 and still carries 161 uncovered and 85 surviving mutants,
+mostly in the `MessageReceivedEvent` dispatch switch (`Worker.cs:620`).
+
+Three defects surfaced while writing these tests. They are pinned by test but deliberately not
+fixed there, since GM-808 changed no production code:
+
+1. **GM-810.** `SportsbookRepository.cs:1534` and `:1826` dereference the per-selection `ClientOdds` returned by
+   `FirstOrDefault` with no null check. A market with an empty `ClCoMa` throws inside the mapper and
+   the caller's `catch` swallows it, so the whole fixture update is dropped rather than that one
+   market. Pinned by `MainMarketsOE_MarketWithNoClientOddsConfiguration_SilentlyDropsTheWholeUpdate`.
+2. **GM-811.** The asian-odds branch at `SportsbookRepository.cs:1009` is unreachable: `_MaTeIds` at `:39` is an
+   empty list with its values commented out. Same for `IsVirtualSportId`
+   (`OE.Shared/Extensions/IntExtensions.cs:11`). Their mutants stay "no coverage" permanently.
+3. **GM-812.** `SportsbookRepository.cs:1329`, `:1339`, `:1429` and `:1439` append to a non-concurrent
+   `List<string>` from inside `Parallel.ForEach`.
 
 ## Why there are no `*MutationCheck` tests any more
 
