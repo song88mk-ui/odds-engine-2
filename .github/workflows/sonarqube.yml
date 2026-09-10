@@ -42,6 +42,7 @@ jobs:
           export PATH=$PATH:~/.dotnet/tools
           dotnet sonarscanner begin /k:"odds-engine-2" \
                                     /d:sonar.host.url="https://sonarqube.stg.song88.com" \
+                                    /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml" \
                                     /d:sonar.token="${{ secrets.SONARQUBE_TOKEN }}"
           dotnet build --no-incremental src/OddsEngine/OddsEngine.sln
           dotnet test --collect:"XPlat Code Coverage;Format=opencover" src/OddsEngine/OddsEngine.sln
