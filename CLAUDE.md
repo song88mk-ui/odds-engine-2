@@ -108,6 +108,7 @@ KeepAlive (heartbeat, 5s).
 | Known issues / risks / unknowns | [docs/TechnicalDebt.md](docs/TechnicalDebt.md), [docs/ArchitectureRisks.md](docs/ArchitectureRisks.md), [docs/Unknowns.md](docs/Unknowns.md) |
 | Symptom → cause | [docs/knowledge/Troubleshooting.md](docs/knowledge/Troubleshooting.md) |
 | What changes most | [docs/knowledge/FrequentlyModifiedAreas.md](docs/knowledge/FrequentlyModifiedAreas.md) |
+| Test inventory, mutation scores, coverage gaps | [docs/Testing.md](docs/Testing.md) |
 
 ## Build / run
 - Build: `dotnet build src/OddsEngine/OddsEngine.sln` (note: `OE.Job.KeepAlive` is NOT in the .sln but
@@ -117,6 +118,9 @@ KeepAlive (heartbeat, 5s).
 - `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
   (nullable-reference assignment warning) — don't be surprised it's silent on that class of bug.
 - Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project).
+- Mutation testing: `dotnet stryker --project <Project>.csproj` from the matching test-project
+  folder (global tool, config in `src/OddsEngine/stryker-config.json`, no CI gate). Scores and
+  gaps: [docs/Testing.md](docs/Testing.md). A green suite is not evidence a bug would be caught.
 - CI builds each changed service to ECR; argocd deploys. ([docs/Hosting.md](docs/Hosting.md))
 
 ## Roslyn MCP navigator (token-cheap code search)

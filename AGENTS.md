@@ -60,10 +60,13 @@ See [docs/knowledge/FrequentlyModifiedAreas.md](docs/knowledge/FrequentlyModifie
   ([Verified] / [Verified-sibling:X] / [Unknown]).
 
 ## Tooling
-- Build: `dotnet build src/OddsEngine/OddsEngine.sln`. Test projects exist for some services
-  (`OE.Shared.Test`, `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`,
-  `OE.Translation.Service.Tests`, `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`) — not
-  every service has one; confirm before claiming coverage. CI runs these on PRs via the `test` job.
+- Build: `dotnet build src/OddsEngine/OddsEngine.sln`. Nine test projects exist (`OE.Shared.Test`,
+  `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
+  `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`,
+  `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests`) — `OE.Job.Cleanup`, `OE.Job.LiveStream` and
+  `OE.UOF.Client` have none; confirm before claiming coverage. CI runs these on PRs via the `test`
+  job. A green suite is weak evidence: mutation scores per project, and the gaps behind them, are in
+  [docs/Testing.md](docs/Testing.md).
   Git history: feature tickets `GM-####`, infra `DEVOPS-###`.
 
 ## Asset index

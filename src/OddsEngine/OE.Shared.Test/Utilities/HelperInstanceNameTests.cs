@@ -37,54 +37,5 @@ namespace OE.Shared.Test.Utilities
         {
             Assert.Throws<ArgumentException>(() => _helper.GetInstanceName(providerFixtureId!));
         }
-
-        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
-
-        // Each check re-runs the same path as its real counterpart above, then asserts a
-        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
-        // assertion is expected to fail — that failure is what makes this test pass (green). If
-        // the real test's assertion could never distinguish correct from wrong (a vacuous or
-        // tautological check), the wrong-value assertion here would NOT throw, and this test
-        // would go red instead — flagging the real test as untrustworthy.
-
-        [Theory]
-        [InlineData("1234567890", "01")]
-        [InlineData("1234567891", "01")]
-        [InlineData("1234567800", "00")]
-        [InlineData("1234567805", "04")]
-        [InlineData("1234567819", "09")]
-        public void GetInstanceName_ShardsByLastTwoDigits_MutationCheck(string providerFixtureId, string expected)
-        {
-            var wrong = expected == "00" ? "09" : "00";
-
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(wrong, _helper.GetInstanceName(providerFixtureId)));
-        }
-
-        [Fact]
-        public void GetInstanceName_AlwaysLandsInTheTenKnownInstances_MutationCheck()
-        {
-            var known = Enumerable.Range(0, 10).Select(i => i.ToString("D2")).ToHashSet();
-
-            for (var i = 0; i < 100; i++)
-            {
-                var instance = _helper.GetInstanceName($"12345678{i:D2}");
-                Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.DoesNotContain(instance, known));
-            }
-        }
-
-        [Theory]
-        [InlineData(null)]
-        [InlineData("")]
-        [InlineData("7")]
-        public void GetInstanceName_RejectsInvalidFixtureIds_MutationCheck(string? providerFixtureId)
-        {
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
-            {
-                var exception = Record.Exception(() => _helper.GetInstanceName(providerFixtureId!));
-                Assert.Null(exception);
-            });
-        }
-
-        #endregion
     }
 }

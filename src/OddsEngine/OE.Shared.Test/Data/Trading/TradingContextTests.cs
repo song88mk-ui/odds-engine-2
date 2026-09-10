@@ -11,8 +11,8 @@ namespace OE.Shared.Test.Data.Trading
     // sports overwrite each other.
     //
     // Each scenario is seeded exactly once (static field initializer below its Seed* method),
-    // not once per Fact: a real test and its MutationCheck companion read the same already-saved
-    // result instead of each rebuilding a DI container + InMemory database to re-derive it.
+    // not once per Fact: the tests read the same already-saved result instead of each rebuilding a
+    // DI container + InMemory database to re-derive it.
     public class TradingContextTests
     {
         private static IServiceProvider NewProvider(string databaseName)
@@ -124,44 +124,5 @@ namespace OE.Shared.Test.Data.Trading
         {
             Assert.Equal(new DateTime(2026, 1, 1), LiveFixtureStored.FixtureStartDate);
         }
-
-        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
-
-        // Each check reads the same seeded result as its real counterpart above, then asserts a
-        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
-        // assertion is expected to fail — that failure is what makes this test pass (green). If
-        // the real test's assertion could never distinguish correct from wrong (a vacuous or
-        // tautological check), the wrong-value assertion here would NOT throw, and this test
-        // would go red instead — flagging the real test as untrustworthy.
-
-        [Fact]
-        public void ClientOddsFeedConfiguration_RoundTripsThroughDbSet_MutationCheck()
-        {
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.False(RoundTripStored.PrematchOdds));
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(11, RoundTripStored.MaxFixtures));
-        }
-
-        [Fact]
-        public void ClientOddsFeedConfiguration_SameClientDifferentSport_AreDistinctRows_MutationCheck()
-        {
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, DistinctRowsCount));
-        }
-
-        [Fact]
-        public void ClientOddsFeedConfiguration_DuplicateCompositeKey_ThrowsOnSecondContextSave_MutationCheck()
-        {
-            // The real test proves SaveChanges throws ArgumentException on a duplicate composite
-            // key. This proves the proof itself discriminates: asserting that NO exception was
-            // thrown must fail here, since one really is.
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Null(DuplicateKeyException));
-        }
-
-        [Fact]
-        public void ClientOddsFeedLiveFixture_RoundTripsThroughDbSet_MutationCheck()
-        {
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(new DateTime(2026, 1, 2), LiveFixtureStored.FixtureStartDate));
-        }
-
-        #endregion
     }
 }

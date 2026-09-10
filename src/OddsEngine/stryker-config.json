@@ -1,0 +1,19 @@
+{
+  "stryker-config": {
+    "project-info": {
+      "name": "github.com/FlyingCockatoo/odds-engine-2",
+      "module": "OddsEngine"
+    },
+    "reporters": [
+      "html",
+      "progress"
+    ],
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 0
+    },
+    "mutation-level": "Standard",
+    "coverage-analysis": "perTest"
+  }
+}

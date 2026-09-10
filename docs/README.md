@@ -52,6 +52,7 @@ Do **not** treat [Likely] or [Unknown] items as fact when implementing.
 | [Hosting.md](./Hosting.md) | Process/container/k8s hosting, scaling, sharding, health gaps |
 | [Configuration.md](./Configuration.md) | Provider hierarchy, secrets, user secrets, feature flags |
 | [Logging.md](./Logging.md) | Serilog + OpenTelemetry, trace-based correlation, sinks, metrics |
+| [Testing.md](./Testing.md) | Test inventory, how to run the suite, Stryker mutation testing and scores |
 | [MiddlewarePipeline.md](./MiddlewarePipeline.md) | *No HTTP pipeline* — the message consume→dispatch→ack analogue |
 | [Authentication.md](./Authentication.md) | *No inbound auth* — outbound credentials + BetGenius token flow |
 | [Authorization.md](./Authorization.md) | *No authz layer* — trust model + business gates |

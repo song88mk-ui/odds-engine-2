@@ -355,6 +355,22 @@ dotnet test src/OddsEngine/OE.Shared.Test
 dotnet test src/OddsEngine/OE.Shared.Test --filter FullyQualifiedName~HelperInstanceNameTests
 ```
 
+### Mutation testing
+
+Passing tests prove the suite runs, not that it would catch a bug. [Stryker.NET](https://stryker-mutator.io/docs/stryker-net/introduction/)
+edits the production code and reports whether a test turns red. It is a global tool, installed per
+developer, with shared settings in `src/OddsEngine/stryker-config.json`:
+
+```bash
+dotnet tool install -g dotnet-stryker
+
+cd src/OddsEngine/OE.Shared.Test
+dotnet stryker --project OE.Shared.csproj
+```
+
+No CI job runs it and no threshold is enforced. Current scores per project, the known coverage gaps,
+and how to read the report are in [docs/Testing.md](docs/Testing.md).
+
 ## Upstream and downstream dependencies
 
 | System | Direction | How it connects | Local setup |

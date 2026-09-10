@@ -49,52 +49,5 @@ namespace OE.Translation.Job.Tests.Repositories
 
             Assert.Equal(0, result);
         }
-
-        #region Mutation checks — prove the assertions above actually discriminate real vs. wrong values
-
-        // Each check re-runs the same path as its real counterpart above, then asserts a
-        // deliberately WRONG value wrapped in Assert.ThrowsAny<XunitException>. The wrapped
-        // assertion is expected to fail — that failure is what makes this test pass (green). If
-        // the real test's assertion could never distinguish correct from wrong (a vacuous or
-        // tautological check), the wrong-value assertion here would NOT throw, and this test
-        // would go red instead — flagging the real test as untrustworthy.
-
-        [Fact]
-        public async Task FlagBetPlacementAsync_NullCollection_ReturnsZeroWithoutTouchingDatabase_MutationCheck()
-        {
-            var result = await BuildRepository().FlagBetPlacementAsync(null!, CancellationToken.None);
-
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, result));
-        }
-
-        [Fact]
-        public async Task FlagBetPlacementAsync_EmptyCollection_ReturnsZero_MutationCheck()
-        {
-            var result = await BuildRepository().FlagBetPlacementAsync(Array.Empty<string>(), CancellationToken.None);
-
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, result));
-        }
-
-        [Fact]
-        public async Task FlagBetPlacementAsync_OnlyWhitespaceEntries_ReturnsZero_MutationCheck()
-        {
-            var result = await BuildRepository().FlagBetPlacementAsync(new[] { "", "   ", null! }, CancellationToken.None);
-
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, result));
-        }
-
-        [Theory]
-        [InlineData(0, 100)]
-        [InlineData(-1, 100)]
-        [InlineData(30, 0)]
-        [InlineData(30, -1)]
-        public async Task CleanupAsync_NonPositiveRetentionOrBatchSize_ReturnsZeroWithoutTouchingDatabase_MutationCheck(int retentionDays, int batchSize)
-        {
-            var result = await BuildRepository().CleanupAsync(new[] { "Te:" }, retentionDays, batchSize, CancellationToken.None);
-
-            Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => Assert.Equal(1, result));
-        }
-
-        #endregion
     }
 }
