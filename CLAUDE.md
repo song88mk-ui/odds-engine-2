@@ -32,6 +32,24 @@ bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 - Full map: [docs/README.md](docs/README.md) → [docs/Architecture.md](docs/Architecture.md),
   [docs/ProjectOverview.md](docs/ProjectOverview.md).
 
+## Tech stack (verified from `src/OddsEngine/**/*.csproj`, 2026-09-10)
+| Concern | What |
+|---|---|
+| Runtime | `net10.0` for every service and job |
+| Shared kernel | `OE.Shared` targets **`netstandard2.1`** — new shared code must stay inside that API surface |
+| Host model | `Microsoft.NET.Sdk.Worker` (Websocket, UOF.Client, Job.*) and `Microsoft.NET.Sdk` + `OutputType=Exe` (Adapter, Sportsbook, Translation) |
+| Mongo | `MongoDB.Driver` 3.11.1 |
+| Broker | `RabbitMQ.Client` 5.2.0 — raw client behind `IMessageBroker`; **no Wolverine/MassTransit** |
+| SQL | `Microsoft.EntityFrameworkCore(.SqlServer)` 3.1.32 |
+| Logging | `Serilog` 4.3.0 + `Serilog.Formatting.Compact` + `Serilog.Sinks.Console` |
+| Push | `Microsoft.AspNetCore.SignalR.Client` + `.Protocols.MessagePack` |
+| Cache | `System.Runtime.Caching` (`MemoryCache.Default`) — no Redis |
+| Tests | `xunit` **2.5.3** (not v3) + `coverlet.collector`; no Testcontainers |
+| Language | `<Nullable>enable</Nullable>`, no `LangVersion` pin; `.editorconfig` mandates **block-scoped** namespaces (`csharp_style_namespace_declarations = block_scoped`) — do not convert files to file-scoped |
+
+Note: EF Core 3.1.32 is an out-of-support package running on a `net10.0` target. Recorded as an
+observation, not a change request — upgrading it is a cross-repo decision.
+
 ## The data pipeline (memorize this)
 ```
 bet-genius / (oddsfeed?) ─► OE.Adapter.Service ─► r.oe.adapter.<type>.<NN>
@@ -98,7 +116,21 @@ KeepAlive (heartbeat, 5s).
   Sportsbook/UOF). Uses committed `appsettings.json` + git-ignored `appsettings.Development.json`.
 - `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
   (nullable-reference assignment warning) — don't be surprised it's silent on that class of bug.
+- Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project).
 - CI builds each changed service to ECR; argocd deploys. ([docs/Hosting.md](docs/Hosting.md))
+
+## Roslyn MCP navigator (token-cheap code search)
+When the `cwm-roslyn-navigator` tools are available, prefer them over `grep` for symbol work:
+- `find_symbol` — locate a type/member; the right tool when 6 `SportsbookRepository` copies exist.
+- `find_references` / `find_callers` — run before changing any signature, DTO field, or enum
+  (see non-negotiable fact 3: `OE.Shared` edits are cross-repo breaking changes).
+- `find_implementations` — interface to concrete for the `IXxx` + `Xxx` singleton pairs.
+- `get_project_graph` — verify the "every service references only `OE.Shared`, no cycles" rule.
+- `get_diagnostics` — after edits, alongside `dotnet build`.
+
+No `.mcp.json` is committed; registration is per-developer
+(`claude mcp add --scope user cwm-roslyn-navigator -- cwm-roslyn-navigator --solution <path>`).
+Fall back to `grep`/`/find-*` commands when the server is not registered.
 
 ## MANDATORY development workflow (Phase 12 — applies to EVERY task)
 
@@ -117,10 +149,12 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
    sharding changes).
 10. **Implement the smallest possible change.**
 11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`; state how
-    behavior was checked. Test projects exist for some services — `OE.Shared.Test`,
+    behavior was checked. Nine test projects exist, all in `OddsEngine.sln` — `OE.Shared.Test`,
     `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
-    `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests` — run `dotnet test` against the
-    relevant project(s) when present; not every service has one).
+    `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`,
+    `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests` — run `dotnet test` against the relevant
+    project(s) when present; `OE.Job.Cleanup`, `OE.Job.LiveStream` and `OE.UOF.Client` have none.
+    `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not).
 12. **Update documentation** if architectural knowledge changed (`/update-docs`; keep CLAUDE.md /
     AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
     change whenever the change affects anything the README documents** (projects/frameworks,

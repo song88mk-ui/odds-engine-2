@@ -338,9 +338,10 @@ to configure containers. There is no docker-compose file in this repository.
 
 ## Running tests
 
-Six xUnit test projects are in the solution (`OE.Shared.Test`, `OE.Adapter.Service.Tests`,
+Nine xUnit test projects are in the solution (`OE.Shared.Test`, `OE.Adapter.Service.Tests`,
 `OE.Sportsbook.Service.Tests`, `OE.Websocket.Service.Tests`, `OE.Translation.Service.Tests`,
-`OE.Translation.Job.Tests`). They are unit tests (wire-contract serialization, sharding
+`OE.Translation.Job.Tests`, `OE.Job.KeepAlive.Tests`, `OE.Job.Lookup.Tests`,
+`OE.Job.Settlement.Tests`). They are unit tests (wire-contract serialization, sharding
 helper, translation composers, etc.) and do not need RabbitMQ/MongoDB/SQL running.
 
 ```bash
