@@ -45,7 +45,7 @@ for the doc map; this page is the cheat-sheet.
 | **UOF / Unified Odds Feed** | the outbound white-label feed (UOF.Client → external broker). [Likely] |
 | **Instance / shard (`NN`)** | 00–10 Sportsbook partition from `GetInstanceName`. |
 | **Channel type** | feed provider: BG=0 (BetGenius), EM=1, OD=2. |
-| **Translation** | localized name; SQL `SportsbookDynamic`. (Corrected 2026-06-30: translations removed from pipeline — OEv2 no longer reads this into `sb:translation:*`; the read path is orphaned. UI localizes via platform-web REST `GetTranslations()`.) |
+| **Translation** | localized name; SQL `TranslationCache2` (one row per `STRING_ID`, one `TARGET_TEXT_*` column per language). Carried on the wire as the `*Tr` lists, persisted to Mongo as `*NaTr`. Owned by `OE.Adapter.Service` (preload + stamp) and `OE.Translation.Service` (SQL + Mongo writes). |
 
 ## Reusable patterns to copy (the "good" ones)
 - **New worker:** clone a service folder (Program/Worker/Repository/Telemetry/appsettings/Dockerfile).

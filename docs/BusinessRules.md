@@ -68,12 +68,22 @@ that are **currently disabled** in code (intent uncertain — see [Unknowns.md](
   **not enforced** (TechnicalDebt H5).
 
 ## Translation / localization
-- **BR-18 [Verified]** **(Corrected 2026-06-30: translations removed from pipeline.)** OEv2 no longer
-  reads/embeds translations: `LoadTranslationsAsync`/`MapTranslations` were deleted, the `*Tr` lists were
-  removed from messages, and the `sb:translation:*` MemCache is no longer populated. The "only processed
-  translations / negative-caching" rule no longer applies in OEv2 (the SQL read path is gone;
-  `TranslationRepository` is orphaned). `OnDynamicTranslationChange` still runs but purges an empty cache
-  (no-op). Localization for the UI now comes solely from platform-web's REST `GetTranslations()`.
+- **BR-18 [Verified]** Translations are embedded in the pipeline as `*Tr` lists, sourced from SQL
+  `TranslationCache2`. `OE.Adapter.Service` preloads the table at startup and stamps `*Tr` onto every
+  outgoing message; `OE.Sportsbook.Service` forwards them **delta-gated**; `OE.Websocket.Service` pushes
+  them on SignalR; `OE.Translation.Service` persists them onto Mongo documents as `*NaTr`.
+- **BR-18a [Verified]** **An absent or empty `*Tr` list means "unchanged since last publish" OR "not
+  translated yet" — never "the translation is empty".** Consumers must fall back to the English `*Na`
+  source. This is a consequence of `GateTranslations`, which publishes a key's translations only when
+  they differ from what that Sportsbook instance last sent.
+- **BR-18b [Verified]** OEv2 **never writes** `TARGET_TEXT_*` — those columns belong to the external
+  translation pipeline. OEv2 owns the source columns, `PROCESSED`, and `HAS_BET_PLACEMENT`.
+- **BR-18c [Verified]** `MaTeP:` (player-placeholder) rows are seeded `PROCESSED = 1` deliberately, to
+  keep them **off** the external DeepL worklist — they are translated by hand via backoffice. This is the
+  one sanctioned exception to the "never set `PROCESSED = 1`" rule
+  (`TranslationRepository.cs:468-478`).
+- **BR-18d [Verified]** Static **UI** strings are a separate system: platform-web's own REST
+  `GetTranslations()`. Entity names come from OEv2; labels do not.
 
 ## Livestream
 - **BR-19 [Verified]** Livestream availability is synced only for **BetGenius channel** fixtures

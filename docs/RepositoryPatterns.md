@@ -17,7 +17,10 @@ DB work). All [Verified].
 | Service | Repository | Store(s) | Role |
 |---|---|---|---|
 | **Sportsbook.Service** | `SportsbookRepository` | MongoDB (Fixture/Market/Selection/BettingStatus) | the real persistence repo: upserts catalogue, reads for projections, publishes derived messages |
-| | `TranslationRepository` | SQL Translation + MemCache | cache-aside translation lookups (read-only) — **orphaned as of 2026-06-30: still DI-registered but never resolved/called by `SportsbookRepository`** |
+| Translation.Service | `TranslationRepository` | SQL Translation (**read + write**) | seed/update `TranslationCache2`; legacy `CacheBackfill` bridge |
+| Translation.Service | `MongoTranslationRepository` | Mongo Sportsbook | stamp `*NaTr` onto documents (update-only, retried); republish translation-only odds changes |
+| Translation.Job | `TranslationCleanupRepository` | SQL Translation (**raw SQL**) | flag `HAS_BET_PLACEMENT`; batched retention delete (**Scoped**, not Singleton) |
+| Adapter | `TranslationCache` | SQL Translation (startup only) | full-table preload; serves `*Tr` from memory |
 | **UOF.Client** | `TradingRepository` | SQL Trading | read client feed config/live fixtures (`new` context per call) |
 | | `PlatformRepository` | HTTP (Platform API) | fetch player-props; **not** a DB repo |
 | | `ClientRepository` | none | odds math + transform + external publish |
@@ -40,31 +43,36 @@ DB work). All [Verified].
 2. **Process* methods** (one per message type) = read related docs → `BulkWrite` upsert(s) → publish
    derived message(s). [`:76-321`]
 3. **To* helpers** build `WriteModel<T>[]` (UpdateOneModel, Set/SetOnInsert, IsUpsert). [`:351-575`]
-4. **Prepare* helpers** build outgoing messages. (Corrected 2026-06-30: translations removed from
-   pipeline — the `MapTranslations`/`LoadTranslationsAsync`/`AddTranslationKey`/`AddContentKey` calls and
-   the `*Tr` lists were deleted, and `ITranslationRepository` is no longer injected; `Prepare*` no longer
-   merges any translations.)
+4. **Prepare* helpers** build outgoing messages. They **forward** translations rather than fetch them:
+   inbound `*Tr` lists go through `GateTranslations` (a per-instance delta gate), and `SeNaTr`/`MaTeTr`
+   are read back from the persisted Mongo `*NaTr` (`:839, :864`). No SQL, no `ITranslationRepository` —
+   sourcing happens upstream in `OE.Adapter.Service`.
 5. **BulkWrite<T>** central write + latency histogram. [`:578`]
 6. **Read helpers**: `GetActiveMarketIds` (filter + projection), `SetBetStopStatus` (load global flag). [`:867-886`]
 
-## EF repository pattern (`TranslationRepository`, `TradingRepository`)
-- Inject the pooled `DbContext` (Sportsbook) **or** new one per call (UOF.Client — anti-pattern).
-- **`AsNoTracking`** read-only queries, batched `Where(... Contains(ids) ...)`, `Select` into a DTO,
-  `ToList`. No writes, no SaveChanges (OEv2 doesn't write SQL).
-- Cache-aside layered on top (TranslationRepository) — see [Caching.md](./Caching.md).
-- **(Corrected 2026-06-30: translations removed from pipeline.)** `TranslationRepository`/
-  `GetTranslationsAsync` is now **orphaned** — `SportsbookRepository` no longer injects/calls it, so the
-  pattern below survives only as `TradingRepository` (UOF.Client). `ConnectionStrings:Translation` and
-  `Custom:Translation:UseContentKey` are now unused.
+## EF repository pattern (`TradingRepository`, `TranslationRepository`, `TranslationCleanupRepository`)
+- Inject a pooled `DbContext` (Adapter, Translation.Service, Translation.Job) **or** new one per call
+  (UOF.Client — anti-pattern).
+- **Read side:** `AsNoTracking` queries, batched `Where(... Contains(ids) ...)`, `Select` into a DTO,
+  `ToList`.
+- ⚠️ **"OEv2 doesn't write SQL" is no longer true.** Since the 2026-07 translation-flow redesign:
+  - `OE.Translation.Service/TranslationRepository` **tracks and saves** — `SaveChangesAsync` on
+    `TranslationCache2` (`:462, :586`). This is the one tracked-write repository in the repo.
+  - `OE.Translation.Job/TranslationCleanupRepository` uses **raw SQL** (`ExecuteSqlRawAsync`) for a
+    chunked `UPDATE` (`:42`) and a batched `DELETE TOP (n)` loop (`:80`) — deliberately outside EF's
+    change tracker to keep transactions small and avoid lock escalation.
+  - `TradingRepository` (UOF.Client) remains **read-only**, and is still the reference for that shape.
+- Cache-aside layered on top: `OE.Adapter.Service/TranslationCache` preloads the whole
+  `TranslationCache2` table at **startup** instead of reading per message — see [Caching.md](./Caching.md).
 
 ## Patterns observed
 - **Interface seam** for every repo (testable in principle; no tests in-repo).
 - **Transform-and-persist co-location** (mapping logic lives with persistence).
 - **Read-through / cache-aside** for reference data.
 - **No generic repository / no `IQueryable` leakage** — each repo exposes intent-named methods
-  (`ProcessOnMarketChangeMessage`, `GetClientConfigurations`; `GetTranslationsAsync` still exists but is
-  now uncalled — see 2026-06-30 correction above).
-- **No unit-of-work / no SaveChanges batching** — Mongo writes are immediate bulk upserts.
+  (`ProcessOnMarketChangeMessage`, `GetClientConfigurations`, `OnProcessFixtureSetUpdate`).
+- **No unit-of-work** — Mongo writes are immediate bulk upserts. The one place changes are batched into
+  a single `SaveChangesAsync` is `TranslationRepository`'s SQL seed path.
 
 ## Inconsistencies / debt at the repository layer (see TechnicalDebt.md)
 - `new TradingContext()` per call (UOF.Client) — M9.

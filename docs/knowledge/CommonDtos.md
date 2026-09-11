@@ -16,7 +16,7 @@ All in `OE.Shared` unless noted. All [Verified].
 | DTO | MessageType | Key shape |
 |---|---|---|
 | `OutgoingAdapterMessageBase` | — | `Id="{ChTyId}:{PrFiId}"`, `ChTyId`,`PrFiId`,`FiId`,`FiSp`,`TiSe`,`TiRe` |
-| `OnFixtureChangeMessage` | `OnFixtureChange` | + sport/segment/league, status, score, teams (the `*Tr` translation lists were **removed 2026-06-30**) |
+| `OnFixtureChangeMessage` | `OnFixtureChange` | + sport/segment/league, status, score, teams, and the `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr` translation lists (`TranslationMessage {LaCo, Tx}`) |
 | `OnMarketChangeMessage` | `OnMarketChange` | + `Ma[]` MarketMessage → `Se[]` SelectionMessage (+ `ClOd[]`) |
 | `OnMarketSettlementMessage` | `OnMarketSettlement` | `Ma[]` MarketResult → `Se[]` SelectionResult |
 | `OnMarketCancellationMessage` | `OnMarketCancel` | `Ma[]` w/ `VoRe`,`StTi`,`EnTi` |

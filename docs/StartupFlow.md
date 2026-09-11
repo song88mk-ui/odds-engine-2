@@ -1,7 +1,7 @@
 # Startup Flow
 
 > **Phase 2 scope note.** Phase 2's template targets a *web* application. `odds-engine-2` has
-> **no web app** — it is 9 headless .NET worker processes (the sibling **platform-web** is the
+> **no web app** — it is 11 headless .NET worker processes (the sibling **platform-web** is the
 > Blazor app and is already documented in `platform-web/docs/`). This document covers worker
 > **startup & initialization**. Web-only concerns (middleware/auth/authz) are addressed — with
 > their worker analogues — in [MiddlewarePipeline.md](./MiddlewarePipeline.md),

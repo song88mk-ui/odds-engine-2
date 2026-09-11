@@ -19,7 +19,7 @@ Classification: **[Verified]** (odds-engine-2) · **[Verified-sibling:X]** · **
 | **backoffice-final** | .NET admin app (API net3.1 + Blazor net8 + workers) | **Config/admin authority** | writes SQL `Trading`/`Translation`/`Sportsbook` config OEv2 reads; reads Mongo catalogue; publishes `r.oe.cachesync.*`; mirrors `OE.Shared.Data.Sportsbook` | [Verified-sibling:backoffice-final] |
 | **Auth** | .NET 8 JWT + operator-token issuer | **No direct dependency** | issues `x-operator-token`/JWT for platform (Platform.Operator.API); OEv2 does not call it | [Verified-sibling:Auth] |
 | **argocd** | GitOps manifests (Helm `betgenius-app`) | **Deploys OEv2** | per-service `{env}.yaml`, ECR images, env+secret injection | [Verified-sibling:argocd] |
-| **infrastructure** | Helm/helmfile shared infra | **Hosts deps** | RabbitMQ cluster, MongoDB, secret-stores | [Verified-sibling:infrastructure] |
+| **infrastructure** | Helm/helmfile shared infra **+ `flyway/` — the SQL schema source of truth** | **Hosts deps; owns all SQL DDL** | RabbitMQ cluster, MongoDB, secret-stores; `flyway/migrations/<env>/` applied via `just migrate <env>` | [Verified-sibling:infrastructure] |
 | **oddsfeed** | not analyzed | **Likely the `r.uof.*` producer** | RabbitMQ `r.uof.*` / `r.of.recovery.*` | [Unknown] |
 | **oddsengine** | obsolete v1 | none (superseded) | — | [Verified-sibling:argocd] (v1 deploys exist) |
 | **Reference** | pre-AI baseline snapshot | comparison only | — | [Historical:Reference] |
@@ -82,7 +82,7 @@ Classification: **[Verified]** (odds-engine-2) · **[Verified-sibling:X]** · **
 | RabbitMQ `e.central` | bet-genius, all OE.*, platform-final, backoffice-final |
 | MongoDB `Sportsbook` | OEv2 (write) · platform-final, backoffice-final (read) |
 | SQL `Trading` | backoffice-final (write) · OEv2 UOF.Client (read) |
-| SQL `Translation` | external/backoffice (write) · OEv2 Sportsbook (read) |
+| SQL `Translation` | OEv2 Translation.Service (read/write) · Translation.Job (write) · Adapter (read) · the external translation pipeline (writes `TARGET_TEXT_*`) · backoffice · **plus unrelated tenants in the same DB** (`SportsApiTranslationCache`, `SportsbookStatic`, `BackofficeStatic`) |
 | SQL `Sportsbook` (order/template config) | backoffice-final (read/write) · platform [Likely] |
 | SQL `Auth` | Auth only |
 | `OE.Shared` contracts | OEv2 + bet-genius (NuGet) + backoffice-final (inline copy) |

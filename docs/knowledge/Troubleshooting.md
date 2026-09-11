@@ -28,16 +28,28 @@ Cross-refs to canonical docs. Use with [FrequentlyModifiedAreas.md](./Frequently
 
 ## Translations
 
-**Translations missing / showing keys**
-- **(Corrected 2026-06-30: translations removed from pipeline.)** OEv2 **no longer reads SQL
-  translations and no longer puts translations in the published message** (the read/embed path was
-  deleted; `TranslationRepository` is orphaned). So OEv2 is not the place to look for missing UI names.
-- **Translations are NOT written to Mongo docs** (those `.Set()`s are commented out) — and now also not
-  in any message. ([../MongoDb.md](../MongoDb.md))
-- **UI localization source:** the UI gets names from platform-web's REST `v1/sportsbook/translations`
-  (`GetTranslations()`), or falls back to default-language names (`SpNa`/`FiNa`). Investigate there.
-- **Negative cache / `sb:translation:*`:** no longer populated by OEv2 (the cache writer is never
-  called); `OnDynamicTranslationChange` purge is now a no-op. ([../CacheInvalidation.md](../CacheInvalidation.md))
+**Translations missing / showing keys** — walk the chain in this order:
+1. **Is the row translated?** `SELECT * FROM TranslationCache2 WHERE STRING_ID = '<Prefix:Id>'`. An
+   **empty string** (not NULL) in `TARGET_TEXT_ZH`/`_ES`/`_FR` means the external pipeline hasn't
+   translated it yet. OEv2 never writes those columns.
+2. **Did the row get seeded at all?** Seeding is gated by `Custom:Translation:CacheSeed` in
+   `OE.Translation.Service` (default `false`; argocd sets it `true` in stg + prd).
+3. **Did Adapter preload it?** `OE.Adapter.Service` loads the table **once at startup**
+   (`TranslationCache.Preload()`). A row translated *after* the pod started is not picked up until a
+   restart or an `ON_TRANSLATION_CHANGE`. Check for the startup warning — a blank
+   `ConnectionStrings:Translation` skips the preload entirely (`Worker.cs:96-109`) and the service then
+   publishes **no** `*Tr` at all.
+4. **Was it gated out?** `OE.Sportsbook.Service.GateTranslations` suppresses a key's `*Tr` when they are
+   unchanged since **that instance** last published them. An empty `*Tr` therefore means "unchanged", not
+   "missing" — consumers must fall back to the English `*Na`. A restarted Sportsbook pod re-sends once.
+5. **Mongo `*NaTr` empty?** Those are written only by `OE.Translation.Service` (update-only, with a short
+   retry) — check its logs, and `BackfillActiveSnapshot` at startup. ([../MongoDb.md](../MongoDb.md))
+
+- ⚠️ **Don't chase `sb:translation:*`** — that cache has been unpopulated since the 2026-07 redesign, and
+  the `ON_DYNAMIC_TRANSLATION_CHANGE` purge is a no-op. The live change path is `ON_TRANSLATION_CHANGE`
+  → `OE.Translation.Service`. ([../CacheInvalidation.md](../CacheInvalidation.md))
+- **Static UI strings** (labels, not entity names) come from platform-web's own REST
+  `v1/sportsbook/translations` (`GetTranslations()`) — a different system entirely.
 - **Stale after a backoffice change:** the `OnDynamicTranslationChange` purge reaches every Sportsbook
   shard (`00–09`) via platform `CacheSync.Service`. **Known bug (fixed in platform-final 2026-06-28):**
   CacheSync relayed the bare boolean `true` instead of an `OnDeleteCacheMessage`, so OEv2 failed to

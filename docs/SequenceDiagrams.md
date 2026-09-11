@@ -126,13 +126,33 @@ platform CashOut.Svc ── r.bet.cashoutchange.s88 ──► OE.Websocket ─�
                                                                     group: oncashoutchange:{cc}:{userId}     OnCashOutChangeAsync → update MyBets CaOuSt
 ```
 
-## 6. Translation (OEv2 read path REMOVED 2026-06-30) + platform REST path
+## 6. Translation (2026-07 redesign) + platform REST path
 ```
-(Corrected 2026-06-30: translations removed from pipeline)
-   OEv2 read path:  REMOVED — OE.Sportsbook no longer reads SQL SportsbookDynamic, no *Tr embedded in messages,
-                    sb:translation:* MemCache never populated (TranslationRepository/Context orphaned in DI)
-   invalidate:      OnDynamicTranslationChange → purges empty/unused MemCache → effectively a NO-OP (handler retained)
-   surviving path:  platform-web GetTranslations() (REST, 30s cache) → TranslationState  ← sole UI translation source
+STARTUP
+   OE.Adapter.Service  ──SELECT * FROM TranslationCache2──►  in-process TranslationCache   (once; no TTL)
+        (blank ConnectionStrings:Translation → warn + skip → no *Tr published at all)
+
+STEADY STATE (per message)
+   OE.Adapter.Service   TradingRepository stamps SpTr/SegTr/LeTr/HoTr/AwTr, MaTeTr, SeNaTr  (memory only)
+        │
+        ▼
+   OE.Sportsbook.Service  GateTranslations → emit a key's *Tr ONLY if changed since this instance last sent
+        │                 SeNaTr/MaTeTr for the internal odds change are read back from Mongo *NaTr (ungated)
+        ▼
+   OE.Websocket.Service   ToOutgoingTranslations → SignalR OutgoingOddsChange.*Tr
+        ▼
+   platform-web           falls back to English *Na whenever a *Tr list is absent/empty
+
+CHANGE PATH
+   backoffice/pipeline ──r.oe.ontranslationchange (ON_TRANSLATION_CHANGE)──► OE.Translation.Service
+        │  persist Mongo *NaTr delta
+        └► republish TRANSLATION-ONLY odds changes to r.oe.sb.engine.on_odds_change  → live clients update
+
+NO-OP (legacy)
+   backoffice ──ON_DYNAMIC_TRANSLATION_CHANGE──► OE.Sportsbook.Service → purge sb:translation:* → empty cache
+
+SEPARATE SYSTEM (static UI labels, not entity names)
+   platform-web GetTranslations() (REST, 30s cache) → TranslationState
 ```
 
 ## 7. Authentication (OGAuth) — no token on SignalR

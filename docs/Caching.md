@@ -15,13 +15,11 @@ storage** (headless workers). All [Verified] unless tagged.
 - **Eviction/invalidation:** `DeleteCache(key)`, `DeleteCacheByPrefix(prefix)` (`:79` — **O(n) LINQ
   scan over all keys**, `StartsWith` ordinal-ignore-case), `GetExistingKeys(substring)`.
 
-> ⚠️ **TTL-in-hours footgun** [Verified]: `TranslationRepository` passes
-> `(int)TimeSpan.FromMinutes(60).TotalHours` = `(int)1.0` = **1 hour** — correct only by luck.
-> Any sub-hour value truncates: e.g. 30 min → `(int)0.5` = **0 → AddHours(0) → immediate expiry**.
-> Fragile; recorded in [TechnicalDebt.md](./TechnicalDebt.md). **(Corrected 2026-06-30: translations
-> removed from pipeline.)** `TranslationRepository` is now **orphaned/never called**, so this footgun is
-> no longer exercised in practice — but the footgun in `MemCache`'s int overload still applies to any
-> future caller.
+> ⚠️ **TTL-in-hours footgun** [Verified]: `MemCache`'s `int` TTL overload is in **HOURS**, not minutes.
+> The old `TranslationRepository` passed `(int)TimeSpan.FromMinutes(60).TotalHours` = `(int)1.0` =
+> **1 hour** — correct only by luck. Any sub-hour value truncates: e.g. 30 min → `(int)0.5` =
+> **0 → AddHours(0) → immediate expiry**. That call site is gone, but the overload is unchanged and
+> still bites any future caller; recorded in [TechnicalDebt.md](./TechnicalDebt.md).
 
 > ⚠️ **`DeleteCacheByPrefix` is O(n)** over the entire process cache; fine at current scale but scans
 > all keys (including unrelated `bg:*`/`mtpp` entries).
@@ -29,28 +27,38 @@ storage** (headless workers). All [Verified] unless tagged.
 ## What is cached, where, and for how long
 | Cache | Key(s) | TTL | Where | Purpose |
 |---|---|---|---|---|
-| **Translations** | `sb:translation:{Prefix:Id}` (e.g. `sb:translation:MaId:123`) | 60 min (1h) + **negative cache** of misses | OE.Sportsbook.Service `TranslationRepository` | avoid per-message SQL hits — **NO LONGER POPULATED as of 2026-06-30** (only writer `GetTranslationsAsync` is never called; repo orphaned) |
+| **Translations (live)** | `{Prefix:Id}` in a dedicated in-process cache | **no TTL** — full reload at startup | OE.Adapter.Service `TranslationCache` | stamp `*Tr` onto every outgoing message with zero SQL on the hot path |
+| **Translation backfill throttle** | `BackfillCachePrefix + {StringId}` | short-lived | OE.Translation.Service `TranslationRepository` | stop a hot, already-checked key re-querying the legacy table on every message |
+| **~~Translations (legacy)~~** | `sb:translation:{Prefix:Id}` | ~~60 min + negative cache~~ | OE.Sportsbook.Service | **never populated** since the 2026-07 redesign; only the purge handler survives |
 | **BetGenius auth token** | `bg:auth` | `BGAuth.ExpiresIn` seconds | OE.Shared `BetGeniusRepository` (Job.LiveStream) | reuse bearer token until expiry |
 | **BetGenius fixture(s)** | `bg:fixture:{id}` | ~5 hours | same | reduce Video API calls; also negative-caches `Bet_Not_Found` |
 | **Market-template player props** | `mtpp` | **1 year** | OE.UOF.Client `PlatformRepository` | startup-loaded player-props config |
 
-> The translation cache was the only **invalidated** cache (via messages — see
-> [CacheInvalidation.md](./CacheInvalidation.md)); the others rely purely on TTL expiry.
-> **(Corrected 2026-06-30: translations removed from pipeline.)** Since the translation cache is no
-> longer populated, its `OnDynamicTranslationChange` invalidation now purges an empty cache (a no-op);
-> handler retained.
+> The `sb:translation:*` cache was the only **message-invalidated** cache; every remaining cache relies
+> purely on TTL expiry. Since the 2026-07 redesign that cache is **never populated**, so its
+> `ON_DELETE_CACHE` purge is a **no-op** (handler retained) — see
+> [CacheInvalidation.md](./CacheInvalidation.md).
 
 ## Cache strategy = cache-aside (lazy)
-> **(Corrected 2026-06-30: translations removed from pipeline.)** The example below describes
-> `GetTranslationsAsync`, which is **no longer called** (repo orphaned). It is retained here only to
-> document the cache-aside pattern; the live cache-aside/read-through users are now the BetGenius caches.
+> The live cache-aside / read-through users are the **BetGenius** caches (`bg:auth`, `bg:fixture:*`).
+> Translations no longer use cache-aside at all — see the preload note below.
 
-`TranslationRepository.GetTranslationsAsync` (`:38`) is the canonical pattern:
-1. For each `StringId`, check `sb:translation:{id}`.
-2. Batch-fetch all misses from SQL in one query.
-3. Store each found result (1h).
-4. **Negative-cache** not-found ids (empty list, 1h) to prevent repeated SQL hits for permanently
-   missing translations.
+The BetGenius pattern:
+1. Check the key in `MemCache`.
+2. On a miss, call the upstream API once.
+3. Store the result under a TTL (auth: the token's `ExpiresIn`; fixtures: ~5h).
+4. **Negative-cache** not-found results (e.g. `Bet_Not_Found`) so a permanently-missing id doesn't hit
+   the API on every message.
+
+## Cache strategy = full preload (translations)
+`OE.Adapter.Service` does **not** read translations lazily. `TranslationCache.Preload()`
+(`OE.Adapter.Service/Repositories/TranslationCache.cs:67-73`) loads the entire `TranslationCache2` table
+into an in-process dictionary **once at startup**, and `TradingRepository` then stamps `*Tr` onto every
+outgoing message from memory — zero SQL on the hot path.
+- **Trade-off:** a translation added after startup is not picked up until the next restart *or* until an
+  `ON_TRANSLATION_CHANGE` message drives `OE.Translation.Service`'s delta path.
+- If `ConnectionStrings:Translation` is blank the preload is **skipped with a warning** and the service
+  starts anyway (`Worker.cs:96-109`) — it simply publishes no `*Tr`.
 
 BetGenius caches are **read-through** (`GetBetGeniusAuthorizationToken`/`GetBetGeniusFixture`):
 check cache → call API on miss → store with TTL → delete on error.

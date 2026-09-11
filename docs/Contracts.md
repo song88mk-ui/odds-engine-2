@@ -13,10 +13,10 @@ Classification: **[Verified]** · **[Verified-sibling:X]** · **[Historical:Refe
 | C3 | **RabbitMQ routing-key namespace** | string keys on `e.central` (topic) | shared convention | all OE.* + bet-genius + platform + backoffice | add safe; rename/move = break bindings |
 | C4 | **RabbitMQ message envelope** | `BasicProperties.Type` = message-type constant + JSON/UTF8 body + W3C trace headers | odds-engine-2 (`MessageBroker`, `MessageType`) | all broker participants | dispatch keys off `Type` |
 | C5 | **SignalR `/platform` hub methods** | method names + arg types | hub gateway [Unknown repo] | OE.Websocket (caller), platform-web (handlers) | signature change = break |
-| C6 | **SignalR message models** | `OutgoingOddsChange`, `OutgoingBetStatus`, … | OE.Websocket + platform-web (`EngineMessages`) | both | **MessagePack Contractless** → property **rename changes wire key**; deploy together. **(2026-06-30) The `*NaTr` translation props (`SpNaTr/SegNaTr/LeNaTr/FiNaTr/MaNaTr/SeNaTr`) were REMOVED from `OutgoingOddsChange`/`OutgoingBoostedOddsChange`** — OEv2 no longer pushes localized names; missing keys deserialize to empty on platform-web's mirror, but OEv2+platform-web must deploy together. See [ArchitectureRisks.md](./ArchitectureRisks.md). |
+| C6 | **SignalR message models** | `OutgoingOddsChange`, `OutgoingBetStatus`, … | OE.Websocket + platform-web (`EngineMessages`) | both | **MessagePack Contractless** → property **rename changes wire key**; deploy together. ⚠️ **The translation props were renamed, not just re-added:** the old `SpNaTr/SegNaTr/LeNaTr/FiNaTr/MaNaTr/SeNaTr` are gone; `OutgoingOddsChange` now carries `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr` (fixture), `MaTeTr` (market) and `SeNaTr` (selection), all `List<OutgoingTranslation> {LaCo, Tx}`. Under Contractless that is a **breaking wire change** — a platform-web mirror still reading `SpNaTr` silently deserializes empty. `OutgoingBoostedOddsChange` carries **no** translations. **Null/empty means "unchanged" or "not translated yet", never "no translation" — clients keep their current names and fall back to the English `*Na`.** See [ArchitectureRisks.md](./ArchitectureRisks.md). |
 | C7 | **Platform REST DTOs** | `BaseResponseDTO<T>` + endpoint DTOs | platform-final | OEv2 (UOF.Client/Websocket callers), platform-web, backoffice | `x-api-key` auth; `StatusCode` enum shared |
 | C8 | **SQL `Trading` config schema** | EF entities (`ClientOddsFeedConfiguration`, …) | backoffice-final (writer) | OEv2 UOF.Client (reader) | column change = break |
-| C9 | **SQL `Translation` schema** | `SportsbookDynamic` | external/backoffice (writer) | OEv2 Sportsbook (reader) — **(2026-06-30) OEv2 NO LONGER reads this; the `TranslationRepository`/`TranslationContext` are retained but uncalled (orphaned). Contract effectively dormant on the OEv2 side.** | — |
+| C9 | **SQL `Translation` schema** | `TranslationCache2` (+ legacy `TranslationCache`, external, read-only) | **shared, column-partitioned**: OEv2 owns `STRING_ID`/`SOURCE_*`/`PROCESSED`/`CREATED_AT`/`UPDATED_AT` (Translation.Service) and `HAS_BET_PLACEMENT` (Translation.Job); the **external translation pipeline** owns `TARGET_TEXT_ZH`/`_ES`/`_FR` | OEv2 Adapter (full preload), Translation.Service, Translation.Job | ⚠️ **A live two-writer contract, not a read-only one.** Neither side may write the other's columns. `PROCESSED = 1` means "off the worklist" — setting it wrongly silently drops a key from translation. `SportsbookDynamic`/`SportsbookGlossary` are retired **from OEv2's code only** — both tables still exist in the schema (no migration drops them). DDL lives in `infrastructure/flyway`, not here. |
 | C10 | **External UOF feed** | `uof.*` keys on vhost `ext`, JSON | odds-engine-2 (UOF.Client) | external white-label clients | external versioned contract |
 | C11 | **Shared enums** | `StatusCode`, `FixtureStatus`, `MarketStatus`, `SettlementStatus`, `BetStatus`, `CashoutStatus`, `VoidFactor`, `ChannelType`, `CacheType` | odds-engine-2 (`OE.Shared.Enums`) | bet-genius, platform, backoffice | numeric values are the contract |
 
@@ -67,10 +67,23 @@ Endpoints OEv2 calls + the wider read surface: [PlatformApi.md](./PlatformApi.md
 (+ `x-client-id`, `x-operator-token`, `x-og-*` on platform-web). [Verified]/[Verified-sibling:platform-final]
 
 ## C8/C9 — SQL schemas
-`ClientOddsFeedConfiguration` (`ClientId`, `SportId`, `PrematchOdds`, `LiveOdds`, `MaxFixtures`),
-`ClientOddsFeedLiveFixture`; `SportsbookDynamic` (`StringId`, `TargetLanguageId`, `TargetText`,
-`Processed`, `GlossaryVersion`, …). **backoffice-final writes; OEv2 reads.** Field listings:
-[SharedLibraries.md](./SharedLibraries.md) §1.2. [Verified]/[Verified-sibling:backoffice-final]
+**C8 — Trading (read-only for OEv2):** `ClientOddsFeedConfiguration` (`ClientId`, `SportId`,
+`PrematchOdds`, `LiveOdds`, `MaxFixtures`), `ClientOddsFeedLiveFixture`. **backoffice-final writes;
+OEv2 reads.** [Verified]/[Verified-sibling:backoffice-final]
+
+**C9 — Translation (two writers):** `TranslationCache2` (`ID`, `STRING_ID`, `SOURCE_LANGUAGE`,
+`SOURCE_TEXT`, `TARGET_TEXT_ZH`/`_ES`/`_FR`, `HAS_BET_PLACEMENT`, `PROCESSED`, `CREATED_AT`,
+`UPDATED_AT`), plus the external read-only `TranslationCache` (`SOURCE_HASH`, `SOURCE_LANGUAGE`,
+`TARGET_LANGUAGE`, `TARGET_TEXT`, …). Column ownership is the contract — see the C9 row above.
+`SportsbookDynamic`/`SportsbookGlossary` are retired from OEv2's code but **still exist in the
+schema**. Field listings: [SharedLibraries.md](./SharedLibraries.md) §1.2,
+[Database.md](./Database.md). [Verified]
+
+> **All SQL DDL for OEv2's databases lives in the `infrastructure/flyway` repo** (`migrations/<env>/`),
+> applied with `just migrate <env>`. OEv2 ships no migrations, so an EF model here is a *mapping*, not
+> a schema definition, and may omit objects the database actually has (e.g. two of
+> `TranslationCache2`'s three indexes). Any schema change is a flyway PR **plus** an EF model change —
+> and per CLAUDE.md every script must be idempotent.
 
 ## C10 — External UOF feed
 `uof.onfixture.change.*`, `uof.onoddschange.*`, `uof.onbetstop*`, `uof.onmarketsettlement.*`,

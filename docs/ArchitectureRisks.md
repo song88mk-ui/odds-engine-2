@@ -91,9 +91,14 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
 - **Impact:** stale translations on some shards up to 60-min TTL. **Confidence:** Medium.
 - **Suggested investigation:** trace how `OnDynamicTranslationChange` is delivered to Sportsbook
   (argocd extra binding?); confirm fan-out to all shards. (Unknowns #23)
-- **(Corrected 2026-06-30: translations removed from pipeline.)** This risk is now **moot in practice** —
-  the `sb:translation:*` cache is no longer populated, so the purge has nothing to invalidate (no-op).
-  Re-open only if a cached translation read path is reintroduced. See [TechnicalDebt.md](./TechnicalDebt.md) H7.
+- **Status:** **moot as stated** — the `sb:translation:*` cache is no longer populated, so the purge has
+  nothing to invalidate (no-op). See [TechnicalDebt.md](./TechnicalDebt.md) H7.
+- ⚠️ **But the underlying cross-instance concern moved rather than disappeared.**
+  `OE.Sportsbook.Service.GateTranslations` keeps a **per-instance** `_publishedTranslations` dictionary,
+  so each of the 11 shards independently decides whether a key's `*Tr` are "unchanged". State is not
+  shared, is lost on restart, and is cleared wholesale at `MAX_PUBLISHED_TRANSLATION_ENTRIES` (logged as
+  "Translation gate reset"). The designed-for outcome is a harmless duplicate re-send, not a miss —
+  but it is unbounded-until-reset per-instance state on the hot path, and worth watching.
 
 ### R8 🟡 Unverified upstream source (`r.uof.*`)
 - **Evidence:** Adapter binds `r.uof.#`/`r.of.recovery.#.tso`; no producer in analyzed repos.
@@ -101,18 +106,23 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
 - **Impact:** an undocumented input service; recovery-channel behavior unknown. **Confidence:** Low.
 - **Suggested investigation:** grep `oddsfeed`/`oddsengine` for `r.uof.`/`r.of.` publishers. (Unknowns #1/#2)
 
-### R9 🟠 SignalR `*NaTr` removed — OEv2 + platform-web must deploy together (C6)
-- **Evidence (2026-06-30):** the `*NaTr` translation properties (`SpNaTr/SegNaTr/LeNaTr/FiNaTr/MaNaTr/
-  SeNaTr`) were removed from `OutgoingOddsChange`/`OutgoingBoostedOddsChange`, and
-  `OE.Websocket.Service/Repository/SportsbookRepository.cs` no longer maps them. SignalR uses MessagePack
-  `ContractlessStandardResolver` (name-keyed — contract C6, see [Contracts.md](./Contracts.md)).
-- **Impact:** platform-web's mirror model `OddsChangeFixtureMessageModel` **won't crash** on the now-missing
-  keys (missing keys deserialize to empty), but OEv2 **no longer pushes localized names**. The UI must
-  rely on its REST `GetTranslations()` path (or fall back to default-language names like `SpNa`/`FiNa`).
-  **OEv2 + platform-web must deploy together.** **Confidence:** High (OEv2 side) / [Unknown] whether
-  platform-web actually consumed the message `*NaTr` or relied solely on the REST path (Unknowns — see below).
-- **Suggested investigation:** confirm in platform-web whether `*NaTr` from the websocket message was ever
-  rendered; coordinate the joint deploy. See [TechnicalDebt.md](./TechnicalDebt.md) H7.
+### R9 🟠 SignalR translation props were **renamed** — OEv2 + platform-web must deploy together (C6)
+- **Evidence:** the pre-2026-07 `*NaTr` properties (`SpNaTr/SegNaTr/LeNaTr/FiNaTr/MaNaTr/SeNaTr`) no
+  longer exist on `OutgoingOddsChange`. The 2026-07 redesign put translations back under **different
+  names**: `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr` (fixture), `MaTeTr` (market), `SeNaTr` (selection), typed
+  `List<OutgoingTranslation> {LaCo, Tx}` (`OE.Websocket.Service/Messages/OutgoingOddsChange.cs:44-88`,
+  mapped at `Repository/SportsbookRepository.cs:1547-1927`). `OutgoingBoostedOddsChange` carries none.
+  SignalR uses MessagePack `ContractlessStandardResolver` (name-keyed — contract C6, see
+  [Contracts.md](./Contracts.md)).
+- **Impact:** a rename under Contractless is a **silent** break — a platform-web mirror still reading
+  `SpNaTr` deserializes to empty rather than failing, so the UI degrades to English `*Na` with no error
+  anywhere. `HoTr`/`AwTr` also replace the old per-fixture `FiNaTr`, which is a **shape** change, not
+  just a name change. **OEv2 + platform-web must deploy together.** **Confidence:** High (OEv2 side).
+- **Second-order risk:** an empty `*Tr` list is ambiguous by design — it means "unchanged since last
+  publish" (Sportsbook's delta gate) *or* "not translated yet". A consumer that treats empty as
+  "clear the translation" will blank names on every gated message.
+- **Suggested investigation:** confirm platform-web reads the new names and treats empty as "keep
+  current"; coordinate the joint deploy. See [TechnicalDebt.md](./TechnicalDebt.md) H7.
 
 ## Architecture "violations" (deviations from the system's own conventions)
 > Not classic layering violations (the architecture is clean); these are internal inconsistencies.

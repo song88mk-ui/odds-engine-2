@@ -190,19 +190,14 @@ Playbook: [.claude/checklists/standard-workflow.md](.claude/checklists/standard-
 - UOF entitlement validation is disabled (H5).
 - See [docs/TechnicalDebt.md](docs/TechnicalDebt.md) for the full register.
 
-### ⚠️ Translations are back in the pipeline — and `/docs` still says they aren't
-`/docs` is **stale on this topic**: 21 files carry a "Corrected 2026-06-30: translations removed from
-pipeline" note (29 occurrences — `grep -rl "Corrected 2026-06-30" docs/`). That note was true of the
-*old* path only. Trust this section over `/docs` until they're reconciled (**DEVOPS-361**) — and delete
-this paragraph once that lands.
-
-**Dead (the note is right about this):** the SQL path — `OE.Sportsbook.Service`'s
+### ⚠️ Translations are back in the pipeline
+**Dead — the old SQL path:** `OE.Sportsbook.Service`'s
 `TranslationRepository`/`TranslationContext` are gone, and nothing writes the `sb:translation:*`
 MemCache any more. One live remnant: `ProcessCacheInvalidationMessage` still deletes by that prefix on
 `ON_DELETE_CACHE` (`OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:340`
 `ProcessCacheInvalidationMessage`), so that handler now purges a namespace nothing populates.
 
-**Live (the note is wrong about this):** `OE.Translation.Service` owns a message-driven path moved in
+**Live — the current path:** `OE.Translation.Service` owns a message-driven path moved in
 from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment at
 `OE.Translation.Service/Repositories/MongoTranslationRepository.cs:682`). It:
 - **persists to Mongo** — `*NaTr` fields on the `Fixture`/`Market`/`Selection` collections (the

@@ -4,7 +4,7 @@ Operating guide for AI agents. Read alongside [CLAUDE.md](CLAUDE.md) (the primar
 `/docs` knowledge base. This file adds agent-specific operating rules.
 
 ## Orientation (30 seconds)
-- 9 headless .NET RabbitMQ worker services + `OE.Shared` kernel. No UI, no inbound HTTP here.
+- 11 headless .NET RabbitMQ worker services + `OE.Shared` kernel. No UI, no inbound HTTP here.
 - Pipeline: `bet-genius → OE.Adapter → OE.Sportsbook(00–10) → MongoDB + r.oe.sb.engine.* →
   OE.Websocket → /platform hub → platform-web`. Side jobs + an external UOF egress (UOF.Client).
 - Source of truth = the repo + `/docs`. Start at [docs/README.md](docs/README.md).

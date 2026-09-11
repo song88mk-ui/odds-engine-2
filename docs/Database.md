@@ -6,42 +6,97 @@ odds-engine-2 uses **SQL Server via EF Core 3.1** for two **read-mostly referenc
 ## Overview
 | DB | Context | Used by | Access | Writer |
 |---|---|---|---|---|
-| **Translation** | `TranslationContext` | OE.Sportsbook.Service | **read-only** (`AsNoTracking`) | external translation svc / backoffice-final |
+| **Translation** | `TranslationContext` | OE.Adapter.Service (read), OE.Translation.Service (read+write), OE.Translation.Job (write) | **read/write** | OE.Translation.Service + the external translation pipeline |
 | **Trading** | `TradingContext` | OE.UOF.Client | **read-only** | backoffice-final |
 
-> OEv2 **reads** SQL config (Trading); the **writer is backoffice-final**. (Corrected 2026-06-30:
-> translations removed from pipeline — OEv2 no longer reads SQL `Translation`; that path is orphaned.) (see
+> OEv2 **reads** SQL config (Trading); the **writer is backoffice-final**. `Translation` is different:
+> since the **2026-07 translation-flow redesign** OEv2 both reads **and writes** it — `OE.Translation.Service`
+> seeds/updates rows (`SaveChangesAsync`) and `OE.Translation.Job` issues raw deletes/updates. The
+> "OEv2 doesn't write SQL" rule now applies to **Trading only**. (see
 > [CrossRepositoryDependencies.md](./CrossRepositoryDependencies.md), [OddsEngineIntegration.md](./OddsEngineIntegration.md)).
 > EF Core is pinned to **3.1 (EOL)** by the netstandard2.1 `OE.Shared` target ([TechnicalDebt.md](./TechnicalDebt.md) M1).
 
 ## Translation DB — `TranslationContext` (`OE.Shared/Data/Translation/`)
-> **(Corrected 2026-06-30: translations removed from pipeline.)** `OE.Sportsbook.Service` **no longer
-> invokes** this context: `TranslationRepository.GetTranslationsAsync` and its `SportsbookRepository`
-> call sites were deleted, and `ITranslationRepository` is no longer injected. The DbSet/columns/indexes
-> below still exist in code (and `AddDbContextPool<TranslationContext>` is still registered), but the
-> read pattern is **dormant/orphaned**; `ConnectionStrings:Translation` is now unused.
+> **2026-07 translation-flow redesign.** `TranslationCache2` is the single translation store **that
+> OEv2 uses**: one flat row per `STRING_ID`, with a fixed `TARGET_TEXT_*` column per language.
+> `OE.Sportsbook.Service` no longer touches this context at all (it is not registered there); the
+> consumers are `OE.Adapter.Service`, `OE.Translation.Service` and `OE.Translation.Job`.
+>
+> ⚠️ **"Retired" means retired from OEv2's code, not dropped from the database.**
+> `SportsbookDynamic` and `SportsbookGlossary` still exist in the `Translation` schema — no migration
+> drops them (`infrastructure/flyway/migrations/*/V1__Baseline.sql`). Expect to find them, with data,
+> if you look. OEv2 simply no longer reads or writes them.
 
-- **DbSet:** `SportsbookDynamic` → table **`SportsbookDynamic`**.
-- **Columns** (mapped via Fluent API, `TranslationContext.cs:15-103`): `ID` (PK identity,
-  `PK_SportsbookDynamic_v2`), `String_ID` (≤100), `SOURCE_LANGUAGE_ID`/`TARGET_LANGUAGE_ID` (≤10),
-  `SOURCE_TEXT`, `TARGET_TEXT` (nullable), `SOURCE_HASH` (computed), `GLOSSARY_VERSION` (default 1),
-  `CREATED_AT` (`GETDATE()`), `UPDATED_AT`, `PROCESSED` (default false).
-- **Indexes** (declared in EF model):
-  | Name | Keys | Notes |
+> **Schema source of truth: the `infrastructure/flyway` repo**, not this one. OEv2 ships **no**
+> migrations and no DDL for any SQL table — the EF models here are hand-written mappings onto a schema
+> owned elsewhere, so they can and do drift (see the index note below). Cross-check
+> `infrastructure/flyway/migrations/<env>/` before trusting an EF model as a schema description.
+>
+> **The `Translation` database is shared.** Besides the two tables below it holds
+> `SportsApiTranslationCache` (a newer, unrelated 8-language table — `zh, pt_br, th, id, ko, ja, vi,
+> pt` — added in `V2__SportsApiTranslationCache_Table.sql`, **not** referenced anywhere in OEv2),
+> plus `SportsbookStatic` and `BackofficeStatic`. Do not read "the Translation DB" as "OEv2's DB".
+
+### `TranslationCache2` — the live store
+- **DbSet:** `TranslationCache2` → table **`TranslationCache2`** (`TranslationContext.cs:13`).
+- **Columns** (Fluent API, `TranslationContext.cs:19-92`): `ID` (PK, `PK_TranslationCache2`),
+  `STRING_ID` (≤200, required), `SOURCE_LANGUAGE` (≤10, required), `SOURCE_TEXT` (≤250, required),
+  `TARGET_TEXT_ZH` / `TARGET_TEXT_ES` / `TARGET_TEXT_FR` (≤250, required — empty string, not NULL,
+  means "not translated yet"), `HAS_BET_PLACEMENT`, `CREATED_AT`, `PROCESSED`, `UPDATED_AT`.
+- **Indexes — the DB has three; the EF model declares only one:**
+  | Index | Keys | Purpose |
   |---|---|---|
-  | `UX_SBD_STRING_LANG` | `String_ID, TARGET_LANGUAGE_ID` | unique |
-  | `IX_SBD_STRING_LANG` | `String_ID, TARGET_LANGUAGE_ID` | non-unique (duplicate of the unique — redundant) |
-  | `IX_SBD_HASH_LANG` | `SOURCE_HASH, SOURCE_LANGUAGE_ID, TARGET_LANGUAGE_ID, GLOSSARY_VERSION` | dedup/versioning |
-  | `IX_SBD_MISSING` | `TARGET_LANGUAGE_ID` filtered `WHERE [TARGET_TEXT] IS NULL` | find untranslated rows |
-- **Read pattern** (`TranslationRepository.cs:73`): `SportsbookDynamic.AsNoTracking().Where(StringId ∈
-  missing && Processed && TargetText != null).Select(TranslationItem).ToList()` — one batched query
-  for all cache-missed `StringId`s; results grouped by `StringId`. Uses `UX_SBD_STRING_LANG`.
-  **(Corrected 2026-06-30: this read is no longer invoked by Sportsbook — `GetTranslationsAsync` is uncalled.)**
+  | `UX_TC2_STRING` | `STRING_ID` (unique) | OEv2's lookup key — **the only one EF knows about** |
+  | `IX_TC2_SOURCE_TEXT` | `SOURCE_TEXT, SOURCE_LANGUAGE` INCLUDE (`STRING_ID`, `TARGET_TEXT_*`) | the external pipeline's dedup/lookup-by-text path |
+  | `IX_TC2_UNPROCESSED` | `ID` filtered `WHERE PROCESSED = 0` | the external pipeline's worklist scan |
+  The last two exist only in flyway's baseline. They are **load-bearing for the external pipeline** —
+  don't "clean up" an index just because `TranslationContext` doesn't mention it.
+- ⚠️ **`STRING_ID` collates `Latin1_General_CI_AS` (case-insensitive)**, and `UX_TC2_STRING` is unique
+  over it — so two keys differing only in case are the **same row**. Relevant to `MaTe:` keys, whose
+  identity is computed from market-template wording (`MarketTemplateVariantId.Compute`).
+- **Who writes what** (the ownership split matters — see `TranslationContext.cs:20-26`):
+  | Columns | Owner |
+  |---|---|
+  | `STRING_ID`, `SOURCE_*`, `PROCESSED`, `CREATED_AT`/`UPDATED_AT` | `OE.Translation.Service` |
+  | `HAS_BET_PLACEMENT` | `OE.Translation.Job` (on `r.bet.placement`) |
+  | `TARGET_TEXT_*` | the **external** translation pipeline only |
+- **Read pattern:** `OE.Adapter.Service` preloads the **whole table** read-only at startup into its
+  in-process `TranslationCache` (`OE.Adapter.Service/Repositories/TranslationCache.cs:67-73`) — there
+  is no per-message SQL read on the hot path any more.
+- **`STRING_ID` format:** `"{Prefix}:{Id}"` — `SpId:`, `SegId:`, `LeId:`, `Te:` (team), `MaTe:`
+  (market template, per wording), `MaTeP:` (player-placeholder template), `SeTe:` (selection template).
 - **Registration:** `AddDbContextPool<TranslationContext>` with `UseSqlServer(conn,
-  CommandTimeout=Custom:DbContextTimeout (180s))` (`Program.cs:48`). Pooled → amortized for the
-  high-frequency translation lookups. Conn string `ConnectionStrings:Translation` (AWS RDS).
-- **`String_ID` format:** `"{Prefix}:{Id}"` e.g. `MaId:123`, `SpId:1` (built in
-  `AddTranslationKey`, `SportsbookRepository.cs:955`).
+  CommandTimeout=Custom:DbContextTimeout (180s))` in `OE.Adapter.Service/Program.cs:40`,
+  `OE.Translation.Service/Program.cs:47`, `OE.Translation.Job/Program.cs:13`. Conn string
+  `ConnectionStrings:Translation` (AWS RDS) — **in use**, and required by all three.
+
+### `TranslationCache` (`LegacyTranslationCache`) — external, read-only, temporary
+- **DbSet:** `TranslationCache` → table **`TranslationCache`** (`TranslationContext.cs:15`), mapped as
+  `LegacyTranslationCache` so it can't be confused with the services' in-memory `TranslationCache`
+  classes.
+- **Externally owned** — OEv2 **never writes** it, and ships no DDL for it. Its `CREATE TABLE` lives in
+  `infrastructure/flyway/migrations/<env>/V1__Baseline.sql`.
+- **Columns:** `SOURCE_HASH` (`varchar(64)`), `SOURCE_LANGUAGE`, `TARGET_LANGUAGE`, `SOURCE_TEXT`,
+  `TARGET_TEXT`, `CREATED_AT`, `GLOSSARY_VERSION`, `UPDATED_AT`.
+- ⚠️ **It is a heap with no constraints at all.** Every column is `NULL`-able and there is **no primary
+  key, no unique index, and no index of any kind** in the flyway DDL. The
+  `HasKey(SourceHash, SourceLanguage, TargetLanguage)` in `TranslationContext.cs` is an **EF-side
+  fiction** required to map the entity — the database does not enforce it. Consequences:
+  duplicate `(hash, lang, lang)` rows are possible (the backfill correctly groups matches by hash and
+  iterates every hit rather than assuming one), and the backfill's
+  `WHERE SOURCE_HASH IN (...) AND SOURCE_LANGUAGE = 'EN'` is an **unindexed scan** of the whole table.
+- `SOURCE_HASH` holds `CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', SOURCE_TEXT), 2)` — SHA-256 over the
+  NVARCHAR (UTF-16LE) source text as uppercase hex. Note it is a **plain stored column** here, unlike
+  `SportsbookDynamic.SOURCE_HASH`, which is `AS (...) PERSISTED`. The bridge therefore computes the
+  hash client-side (`SourceHash(e.SourceText)`) to match.
+- **Only reader:** the temporary `Custom:Translation:CacheBackfill` bridge
+  (`OE.Translation.Service/Repositories/TranslationRepository.cs:501-529`), which copies legacy targets
+  into **empty** `TARGET_TEXT_*` columns only and marks those rows `PROCESSED = 1`.
+- ⚠️ **The bridge is live in production.** `CacheBackfill` defaults to `true` in
+  `OE.Translation.Service/appsettings.json:44` and is **not** overridden in argocd (unlike `CacheSeed`,
+  which is set explicitly per environment). Retiring the legacy table means setting
+  `Custom__Translation__CacheBackfill: false` in argocd first, then deleting the bridge — its own
+  comment says "remove once the external pipeline has drained the worklist".
 
 ## Trading DB — `TradingContext` (`OE.Shared/Data/Trading/`)
 - **DbSets / tables:** `ClientOddsFeedConfiguration`, `ClientOddsFeedLiveFixture`.

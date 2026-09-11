@@ -74,10 +74,17 @@ Tags: [Verified] in code, [Likely] inferred.
 - **Trading** — odds-feed management / client entitlement (SQL `TradingContext`,
   `ClientOddsFeedConfiguration`); also the upstream trading feed (bet-genius / Genius Sports). [Verified]
 - **UOF (Unified Odds Feed)** — the outbound white-label odds feed produced by `OE.UOF.Client`. [Likely]
-- **Translation / Dynamic Translation** — localized names sourced from SQL `SportsbookDynamic`.
-  (Corrected 2026-06-30: translations removed from pipeline.) OEv2 **no longer reads, caches, or embeds**
-  these (the read path was deleted; `TranslationRepository` is orphaned; `OnDynamicTranslationChange` is
-  now a no-op). The UI localizes via platform-web's REST `GetTranslations()` instead. [Verified]
+- **Translation** — a localized entity name (sport, segment, league, team, market template, selection),
+  sourced from SQL `TranslationCache2` and carried through the pipeline as the `*Tr` lists / Mongo
+  `*NaTr` fields. Owned by `OE.Adapter.Service` (preload + stamp) and `OE.Translation.Service` (SQL and
+  Mongo writes). Distinct from platform-web's REST `GetTranslations()`, which serves static UI labels.
+  [Verified]
+- **Dynamic Translation** — legacy name for the above, surviving in the
+  `ON_DYNAMIC_TRANSLATION_CHANGE` message type. ⚠️ Do not confuse it with `ON_TRANSLATION_CHANGE`:
+  the former drives a **no-op** cache purge in Sportsbook, the latter is the **live** change path into
+  `OE.Translation.Service`. [Verified]
+- **Worklist** — the set of `TranslationCache2` rows with `PROCESSED = 0` awaiting the external
+  translation pipeline. [Verified]
 
 ## Match state
 - **Score** — current scoreline (`Sc`); per-period scores (`PeSc`). [Verified]

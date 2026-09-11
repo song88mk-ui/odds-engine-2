@@ -121,16 +121,34 @@ HalfLost=4001, Void=5000, Rejected=6000, Cancelled=7000, CashedOut=8000.
 - OEv2 maintains availability; the **cashout transaction** lifecycle (offer → accept → settle) is
   platform-final's (`Platform.CashOut.Service`).
 
-## 7. Translation lifecycle — OEv2 PATH REMOVED (Corrected 2026-06-30: translations removed from pipeline)
+## 7. Translation lifecycle (2026-07 redesign)
 ```
- external translation service writes SportsbookDynamic (Processed=false → translated → Processed=true)
+ OE.Translation.Service seeds/updates SQL TranslationCache2 rows from the live feed
+   (STRING_ID, SOURCE_TEXT, PROCESSED=0)          [Custom:Translation:CacheSeed]
         │
         ▼
- OE.Sportsbook.Service: SQL read path REMOVED — no longer reads SportsbookDynamic, no MemCache population,
-        │  no *Tr embedded into messages, no *NaTr pushed on SignalR (TranslationRepository orphaned)
-        │  (Mongo *NaTr fields still exist but stay unwritten — see MongoDb.md)
-        ▼
- OnDynamicTranslationChange → purges empty/unused cache → NO-OP (handler retained)
+ external translation pipeline fills TARGET_TEXT_ZH / _ES / _FR   (OEv2 never writes these)
+        │
+        ├──► OE.Adapter.Service preloads the whole table at STARTUP into its in-process cache
+        │      └─► TradingRepository stamps *Tr onto outgoing messages (SpTr/SegTr/LeTr/HoTr/AwTr,
+        │          MaTeTr, SeNaTr) — no per-message SQL
+        │             ▼
+        │          OE.Sportsbook.Service forwards *Tr through GateTranslations (delta gate: a key's
+        │          translations are published only when they changed since this instance last sent them)
+        │             ▼
+        │          OE.Websocket.Service → ToOutgoingTranslations → SignalR OutgoingOddsChange.*Tr
+        │
+        └──► OE.Translation.Service stamps *NaTr onto the Mongo documents (update-only, with retry)
+               │  live path on ON_FIXTURE_CHANGE / ON_MARKET_CHANGE
+               │  startup: SeedActiveSnapshot (Mongo → SQL) + BackfillActiveSnapshot (cache → Mongo)
+               ▼
+             ON_TRANSLATION_CHANGE → persist the *NaTr delta, then republish TRANSLATION-ONLY odds
+             changes to r.oe.sb.engine.on_odds_change so live clients update without an odds move
+
+ OE.Translation.Job: flags HAS_BET_PLACEMENT on r.bet.placement; batch-deletes rows past RetentionDays
+
+ Retired: the SportsbookDynamic read path in OE.Sportsbook.Service. Its sb:translation:* MemCache is
+ never populated, so the surviving ON_DELETE_CACHE purge handler is a NO-OP.
 
  Surviving UI path: platform-web REST GetTranslations() → TranslationState (30s cache)
 ```

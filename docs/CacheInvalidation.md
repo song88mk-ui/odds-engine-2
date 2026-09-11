@@ -1,27 +1,36 @@
 # Cache Invalidation
 
-How cached data is kept fresh across odds-engine-2. Historically the only **actively invalidated** cache
-was the translation cache; everything else is **TTL-expiry only**. All [Verified] unless tagged.
+How cached data is kept fresh across odds-engine-2. Today **no OEv2 cache is message-invalidated**:
+everything is either **TTL-expiry only** or reloaded at startup. All [Verified] unless tagged.
 
-> **(Corrected 2026-06-30: translations removed from pipeline.)** The `sb:translation:*` cache is no
-> longer populated (its only writer, `TranslationRepository.GetTranslationsAsync`, is never called now —
-> the SQL read path was removed from `SportsbookRepository`). The `OnDynamicTranslationChange` /
-> `OnDeleteCacheMessage` handler is **retained** but now purges an empty/unused cache — effectively a
-> **no-op**. The mechanics below are kept for reference and the cross-repo delivery contract.
+> **The `sb:translation:*` purge is a no-op.** That cache had one writer,
+> `TranslationRepository.GetTranslationsAsync` in `OE.Sportsbook.Service`, and the 2026-07
+> translation-flow redesign removed it. The `ON_DYNAMIC_TRANSLATION_CHANGE` handler is **retained** —
+> and backoffice-final still publishes the message — but it now purges an empty cache. The mechanics
+> below are kept for the cross-repo delivery contract.
+>
+> ⚠️ **Two different messages, easily confused:**
+> - `ON_DYNAMIC_TRANSLATION_CHANGE` (payload `OnDeleteCacheMessage`, from backoffice-final) → consumed
+>   by `OE.Sportsbook.Service` → the no-op purge described here.
+> - `ON_TRANSLATION_CHANGE` (`r.oe.ontranslationchange`) → consumed by **`OE.Translation.Service`** →
+>   the **live** path: persist the Mongo `*NaTr` delta and republish translation-only odds changes.
+>   That is how a changed translation actually reaches clients now.
 
 ## Invalidation mechanisms in play
 | Cache | Invalidation | Trigger |
 |---|---|---|
-| `sb:translation:*` | **message-driven purge** + 60 min TTL — **now a no-op (cache never populated as of 2026-06-30)** | `OnDynamicTranslationChange` / `OnDeleteCacheMessage` |
+| `sb:translation:*` | **message-driven purge** — **now a no-op (cache never populated)** | `ON_DYNAMIC_TRANSLATION_CHANGE` / `OnDeleteCacheMessage` |
+| Adapter `TranslationCache` | **none** — full reload at process start only | restart (or `ON_TRANSLATION_CHANGE` handled out-of-band by `OE.Translation.Service`) |
 | `bg:auth` | TTL = token `ExpiresIn`; **delete on API error** | expiry / error |
 | `bg:fixture:*` | TTL ~5h (incl. negative `Bet_Not_Found`) | expiry |
 | `mtpp` (player props) | TTL **1 year**; loaded once at startup | expiry only (effectively never) |
 
 ## Translation invalidation (handler retained — now a no-op) — [Verified]
-> **(Corrected 2026-06-30: translations removed from pipeline.)** The handler still runs but the
-> `sb:translation:*` cache is never populated, so the purge below removes nothing.
+> The handler still runs but the `sb:translation:*` cache is never populated, so the purge below
+> removes nothing. Kept because backoffice-final still publishes the message.
 
-`SportsbookRepository.ProcessCacheInvalidationMessage(OnDeleteCacheMessage)` (`:323`):
+`SportsbookRepository.ProcessCacheInvalidationMessage(OnDeleteCacheMessage)` (`:340`, dispatched from
+`Worker.cs:138`):
 ```csharp
 if (message.PurgeAll) { _memCache.DeleteCacheByPrefix("sb:translation:"); return; }
 foreach (var cache in message.CacheKeys) _memCache.DeleteCache($"sb:translation:{cache}");
@@ -51,11 +60,12 @@ foreach (var cache in message.CacheKeys) _memCache.DeleteCache($"sb:translation:
 > receives no purge.
 
 ## Negative caching (anti-stampede) — [Verified]
-`TranslationRepository` (`:112-127`) caches **empty results** for not-found `StringId`s (1h) so
-permanently-missing translations don't hit SQL on every message. Trade-off: a translation **added**
-after a negative-cache entry won't appear until that entry expires (or a purge arrives).
-**(Corrected 2026-06-30: translations removed from pipeline.)** `TranslationRepository` is now orphaned/
-uncalled, so negative caching is no longer exercised.
+The old Sportsbook translation cache used negative caching (empty result cached for 1h) so
+permanently-missing `StringId`s didn't hit SQL on every message. That path is gone — `OE.Adapter.Service`
+preloads the whole table instead, so a miss is simply "not in the dictionary" and costs nothing.
+
+Negative caching is still live for **BetGenius fixtures** (`bg:fixture:*` caches `Bet_Not_Found`), with
+the usual trade-off: a fixture that *becomes* available won't be seen until the entry expires.
 
 ## TTL-only caches — [Verified]
 - **BetGenius auth/fixtures**: refreshed on expiry; auth also deleted on any API error so the next

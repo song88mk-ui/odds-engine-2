@@ -69,16 +69,24 @@ SelectionMapping  SeId  ← (ChTyId, PrFiId, MaTeId, SeTeId, MaSp)
 ## 6. Translation relationships — Mongo schema fields remain, but NEVER WRITTEN / no longer embedded
 
 ```
-Fixture   (1) ──< SpNaTr / SegNaTr / LeNaTr / FiNaTr  (Mongo schema fields — always unwritten)
-Market    (1) ──< MaNaTr                              (Mongo schema field — always unwritten)
-Selection (1) ──< SeNaTr  (and ClBoSeNaTr for boosted) (Mongo schema fields — always unwritten)
+Fixture   (1) ──< SpNaTr / SegNaTr / LeNaTr / HoNaTr / AwNaTr   (written by OE.Translation.Service)
+Market    (1) ──< MaNaTr                                        (written by OE.Translation.Service)
+Selection (1) ──< SeNaTr                                        (written by OE.Translation.Service)
+Fixture   (1) ──< FiNaTr                                        (schema field — NEVER written; superseded
+                                                                 by HoNaTr/AwNaTr in the 2026-07 redesign)
+Selection (1) ──< ClBoSeNaTr  (boosted)                         (schema field — still unwritten)
 ```
-- These `*NaTr` fields exist on the Mongo POCOs but have **always been unwritten** (the `.Set()`/
-  `.AddToSetEach` calls were commented out — see [MongoDb.md](./MongoDb.md)).
-- **(Corrected 2026-06-30: translations removed from pipeline.)** The per-language embedding into
-  published messages (the `*Tr` lists, via `MapTranslations` from SQL `SportsbookDynamic`/MemCache) was
-  **removed** — OEv2 no longer reads SQL translations and no longer emits any translation lists. UI
-  localization is now via platform-web's REST `GetTranslations()`.
+- These `*NaTr` fields **are written**, but not by `OE.Sportsbook.Service` — its `.Set()`/
+  `.AddToSetEach` calls remain commented out. `OE.Translation.Service` owns every `*NaTr` write
+  (update-only, with a short retry against the upsert race) — see [MongoDb.md](./MongoDb.md).
+- The per-language embedding into **published messages** is the `*Tr` lists
+  (`List<TranslationMessage> {LaCo, Tx}`), stamped by `OE.Adapter.Service` from its startup-preloaded
+  `TranslationCache2` snapshot, forwarded delta-gated by Sportsbook, and projected onto SignalR by
+  `OE.Websocket.Service`.
+- **Cardinality caveat:** a `*NaTr` / `*Tr` list is **0..N per entity, one entry per language** — and a
+  *missing* entry does **not** mean the entity has no translation. It means "unchanged since last
+  publish" (the Sportsbook delta gate) or "not translated yet" (empty `TARGET_TEXT_*`). Always fall back
+  to the English `*Na`.
 
 ## 7. Boosted-odds relationships (client-scoped)
 
@@ -126,8 +134,8 @@ Bet / Bet Builder / Wallet / Cashout txn          owned by platform-final (SQL),
                                                               │ N
                                           SeTeId ────────►┌───▼──────┐
                                        (SelectionLookup,  │Selection │── Odds (Od, ClOd, ClBoOd)
-                                        SelectionMapping) │          │── (SeNaTr Mongo field: unwritten)
+                                        SelectionMapping) │          │── (SeNaTr: written by Translation.Service)
                                                           └──────────┘── Settlement (SeStId, DeHeFa)
 
-   Global: BettingStatus("betstop")     SQL: SportsbookDynamic (translations — NO LONGER READ by OEv2 as of 2026-06-30), Trading (client feed config)
+   Global: BettingStatus("betstop")     SQL: TranslationCache2 (translations — read+written by OEv2), Trading (client feed config)
 ```

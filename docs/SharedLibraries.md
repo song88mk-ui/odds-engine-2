@@ -1,7 +1,7 @@
 # Shared Libraries — OE.Shared Catalog
 
 `OE.Shared` (netstandard2.1) is the shared kernel. This is the most important file to know
-before touching anything: changing a contract here ripples across all 9 services **and**
+before touching anything: changing a contract here ripples across all 11 services **and**
 bet-genius. All [Verified].
 
 ## ⭐ Field-name glossary (abbreviation convention)
@@ -30,8 +30,8 @@ convention: `<Entity><Attribute>`, where `Id`/`Na`/`St`/`Ty`/`Da`/`Tr` = Id/Name
 | `MaSp`/`SeSp`/`FiSp` | Market/Selection/Fixture Specifier | `VoRe` | Void reason |
 | `IsSu` | bet-stop flag (Fixture doc) | `IsBeSo`/`BeSo` | IsBetStop / BetStop source key |
 | `LiId`/`GeAl` | Livestream id / geo-alias (Fixture) | `ClCo`/`ClCoMa` | ClientCode(s) / ClientCodeMask |
-| `SpTr`/`SegTr`/`LeTr`/`FiTr`/`MaTr`/`SeTr` | translation lists — **REMOVED from messages 2026-06-30** | `ClOd` | Client odds list |
-| `DeOd`/`MaOd`/`HoOd`/`InOd` | Decimal/Malay/HongKong/Indo odds | `LaCo`/`Va` | Language code / Value (`TranslationBase` — now orphaned) |
+| `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` | translation lists (`TranslationMessage {LaCo, Tx}`); null/empty = unchanged or untranslated → fall back to `*Na` | `ClOd` | Client odds list |
+| `DeOd`/`MaOd`/`HoOd`/`InOd` | Decimal/Malay/HongKong/Indo odds | `LaCo`/`Tx` | Language code / translated text (`TranslationMessage`) |
 
 > When in doubt, open the collection/message `.cs` file — every field has a `[BsonElement]` or
 > property name you can match here.
@@ -41,7 +41,7 @@ convention: `<Entity><Attribute>`, where `Id`/`Na`/`St`/`Ty`/`Da`/`Tr` = Id/Name
 ### 1.1 MongoDB collections (`Data/Sportsbook/MongoDB/Collections/`)
 | Collection | Purpose |
 |---|---|
-| `Fixture` | One doc per fixture — sport/segment/league refs, status, score, teams, bet-stop flag (`IsSu`), livestream (`LiId`/`GeAl`); `*NaTr` translation fields exist in schema but are **never written** |
+| `Fixture` | One doc per fixture — sport/segment/league refs, status, score, teams, bet-stop flag (`IsSu`), livestream (`LiId`/`GeAl`); `*NaTr` translation fields are written by **`OE.Translation.Service`** (update-only), never by Sportsbook |
 | `Market` | One per market — template, status, line, cashout, client-code mask, sort order |
 | `Selection` | One per selection/outcome — odds (`Od`), probabilities, status, correlation |
 | `BettingStatus` | Global/keyed betting state; model id `"betstop"` holds global bet-stop |
@@ -56,7 +56,7 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 | Context | DB | DbSets / tables | Used by |
 |---|---|---|---|
 | `TradingContext` | Trading | `ClientOddsFeedConfiguration`, `ClientOddsFeedLiveFixture` | UOF.Client |
-| `TranslationContext` | Translation | `SportsbookDynamic` (StringId, TargetLanguageId, TargetText, Processed) | Sportsbook.Service — **registered but NO LONGER READ as of 2026-06-30 (orphaned)** |
+| `TranslationContext` | Translation | `TranslationCache2` (StringId, SourceText, TargetTextZh/Es/Fr, Processed, HasBetPlacement) + `TranslationCache` (legacy, external, read-only) | Adapter.Service (startup preload), Translation.Service (read+write), Translation.Job (write) — **not** Sportsbook.Service |
 
 ## 2. Messages (the contract surface)
 
@@ -70,7 +70,7 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 | Message | Maps to | Notes |
 |---|---|---|
 | `OutgoingAdapterMessageBase` | — | base: `Id="{ChTyId}:{PrFiId}"`, `ChTyId`, `PrFiId`, `FiId`, `FiSp`, `TiSe`, `TiRe` |
-| `OnFixtureChangeMessage` | ON_FIXTURE_CHANGE | extends base; sport/segment/league/status/score/teams (the `*Tr` translation lists were **removed 2026-06-30**) |
+| `OnFixtureChangeMessage` | ON_FIXTURE_CHANGE | extends base; sport/segment/league/status/score/teams + the `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr` translation lists |
 | `OnMarketChangeMessage` | ON_MARKET_CHANGE | extends fixture-change; `Ma[]` → `MarketMessage` → `Se[]` `SelectionMessage` (+ `ClOd[]` client odds) |
 | `OnMarketSettlementMessage` | ON_MARKET_SETTLEMENT | `Ma[]` MarketResult → `Se[]` SelectionResult (final status) |
 | `OnMarketCancellationMessage` | ON_MARKET_CANCEL | `Ma[]` with `VoRe`, `StTi`/`EnTi` window |
@@ -88,7 +88,14 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 - `ClientConfigurationModel` (SportId, PrematchOdds, LiveOdds, MaxFixtures) — UOF client config DTO.
 - `ClientLiveFixtureModel`, `FixtureModel` — live-fixture tracking.
 - `ClientOdds` — per-client multi-format odds (Decimal/Malaysian/Hongkong/Indonesian).
-- `TranslationBase` (`LaCo`, `Va`), `TranslationItem` (StringId, TargetLanguageId, TargetText) — **orphaned/unused as of 2026-06-30** (translation read/embed path removed).
+- `TranslationMessage` (`LaCo`, `Tx`) — the live wire type for every `*Tr` list.
+- ⚠️ **Dead types, safe to delete:** `TranslationBase` (`LaCo`, `Va`) and `TranslationItem`
+  (`StringId`, `TargetLanguageId`, `TargetText`) in `OE.Shared/Models`, plus the six
+  `Outgoing*Translation` classes in `OE.Websocket.Service/Messages/OutgoingOddsChange.cs`
+  (`OutgoingSportTranslation`, `OutgoingSegmentTranslation`, `OutgoingLeagueTranslation`,
+  `OutgoingFixtureTranslation`, `OutgoingMarketTranslation`, `OutgoingSelectionTranslation`) — all
+  left over from the pre-2026-07 shape, **zero references** in the solution. The live SignalR type is
+  `OutgoingTranslation` (`LaCo`, `Tx`). Tracked as [TechnicalDebt.md](./TechnicalDebt.md) H7.
 - `MessageBrokerModel`, `RabbitMQModel` (MessageRequest/ResponseDTO), `BaseResponseDTO<T>` (StatusCode/Message/Result).
 - `SportModel` (SpId, FiSp, PrId).
 - `Provider/BetGenius/`: `BGAuth` (IdToken/ExpiresIn), `BGEvent` (fixture + LiveStreams/VOD),

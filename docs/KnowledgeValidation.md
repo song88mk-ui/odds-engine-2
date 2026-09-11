@@ -43,16 +43,17 @@ Suggested investigation**; **no refactoring is suggested**.
    **Resolved & corrected** in DomainModel/EntityLifecycle/RequestLifecycle/SequenceDiagrams + MongoDb.
    Evidence: `OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:386-398,492-495,531,552-569`.
    Confidence: High.
-   **Follow-up correction (2026-06-30: translations removed from pipeline):** the "translations go only
-   into the published message" finding is now itself superseded — the `*Tr` lists (messages) and the
-   `*NaTr` wire props (`OutgoingOddsChange`/`OutgoingBoostedOddsChange`) were **removed entirely**, and
-   `OE.Sportsbook.Service`'s SQL translation read path (`LoadTranslationsAsync`/`MapTranslations`) was
-   deleted (`TranslationRepository` now orphaned). Translations are **no longer anywhere in the OEv2
-   pipeline**; the UI localizes via platform-web's REST `GetTranslations()`. Confidence: High.
+   **Superseded twice — current state (2026-07 translation-flow redesign):** translations are back in
+   the pipeline **and** now persisted. The `*Tr` lists exist on the messages and the `*NaTr` wire props
+   on `OutgoingOddsChange`; Mongo `*NaTr` **are** written, by `OE.Translation.Service` rather than by
+   `OE.Sportsbook.Service` (whose own `.Set()` lines stay commented out, deliberately). What genuinely
+   was removed and never came back is Sportsbook's per-message SQL read — sourcing moved to a startup
+   preload in `OE.Adapter.Service`. Confidence: High.
 3. **Translation cache "60-min TTL."** True, but via fragile `(int)TimeSpan.FromMinutes(60).TotalHours`
    = 1h by truncation luck. **Clarified** as a footgun (P2). Evidence: `TranslationRepository.cs:103,123`.
-   Confidence: High. **(Corrected 2026-06-30: translations removed from pipeline.)** `TranslationRepository`
-   is now orphaned/uncalled, so this cache is no longer populated — the footgun is no longer exercised.
+   Confidence: High. **Superseded by the 2026-07 translation-flow redesign:** that call site is gone
+   (`OE.Adapter.Service` preloads instead of caching per key), so the footgun is no longer exercised —
+   but `MemCache`'s int-overload-in-hours remains and still applies to any future caller.
 4. **platform-final stack** mislabeled "likely NestJS" in one early agent note; **confirmed .NET**
    (≈39 projects). Confidence: Medium ([Verified-sibling]).
 
@@ -77,7 +78,7 @@ Suggested investigation**; **no refactoring is suggested**.
 | backoffice inline `OE.Shared` copy drift | not diffed | diff backoffice `Data/Sportsbook` vs current `OE.Shared` (#24) |
 
 ## Documentation completeness
-- All 9 worker services + `OE.Shared` documented (purpose, lifecycle, data, config). High.
+- All 11 worker services + `OE.Shared` documented (purpose, lifecycle, data, config). High.
 - Cross-repo seams documented with classification. Medium (sibling-verified).
 - **Missing documentation in the code itself:** sparse XML doc comments; many "what is this number?"
   TODOs (e.g. Websocket `_MaTeIds`); no in-repo README beyond a one-liner; no ADRs (the ones in

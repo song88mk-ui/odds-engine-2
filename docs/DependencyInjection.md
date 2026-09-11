@@ -34,8 +34,10 @@ container**, and only one helper-extension pattern (LiveStream's `AddProviders()
 
 | Service | Telemetry | Broker | Cache | Data | HttpClient | Other |
 |---|---|---|---|---|---|---|
-| Adapter | `Instrumentation` + `AddTelemetry` | `IMessageBroker` | — | — | — | `IHelper`, `ITradingRepository` |
-| Sportsbook | ✅ | `IMessageBroker` | `IMemCache` | `IMongoClient`, `IMongoDatabase("Sportsbook")`, `AddDbContextPool<TranslationContext>` ¹ | — | `IHelper`, `ISportsbookRepository`, `ITranslationRepository` ¹ |
+| Adapter | `Instrumentation` + `AddTelemetry` | `IMessageBroker` | `ITranslationCache` | `AddDbContextPool<TranslationContext>` | — | `IHelper`, `ITradingRepository` |
+| Sportsbook | ✅ | `IMessageBroker` | `IMemCache` | `IMongoClient`, `IMongoDatabase("Sportsbook")` ¹ | — | `IHelper`, `ISportsbookRepository` |
+| Translation.Service | ✅ | `IMessageBroker` | `IMemCache`, `ITranslationCache` | `AddDbContextPool<TranslationContext>` | — | `IHelper`, `ITranslationRepository`, `IMongoTranslationRepository` |
+| Translation.Job | ❌ | `IMessageBroker` | — | `AddDbContextPool<TranslationContext>` | — | `ITranslationCleanupRepository` (**Scoped** — the only non-Singleton repo) ², two `IHostedService`s (`BetPlacementWorker`, `CleanupWorker`) |
 | UOF.Client | ✅ | `IMessageBroker` (internal+external use of same singleton) | `IMemCache` | (Trading via repo `new` context) | (Platform via repo) | `IClientRepository`, `IPlatformRepository`, `ITradingRepository` |
 | Websocket | ✅ | `IMessageBroker` | `IMemCache` | (Mongo via repo) | (Platform via repo) | `ISportsbookRepository`; SignalR `HubConnection` built in Worker |
 | Lookup | ❌ | `IMessageBroker` | — | `IMongoClient` | — | `ISportsbookRepository` |
@@ -44,10 +46,13 @@ container**, and only one helper-extension pattern (LiveStream's `AddProviders()
 | Cleanup | ✅ | — | — | (Mongo via repo) | — | `ISportsbookRepository` |
 | KeepAlive | ✅ | `IMessageBroker` | — | — | — | — |
 
-> ¹ **(Corrected 2026-06-30: translations removed from pipeline.)** Sportsbook still **registers**
-> `ITranslationRepository` and `AddDbContextPool<TranslationContext>`, but they are now **never
-> resolved/used** (the translation read path was removed from `SportsbookRepository`) — i.e. orphaned/
-> dead registrations. `ConnectionStrings:Translation` / `Custom:Translation:UseContentKey` are unused.
+> ¹ Sportsbook is **Mongo-only**: since the 2026-07 translation-flow redesign it registers no
+> `TranslationContext` and no `ITranslationRepository` at all. `ConnectionStrings:Translation` is
+> required by **Adapter, Translation.Service and Translation.Job** instead.
+>
+> ² `ITranslationCleanupRepository` is `AddScoped`, unlike every other repository in the solution
+> (Singleton). It holds a `TranslationContext` with tracked writes, so it must not outlive a unit of
+> work — its two hosted workers resolve it from a scope per pass.
 
 ## 4. Patterns
 

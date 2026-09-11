@@ -34,7 +34,7 @@ Classification: **[Verified]** in odds-engine-2 · **[Verified-sibling:X]** conf
 | **backoffice-final** (config/cache) | RabbitMQ `r.oe.cachesync.*` on `e.central` | `OnClientChange`/`OnParlayBonusChange`/`OnMarketSortOrderChange`/`OnSportSortOrderChange`/(`OnDynamicTranslationChange`) | [Verified-sibling:backoffice-final] publishes; OEv2 handles `OnDynamicTranslationChange` [Verified]; exact binding into Sportsbook [Unknown] |
 | **(feed recovery)** | RabbitMQ `r.of.recovery.#.tso` → UOF.Client | snapshot/replay [Unknown shape] | [Unknown] |
 | **SQL `Trading`** | EF Core read | `ClientOddsFeedConfiguration`, `ClientOddsFeedLiveFixture` (written by backoffice) | [Verified] read; [Verified-sibling:backoffice-final] write |
-| **SQL `Translation`** | EF Core read | `SportsbookDynamic` (only `Processed=true`) | **(Corrected 2026-06-30: translations removed from pipeline.) OEv2 NO LONGER reads this — `TranslationRepository`/`TranslationContext` retained but orphaned/uncalled.** Still written by external/backoffice |
+| **SQL `Translation`** | EF Core read **and write** | `TranslationCache2` (read: full preload by Adapter at startup; write: row seeding + `PROCESSED`/`HAS_BET_PLACEMENT` + retention deletes). `TranslationCache` (legacy, external, read-only — temporary `CacheBackfill` bridge only) | [Verified]. `TARGET_TEXT_*` written by the **external translation pipeline only** |
 | **BetGenius Video API** | HTTPS | `BGAuth`/`BGEvent(s)` (token + fixtures) | [Verified] |
 | **Platform API** | HTTPS `x-api-key` | `v1/sportsbook/client/markettemplateplayerprops` (UOF.Client), template/metadata (Websocket) | [Verified] OEv2 call; [Verified-sibling:platform-final] handler |
 
@@ -79,9 +79,11 @@ This is the **write side** of what OEv2 reads — important and previously under
 Changing any of these is a **coordinated multi-repo release**:
 - `OE.Shared` message/DTO shapes → bet-genius, backoffice-final, platform.
 - MongoDB document schema (abbreviated fields) → platform-final, backoffice-final readers.
-- SQL `ClientOddsFeedConfiguration` / `SportsbookDynamic` schema → backoffice-final (writer). (As of
-  2026-06-30 OEv2 no longer reads `SportsbookDynamic`, so a schema change no longer breaks OEv2 — but
-  the writer/contract still exists for other readers.)
+- SQL `ClientOddsFeedConfiguration` schema → backoffice-final (writer).
+- SQL `TranslationCache2` schema → **the external translation pipeline and OEv2 both write it**
+  (different columns — see [Contracts.md](./Contracts.md) C9). A column change here breaks
+  `OE.Adapter.Service`'s startup preload, `OE.Translation.Service` and `OE.Translation.Job`
+  simultaneously. The legacy `TranslationCache` table is externally owned and read-only to OEv2.
 - `e.central` routing-key namespace (`r.oe.*`, `r.oe.cachesync.*`, `r.bet.*`) → all subscribers.
 - `/platform` hub method signatures + SignalR message models → platform-web, the hub gateway.
 - External `uof.*` feed → external white-label clients.

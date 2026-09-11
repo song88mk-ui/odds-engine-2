@@ -77,17 +77,28 @@ platform `CashOut.Service` publishes `r.bet.cashoutchange.s88` → `OE.Websocket
 matching bet's cashout fields in `MyBets` [V/Vpw]. The cashout **action** itself is a platform REST
 call (`POST v1/bet/cashout`).
 
-## Flow 6 — Translation (OEv2 read path REMOVED 2026-06-30) + platform REST path
-**(Corrected 2026-06-30: translations removed from pipeline.)** `OE.Sportsbook.Service` **no longer
-reads SQL `SportsbookDynamic`**: `LoadTranslationsAsync`/`MapTranslations` were deleted, the `*Tr`
-lists were removed from the published messages, and the `sb:translation:*` MemCache is no longer
-populated (`TranslationRepository`/`TranslationContext` retained in DI but never resolved). So OEv2 no
-longer embeds translations into any message and the `OnDynamicTranslationChange` handler now purges an
-empty/unused cache — effectively a **no-op** (handler retained) [V].
-**Surviving path:** platform-web calls its own REST `GetTranslations()` (30 s in-process cache) into
-`TranslationState`, accessed in markup via `_translationState.GetValue("key")` [Vpw]. Language chosen
-from the `languageCode` query param (default EN) → `x-language-code` header [Vpw]. With the wire
-`*NaTr` gone, the UI relies on this REST path (or falls back to default-language names like `SpNa`/`FiNa`).
+## Flow 6 — Translation (2026-07 redesign) + platform REST path
+**Entity names (OEv2).** No SQL is read on the hot path. `OE.Adapter.Service` preloads the whole
+`TranslationCache2` table at **startup** (`TranslationCache.Preload()`), then `TradingRepository` stamps
+`SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`, `MaTeTr` and `SeNaTr` onto each outgoing message from memory
+(`:119-159`) [V]. `OE.Sportsbook.Service` forwards those lists through `GateTranslations`
+(`:789-793, :917-921`) — a per-instance delta gate that emits a key's translations only when they
+changed — and reads `SeNaTr`/`MaTeTr` back from the persisted Mongo `*NaTr` for the internal odds change
+(`:839, :864`) [V]. `OE.Websocket.Service` projects them onto the SignalR payload via
+`ToOutgoingTranslations` (`:1547-1927`) [V].
+
+**Change path.** A translation edit arrives as `ON_TRANSLATION_CHANGE` on `r.oe.ontranslationchange` and
+is handled by `OE.Translation.Service`, which persists the Mongo `*NaTr` delta and then republishes
+**translation-only** odds changes to `r.oe.sb.engine.on_odds_change` so live clients update without an
+odds move (`MongoTranslationRepository.cs:1024-1192`) [V]. The older
+`ON_DYNAMIC_TRANSLATION_CHANGE` → `sb:translation:*` purge in Sportsbook is a **no-op** (that cache is
+never populated) [V].
+
+**Static UI strings (platform-web, separate system).** platform-web calls its own REST
+`GetTranslations()` (30 s in-process cache) into `TranslationState`, accessed in markup via
+`_translationState.GetValue("key")` [Vpw]. Language chosen from the `languageCode` query param
+(default EN) → `x-language-code` header [Vpw]. Entity names come from the OEv2 `*Tr`/`*NaTr` path above;
+labels come from here.
 
 ## Flow 7 — Authentication (OGAuth)
 Browser → `/play?…&signature` → platform-web `OGAuth.OnParametersSetAsync` computes an MD5-HMAC over

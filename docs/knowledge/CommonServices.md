@@ -40,7 +40,9 @@ All live in **`OE.Shared`** unless noted. Deep dives: [../ImplementationPatterns
 ## Data access (per-service repositories)
 | Service | Repository | Store |
 |---|---|---|
-| Sportsbook | `SportsbookRepository` (catalogue); `TranslationRepository` (SQL+cache) **— orphaned/uncalled as of 2026-06-30** | Mongo (SQL Translation no longer read) |
+| Sportsbook | `SportsbookRepository` (catalogue) | Mongo only — no SQL |
+| Translation.Service | `TranslationRepository` (SQL `TranslationCache2`, read+write); `MongoTranslationRepository` (`*NaTr` stamps); `TranslationCache` (in-process) | SQL Translation + Mongo |
+| Translation.Job | `TranslationCleanupRepository` (**Scoped**; raw-SQL flag + batched delete) | SQL Translation |
 | UOF.Client | `TradingRepository` (SQL), `PlatformRepository` (HTTP), `ClientRepository` (odds math) | SQL Trading + Platform API |
 | Adapter | `TradingRepository` (router — **no DB**) | — |
 | Lookup/LiveStream/Settlement/Cleanup/Websocket | `SportsbookRepository` (each service's own) | Mongo |

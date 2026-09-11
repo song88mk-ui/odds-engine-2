@@ -52,13 +52,16 @@ histogram. Writes are **`UpdateOneModel` upserts**:
 - **Inactivate markets** (`ToMarketInactiveStatus`, `:430`): per market, set status Inactive.
 - **Global bet-stop** (`ToDBBettingStatus`, `:447`): upsert the `BeSo="betstop"` doc's `IsBeSo`.
 
-> ⚠️ **Translations are NOT persisted to documents.** Every `*Tr`/`SeNaTr`/`MaNaTr` `.Set()` /
-> `.AddToSetEach(...)` is **commented out** (`:386-398, :492-495, :531-532, :552-556, :568-569`).
-> The Mongo `*NaTr` fields still exist in the schema but remain never-written.
-> (Corrected 2026-06-30: translations removed from pipeline.) Translations are **no longer embedded
-> into the published message either** — `MapTranslations`/`LoadTranslationsAsync` and the `*Tr` lists
-> were deleted from `SportsbookRepository`/the OE.Shared messages, so the SQL read path is gone.
-> (Corrects the Phase 3 phrasing "embedded onto documents".) Likewise `LiId`, `ClMa`,
+> ⚠️ **`*NaTr` fields are written — but not by `OE.Sportsbook.Service`.** Since the **2026-07
+> translation-flow redesign**, `SpNaTr`/`SegNaTr`/`LeNaTr`/`HoNaTr`/`AwNaTr` (Fixture), `MaNaTr`
+> (Market) and `SeNaTr` (Selection) are stamped onto documents by **`OE.Translation.Service`**
+> (`MongoTranslationRepository`: live path `:82-208`, startup `BackfillActiveSnapshot` `:414-470`).
+> Those writes are **update-only** — they never insert a document, and they retry briefly on a
+> zero-match result (`:29`, `:272`) to absorb the race with Sportsbook's upsert.
+> Sportsbook's own `.Set()`/`.AddToSetEach(...)` translation lines remain **commented out**
+> (`:594, :610`) and must stay that way: `OE.Translation.Service` owns all `*NaTr` writes
+> (`SportsbookRepository.cs:414`). Sportsbook *reads* the persisted `*NaTr` back out when building
+> `OnInternalOddsChangeMessage` (`:839, :864`). Likewise `LiId`, `ClMa`,
 > `GeAl`, `IsBo`, `ClBo`, period scores, betradar ids are commented out — those Fixture fields exist
 > in the schema but are **not written by Sportsbook.Service** (LiveStream writes `LiId`/`GeAl`).
 

@@ -35,8 +35,10 @@ documents**.
   + `PeSc` (period scores), `IsOfLi` (offered live), `IsSu` (bet-stopped), `IsBo` (boosted),
   `IsHoFa` (home is favorite), `FiSoOr` (sort order), `LiId`/`StUr`/`GeAl` (livestream + geo),
   `ClCo`/`ClMa` (client visibility), participants `HoId`/`AwId` (+ `HoBeId`/`AwBeId`/`LeBeId`),
-  translation fields `SpNaTr`/`SegNaTr`/`LeNaTr`/`FiNaTr` (Mongo schema fields that **remain but are
-  never written** — see [MongoDb.md](./MongoDb.md); the wire `*NaTr` equivalents were removed 2026-06-30).
+  translation fields `SpNaTr`/`SegNaTr`/`LeNaTr`/`HoNaTr`/`AwNaTr` (written by **`OE.Translation.Service`**,
+  update-only — see [MongoDb.md](./MongoDb.md); the wire equivalents are `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`).
+  ⚠️ `FiNaTr` also still exists on the POCO but is **never written** — `HoNaTr`/`AwNaTr` (added in the
+  2026-07 redesign) replaced it; the fixture name is composed from the two team names.
 - **Source of truth:** MongoDB `Sportsbook` (owned by OEv2).
 - **Created/updated:** `OE.Sportsbook.Service` from `OnFixtureChange`/`OnMarketChange` (upsert by `FiId`).
 - **Closed:** `OE.Job.Settlement` (publishes close when started/6h+ ended). **Purged:** `OE.Job.Cleanup`.
@@ -50,7 +52,7 @@ documents**.
 - **Identity:** `MaId` ↔ `PrMaId`; belongs to `FiId`.
 - **Key state:** `MaStId`/`MaStNa` (MarketStatus), `CaStId`/`CaStNa` (CashoutStatus — *availability*),
   `InPl` (in-play), `MaSoOr` (sort order), `IsBo`/`ClBo` (boosted), `ClCo`/`ClCoMa` (client masks),
-  `MaNaTr` (Mongo name-translation field — remains in schema but never written; the wire `MaNaTr` was removed 2026-06-30).
+  `MaNaTr` (Mongo name-translation field, written by `OE.Translation.Service`; the wire equivalent is `MaTeTr`).
 - **Source of truth / CRUD / consumers:** same as Fixture (Sportsbook.Service writes; platform reads;
   Websocket pushes; platform-web renders market views & bet slip).
 
@@ -60,8 +62,9 @@ documents**.
 - **Identity:** `SeId` ↔ `PrSeId`; belongs to `MaId`/`FiId`.
 - **Key state:** `Od` (decimal odds), probabilities `Pr`/`WoPr`/`LoPr`/`VoPr`/`HaWoPr`/`HaLoPr`,
   `DeHeFa` (dead-heat factor), `IsAc` (active), `SeStId`/`SeStNa` (SelectionStatus), `SeSoOr`,
-  boosted `ClBoOd`/`ClBoSeNa`/`ClBoSeNaTr`, `SeNaTr` (Mongo translation field — remains in schema but
-  never written; the wire `SeNaTr`/`ClBoSeNaTr` were removed 2026-06-30), `CoId` (correlation).
+  boosted `ClBoOd`/`ClBoSeNa`/`ClBoSeNaTr` (**`ClBoSeNaTr` remains unwritten** — boosted names are not
+  translated), `SeNaTr` (written by `OE.Translation.Service`; also on the wire as `SeNaTr`),
+  `CoId` (correlation).
 - **CRUD / consumers:** same pipeline; the most frequently updated entity (odds churn).
 
 ---
@@ -112,21 +115,27 @@ documents**.
   `ClBoOd` (boosted odds), `ClBoSeNa`/`ClBoSeNaTr` (per-client boosted selection name + translations).
   Rendered as "Price Boost" in platform-web. Created/updated upstream + applied in the catalogue.
 
-### Translation — `SportsbookDynamic` (SQL) + MemCache (read path now REMOVED)
+### Translation — `TranslationCache2` (SQL) → `*Tr` (wire) → `*NaTr` (Mongo)
 - **Purpose:** localized names for sport/segment/league/fixture/market/selection.
-- **Source of truth:** SQL `Translation.SportsbookDynamic` (`StringId`, `SourceText`, `TargetText`,
-  `TargetLanguageId`, `Processed`, `GlossaryVersion`, …) — populated by an **external translation
-  service** ([Likely] bet-genius `Translation.Service`).
-- **(Corrected 2026-06-30: translations removed from pipeline.)** `OE.Sportsbook.Service` **no longer
-  reads SQL translations**: `LoadTranslationsAsync`/`MapTranslations`/`AddTranslationKey`/`AddContentKey`
-  were deleted from `SportsbookRepository`, `ITranslationRepository` is no longer injected, and the
-  `*Tr` lists were removed from the OE.Shared messages — so translations are **no longer embedded** into
-  the published message (and were never persisted to Mongo; those `.Set()` calls were already commented
-  out, see [MongoDb.md](./MongoDb.md)). The `TranslationRepository`/`TranslationContext` are still
-  DI-registered but **never resolved (orphaned/dead code)**, so `ConnectionStrings:Translation` and
-  `Custom:Translation:UseContentKey` are now unused, the `sb:translation:*` MemCache is never populated,
-  and the `OnDynamicTranslationChange` invalidation handler is effectively a **no-op** (handler retained).
-  The **surviving** UI translation path is platform-web's own REST `GetTranslations()` → `TranslationState`. [Verified]
+- **Source of truth:** SQL `Translation.TranslationCache2` (`StringId`, `SourceText`,
+  `TargetTextZh`/`TargetTextEs`/`TargetTextFr`, `Processed`, `HasBetPlacement`, …). Rows are seeded by
+  `OE.Translation.Service`; the `TARGET_TEXT_*` values are filled by an **external translation
+  pipeline**. `SportsbookDynamic` is retired from OEv2's code but **still exists in the schema** —
+  see [Database.md](./Database.md).
+- **Carried on the wire** as `*Tr` lists of `TranslationMessage {LaCo, Tx}`
+  (`OE.Shared/Messages/OutgoingAdapterMessages/TranslationMessage.cs`): `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`
+  on `OnFixtureChangeMessage`, `MaTeTr`/`SeNaTr` on `OnMarketChangeMessage`, all seven on
+  `OnInternalOddsChangeMessage`. **A null or empty list means "no translation available" or "unchanged
+  since last publish" — consumers must fall back to the English `*Na` source.**
+- **Persisted to Mongo** as `*NaTr` (`SpNaTr`/`SegNaTr`/`LeNaTr`/`HoNaTr`/`AwNaTr`, `MaNaTr`, `SeNaTr`)
+  by `OE.Translation.Service` only — see [MongoDb.md](./MongoDb.md).
+- **Producer/consumer split:** `OE.Adapter.Service` sources the `*Tr` from its startup-preloaded cache;
+  `OE.Sportsbook.Service` only *forwards* them (delta-gated) and *reads back* the persisted `*NaTr`;
+  `OE.Websocket.Service` projects them onto the SignalR payload. `OE.Sportsbook.Service` reads no
+  translation SQL — its `sb:translation:*` MemCache is never populated and the `ON_DELETE_CACHE` purge
+  handler is a **no-op**. `TranslationBase` (`OE.Shared/Models/`) is left over from the old shape and is
+  **orphaned**. platform-web additionally has its own REST `GetTranslations()` → `TranslationState` path
+  for static UI strings. [Verified]
 
 ### Trading — client feed entitlement (SQL `TradingContext`)
 - "Trading" here = **odds-feed management / client entitlement**, not bet trading. Entities:
@@ -165,7 +174,7 @@ documents**.
 | Market | Mongo Sportsbook (OEv2) | Sportsbook.Svc | platform-final, Websocket | platform-web |
 | Selection / Odds | Mongo Sportsbook (OEv2) | Sportsbook.Svc; client formats by UOF.Client | platform-final, Websocket | platform-web |
 | Sport/Segment/League + templates | provider; materialized in Mongo (OEv2) | Sportsbook.Svc + Job.Lookup | platform-final | platform-web |
-| Translation | SQL Translation (external svc) | external; **OEv2 read path removed 2026-06-30** (repo orphaned/uncalled) — UI localizes via platform-web REST `GetTranslations()` | platform (REST) | platform-web |
+| Translation | SQL `TranslationCache2` | **shared**: OEv2 (Translation.Service/Job) owns source + status columns, the external pipeline owns `TARGET_TEXT_*` | Adapter (preload) → Sportsbook → Websocket; Mongo `*NaTr` | platform-web (entity names); its own REST `GetTranslations()` for static UI labels |
 | Client feed config (Trading) | SQL Trading (platform/ops) | platform/ops | UOF.Client | — |
 | Cashout (status) | Mongo (OEv2) | Sportsbook.Svc | platform, Websocket | platform-web |
 | Cashout (transaction) | SQL Betting (**platform**) | platform CashOut.Svc | platform | platform-web |

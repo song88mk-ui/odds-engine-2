@@ -13,15 +13,15 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   published to GitHub Packages (org `FlyingCockatoo`) by `oe-shared-npkg.yml`.
 - **Key packages:** EF Core 3.1.32 (+ SqlServer), MongoDB.Bson 3.4.0, RabbitMQ.Client 5.2.0,
   OpenTelemetry.Api, System.Runtime.Caching, System.Text.Json.
-- **Consumers:** all 9 worker services **and** `bet-genius` (shares the same contracts).
+- **Consumers:** all 11 worker services **and** `bet-genius` (shares the same contracts).
 - **Detail:** see [SharedLibraries.md](./SharedLibraries.md).
 
 ---
 
 ## OE.Adapter.Service — normalizer + sticky-shard router
 
-- **Purpose:** The pipeline's front door inside OEv2. Consumes provider-normalized messages
-  and re-routes them to the correct Sportsbook shard. Pure pass-through transform; **no DB**.
+- **Purpose:** The pipeline's front door inside OEv2. Consumes provider-normalized messages,
+  enriches them with translations, and re-routes them to the correct Sportsbook shard.
 - **Consumes:** `r.uof.#` and `r.bg.receiver.#` (argocd) from `e.central`.
 - **Handles** (`Worker.cs:98-144`): `ON_FIXTURE_CHANGE`, `ON_MARKET_CHANGE`,
   `ON_MARKET_SETTLEMENT`, `ON_BET_SETTLEMENT`, `ON_BET_STOP_GLOBAL`, `ON_MARKET_CANCEL`,
@@ -29,9 +29,16 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Publishes:** `r.oe.adapter.<type>.<NN>` where `<NN>` = `Helper.GetInstanceName(ProviderFixtureId)`
   (`Repositories/TradingRepository.cs:58,121`); global bet-stop → `...on_bet_stop_global.10`
   (`:75`); errors → `r.oe.adapter.error` (`Worker.cs:158`).
+- **Reads (SQL `Translation`):** at startup only — `TranslationCache.Preload()` loads the whole
+  `TranslationCache2` table into an in-process cache (`Repositories/TranslationCache.cs:67-73`).
+  Skipped with a warning when `ConnectionStrings:Translation` is blank (`Worker.cs:96-109`), so the
+  service still starts without SQL — it just publishes no `*Tr`.
+- **Translation enrichment:** `TradingRepository` stamps the `*Tr` lists onto outgoing messages from
+  that cache — `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr` (`:119-123`), `MaTeTr` (`:144`), `SeNaTr` (`:159`).
+  No per-message SQL.
 - **Telemetry:** `processed.messages` counter tagged by `message.type`.
 - **Notes:** `TradingRepository` despite its name does **no trading-DB access** here — it is
-  the routing/transform helper. Several status-mapping helpers (`GetFixtureStatus`, etc.,
+  the routing/transform/enrichment helper. Several status-mapping helpers (`GetFixtureStatus`, etc.,
   `TradingRepository.cs:95-113`) are **unused dead code**.
 
 ---
@@ -48,14 +55,62 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   bet-stop global/fixture, and `ON_DYNAMIC_TRANSLATION_CHANGE` (cache purge).
 - **Writes (MongoDB `Sportsbook`):** Fixture, Market, Selection, BettingStatus — via unordered
   `BulkWrite` (histogram `bulkwrite.duration`).
-- **Reads (SQL `Translation`):** **(Corrected 2026-06-30: translations removed from pipeline.)** This
-  read path was **removed** — Sportsbook no longer reads `SportsbookDynamic` / `TranslationContext` and
-  no longer populates the `sb:translation:*` MemCache. `TranslationRepository`/`TranslationContext`
-  remain DI-registered but are orphaned/uncalled; `ConnectionStrings:Translation` is unused.
+- **SQL:** none. Sportsbook has **no** `TranslationContext` registration and reads no SQL — it is
+  Mongo-only. (Before the 2026-07 redesign it read `SportsbookDynamic` per message; that path is gone.)
+- **Translations:** *forwards*, never sources. Inbound `*Tr` lists are passed through
+  `GateTranslations` (`SportsbookRepository.cs:789-793, :917-921`), a per-instance delta gate that
+  publishes a key's translations only when they changed since that instance last sent them.
+  `SeNaTr`/`MaTeTr` on the internal odds-change are read back from the **persisted Mongo `*NaTr`**
+  (`:839, :864`) and deliberately **not** gated. Sportsbook writes no `*NaTr` — those writes belong to
+  `OE.Translation.Service` (`:414`, `:969`).
 - **Publishes:** `r.oe.sb.engine.on_odds_change` (canonical `OnOddsChange`),
   `r.oe.bet.settlement` (per-selection), `r.oe.sb.engine.on_bet_stop_*`.
-- **Notes:** `IdGen` package referenced but unused; `_IsBetStopGlobally` not thread-safe;
-  many translation `.Set()` lines commented out (multi-language feature partially shipped).
+- **Notes:** `IdGen` package referenced but unused; `_IsBetStopGlobally` not thread-safe; the
+  `sb:translation:*` MemCache is never populated — only its purge handler survives
+  (`ProcessCacheInvalidationMessage`, `:340`), so `ON_DELETE_CACHE` is a no-op.
+
+---
+
+## OE.Translation.Service — translation store + Mongo `*NaTr` writer
+
+- **Purpose:** Owns the translation side of the pipeline: keeps the SQL worklist
+  (`TranslationCache2`) in step with the live feed, and stamps translated names onto the Mongo
+  catalogue. Added by the **2026-07 translation-flow redesign**.
+- **Consumes** (`q.oe.translation`): `r.bg.receiver.onfixturechange`, `r.bg.receiver.onmarketchange`,
+  `r.oe.ontranslationchange`.
+- **Handles** (`Worker.cs:171-189`):
+  - `ON_FIXTURE_CHANGE` → `OnProcessFixtureSetUpdate` (seed SQL keys) + `WriteFixtureTranslations`
+    (stamp Mongo `SpNaTr`/`SegNaTr`/`LeNaTr`/`HoNaTr`/`AwNaTr`).
+  - `ON_MARKET_CHANGE` → `OnProcessMarketSetUpdate` + `WriteMarketTranslations` (`MaNaTr`, `SeNaTr`).
+  - `ON_TRANSLATION_CHANGE` → `ProcessTranslationChange`: persists the `*NaTr` delta and republishes
+    **translation-only** odds changes to `r.oe.sb.engine.on_odds_change`
+    (`MongoTranslationRepository.cs:1024-1192`) so live clients pick up a new translation without an
+    odds move.
+- **Writes (SQL `Translation`):** `SaveChangesAsync` on `TranslationCache2`
+  (`TranslationRepository.cs:462, :586`) — **this is the one place OEv2 writes translation SQL.**
+- **Startup migrations** (both non-fatal — a failure logs and startup continues):
+  `SeedActiveSnapshot` (`Worker.cs:100-109`, seeds SQL from the active Mongo snapshot) and
+  `BackfillActiveSnapshot` (`:116-126`, stamps `*NaTr` onto active documents from the preloaded cache,
+  insert-missing-only).
+- **Config:** `Custom:Translation:CacheSeed` (default `false`; argocd sets it `true` in stg + prd),
+  `SeedActiveSnapshot`, `BackfillActiveSnapshot`, and the temporary `CacheBackfill` legacy bridge —
+  see [Database.md](./Database.md).
+
+---
+
+## OE.Translation.Job — translation retention + bet-placement flagging
+
+- **Purpose:** Keeps `TranslationCache2` bounded, and protects rows that a bet depends on.
+- **Consumes** (`q.oe.translation.job`): `r.bet.placement` → flags `HAS_BET_PLACEMENT = 1` for the
+  keys behind a placed bet (`TranslationCleanupRepository.cs:42`, chunked so the `IN (...)` list stays
+  inside the SQL Server parameter limit). Same `BetPlacementWorker` pattern as `OE.Job.Cleanup`.
+- **Type:** also a timer job — every `Custom:Cleanup:IntervalMinutes` (default 60) after a
+  `StartupDelaySeconds` (default 60).
+- **Deletes (SQL):** rows older than `RetentionDays` (default 30) whose `STRING_ID` matches
+  `Custom:Cleanup:Prefixes` (default `MaTe:,SeTe:,Te:,SpId:,SegId:,LeId:`), via batched
+  `DELETE TOP (BatchSize)` raw SQL (default 2000) to keep transactions small and avoid lock escalation
+  (`TranslationCleanupRepository.cs:80`, `RunBatchedDeleteAsync`).
+- **Config:** `Custom:Cleanup:Enabled` (default `true`), `ConnectionStrings:Translation`.
 
 ---
 

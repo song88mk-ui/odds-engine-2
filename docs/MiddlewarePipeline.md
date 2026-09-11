@@ -56,7 +56,7 @@ RabbitMQ delivery (BasicDeliverEventArgs)
 | Authorization | **none** — see [Authorization.md](./Authorization.md) | — |
 | CORS | N/A (no browser callers) | — |
 | Response compression | N/A (no HTTP responses; payloads minimized via abbreviated fields) | — |
-| Localization (`UseRequestLocalization`) | **not request-scoped**; **(Corrected 2026-06-30: translations removed from pipeline)** the per-entity SQL→MemCache resolution was **removed** — `TranslationRepository` is now orphaned/uncalled; UI localizes via platform-web REST `GetTranslations()` | `OE.Sportsbook.Service` TranslationRepository (orphaned) |
+| Localization (`UseRequestLocalization`) | **not request-scoped** — there is no request. Localization happens as *message enrichment*: `OE.Adapter.Service` stamps every language's `*Tr` onto the message from a startup-preloaded cache, and consumers pick the language they need | `OE.Adapter.Service/Repositories/TradingRepository.cs:119-159` |
 | Static files / HTTPS redirect / HSTS | N/A | — |
 | Rate limiting / QoS | RabbitMQ `BasicQos` prefetch (default 1000) | `MessageBroker.cs:205` |
 | Health checks middleware | none (no endpoint); KeepAlive heartbeat instead | `OE.Job.KeepAlive` |

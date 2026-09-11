@@ -11,8 +11,10 @@ All [Verified].
 | `ClientLiveFixtureModel` | `ClientId`,`SportId`,`Fixtures[]` | client live-fixture tracking |
 | `FixtureModel` | `FixtureSpecifier`,`FixtureStartDate` | lightweight fixture ref |
 | `ClientOdds` | `ClientCode`,`DecimalOdds`,`MalaysianOdds`,`HongkongOdds`,`IndonesianOdds`,`SelectionTemplateId`,`SelectionId` | per-client multi-format odds |
-| `TranslationBase` | `LaCo`,`Va` | embedded translation (lang→value) — **orphaned/unused as of 2026-06-30** (translation embed path removed) |
-| `TranslationItem` | `StringId`,`TargetLanguageId`,`TargetText` | translation query/result — **orphaned/unused as of 2026-06-30** (SQL read path removed) |
+| `TranslationMessage` | `LaCo`,`Tx` | **the** embedded translation type on every `*Tr` list |
+| `TranslationCache2` | `StringId`,`SourceText`,`TargetTextZh/Es/Fr`,`Processed`,`HasBetPlacement` | the SQL translation store (EF entity) |
+| `LegacyTranslationCache` | `SourceHash`,`SourceLanguage`,`TargetLanguage`,`TargetText` | external legacy table, read-only, temporary `CacheBackfill` bridge only |
+| ~~`TranslationBase`~~ / ~~`TranslationItem`~~ | — | **dead — zero references**; delete (see [TechnicalDebt.md](../TechnicalDebt.md) H7) |
 | `SportModel` | `SpId`,`FiSp`,`PrId` | sport ref + provider mapping |
 
 ## MongoDB collection models (`Data/Sportsbook/MongoDB/Collections/`)
@@ -25,7 +27,7 @@ Embedded sub-docs: `*TranslationMDB`, `PeriodScoreMDB`, `ClientBoostedSelectionN
 | Context | Entities | DB |
 |---|---|---|
 | `TradingContext` | `ClientOddsFeedConfiguration` (PK `{ClientId,SportId}`), `ClientOddsFeedLiveFixture` (PK `{ClientId,SportId,FixtureSpecifier}`) | Trading |
-| `TranslationContext` | `SportsbookDynamic` | Translation — **registered but no longer read as of 2026-06-30 (orphaned)** |
+| `TranslationContext` | `TranslationCache2`, `TranslationCache` (legacy) | Translation — Adapter (preload), Translation.Service (read+write), Translation.Job (write) |
 
 ## Enums (`OE.Shared/Enums/`) — values are the contract
 | Enum | Values (abbrev) |

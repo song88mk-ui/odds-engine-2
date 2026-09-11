@@ -83,7 +83,7 @@ Detailed per-service behavior: [ProjectOverview.md](./ProjectOverview.md).
    service    │  contracts · DB models · enums · broker ·    │
               │  memcache · helpers · providers              │
               └────────────────▲───────────────────────────┘
-                               │ ProjectReference (all 9 workers)
+                               │ ProjectReference (all 11 workers)
    ┌───────────────────────────┴───────────────────────────┐
    │  Worker (BackgroundService)                            │
    │     └─ Repository (per service)                        │

@@ -63,10 +63,13 @@ Static `*Extensions` classes in `OE.Shared/Extensions/`:
   - **`To*` methods** build Mongo `WriteModel<T>[]` from messages (`ToFixture`, `ToMarketAndSelection*`,
     `ToDBBettingStatus`).
   - **`Prepare*` methods** build outgoing messages from inputs (`PrepareInternalOddsChangeMessage`).
-    (Corrected 2026-06-30: translations removed from pipeline — `Prepare*` no longer merges cached
-    translations.)
-  - **`Map*`** for value projection. (Corrected 2026-06-30: `MapTranslations` → `TranslationBase` was
-    deleted; `TranslationBase` is now orphaned.)
+    They forward the inbound `*Tr` lists through `GateTranslations` rather than looking translations up
+    — sourcing happens upstream in `OE.Adapter.Service`.
+  - **`Map*`** for value projection. Note `MapTranslations` → `TranslationBase` was deleted in the
+    2026-07 redesign; `TranslationBase` (`OE.Shared/Models/`) is now **orphaned** and should be removed.
+  - **`To*Translations`** (`ToOutgoingTranslations` in Websocket, the `Select(t => new
+    TranslationMessage {...})` projections in Sportsbook) convert between the Mongo `*NaTr` shape
+    (`{LaCo, <Name>}`) and the wire `*Tr` shape (`{LaCo, Tx}`) — the two are deliberately different.
 - DTO↔entity duplication is accepted (e.g. `ClientConfigurationModel` mirrors the EF entity).
 
 ## Helpers

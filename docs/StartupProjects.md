@@ -19,7 +19,9 @@ hosted `Worker`.
 | Service | Serilog | Telemetry | Broker(s) | MemCache | DB clients | Other registrations |
 |---|---|---|---|---|---|---|
 | **Adapter.Service** | ✅ | ✅ | `IMessageBroker` | — | — | `IHelper`, `ITradingRepository` (`Program.cs:27-36`) |
-| **Sportsbook.Service** | ✅ | ✅ | `IMessageBroker` | ✅ | `IMongoClient`+`IMongoDatabase("Sportsbook")`, `TranslationContext` (DbContextPool — **registered but unused/orphaned as of 2026-06-30**) | `IHelper`, `ISportsbookRepository`, `ITranslationRepository` (**registered but never resolved as of 2026-06-30 — translation read path removed**); **runs MongoIndexBootstrapper at startup** (`Program.cs:21-25`) |
+| **Sportsbook.Service** | ✅ | ✅ | `IMessageBroker` | ✅ | `IMongoClient`+`IMongoDatabase("Sportsbook")` — **no SQL context** | `IHelper`, `ISportsbookRepository`; **runs MongoIndexBootstrapper at startup** (`Program.cs:21-25`) |
+| **Translation.Service** | ✅ | ✅ | `IMessageBroker` | ✅ | `TranslationContext` (DbContextPool) | `IHelper`, `ITranslationCache`, `ITranslationRepository`, `IMongoTranslationRepository`; **two non-fatal startup migrations** — `SeedActiveSnapshot` (Mongo→SQL) and `BackfillActiveSnapshot` (cache→Mongo `*NaTr`), each wrapped so a failure logs and startup continues (`Worker.cs:100-126`) |
+| **Translation.Job** | ❌ | ❌ | `IMessageBroker` | ❌ | `TranslationContext` (DbContextPool) | `ITranslationCleanupRepository` (**Scoped**); two hosted services — `BetPlacementWorker` (`r.bet.placement`) and `CleanupWorker` (timer, after `StartupDelaySeconds`) |
 | **UOF.Client** | ✅ | ✅ | `IMessageBroker` (×used as internal + external) | ✅ | (Trading via repo) | `IClientRepository`, `IPlatformRepository`, `ITradingRepository` (`Program.cs:21-26`) |
 | **Websocket.Service** | ✅ | ✅ | `IMessageBroker` | ✅ | (Mongo via repo) | `ISportsbookRepository`; builds SignalR `HubConnection` in Worker |
 | **Job.Lookup** | ❌ (none) | ❌ (none) | `IMessageBroker` | — | `IMongoClient` | `ISportsbookRepository` (`Program.cs:21-31`) — **minimal host** |
