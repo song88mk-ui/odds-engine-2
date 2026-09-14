@@ -17,7 +17,7 @@ DB work). All [Verified].
 | Service | Repository | Store(s) | Role |
 |---|---|---|---|
 | **Sportsbook.Service** | `SportsbookRepository` | MongoDB (Fixture/Market/Selection/BettingStatus) | the real persistence repo: upserts catalogue, reads for projections, publishes derived messages |
-| Translation.Service | `TranslationRepository` | SQL Translation (**read + write**) | seed/update `TranslationCache2`; legacy `CacheBackfill` bridge |
+| Translation.Service | `TranslationRepository` | SQL Translation (**read + write**) | seed/update `TranslationCache2` (the legacy `CacheBackfill` bridge was removed in GM-784) |
 | Translation.Service | `MongoTranslationRepository` | Mongo Sportsbook | stamp `*NaTr` onto documents (update-only, retried); republish translation-only odds changes |
 | Translation.Job | `TranslationCleanupRepository` | SQL Translation (**raw SQL**) | flag `HAS_BET_PLACEMENT`; batched retention delete (**Scoped**, not Singleton) |
 | Adapter | `TranslationCache` | SQL Translation (startup only) | full-table preload; serves `*Tr` from memory |

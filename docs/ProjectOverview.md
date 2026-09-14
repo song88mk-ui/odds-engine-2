@@ -93,8 +93,8 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   `BackfillActiveSnapshot` (`:116-126`, stamps `*NaTr` onto active documents from the preloaded cache,
   insert-missing-only).
 - **Config:** `Custom:Translation:CacheSeed` (default `false`; argocd sets it `true` in stg + prd),
-  `SeedActiveSnapshot`, `BackfillActiveSnapshot`, and the temporary `CacheBackfill` legacy bridge —
-  see [Database.md](./Database.md).
+  `SeedActiveSnapshot` and `BackfillActiveSnapshot`. The `CacheBackfill` legacy bridge was removed in
+  GM-784 (2026-09-14) — see [Database.md](./Database.md).
 
 ---
 

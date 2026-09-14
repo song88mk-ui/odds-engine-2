@@ -6,8 +6,6 @@ using OE.Shared.Data.Translation;
 using OE.Shared.Data.Translation.Entities;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Utilities;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace OE.Translation.Service.Repositories
 {
@@ -30,29 +28,9 @@ namespace OE.Translation.Service.Repositories
         // Custom:Translation:CacheSeed.
         private readonly bool _cacheSeed;
 
-        // Temporary bridge (ported from the removed BG.Translation.Service, adapted to the flat
-        // schema): after seeding, copy already-translated strings from the external, SOURCE_HASH-
-        // keyed TranslationCache table into TranslationCache2's EMPTY TARGET_TEXT_* columns so
-        // they aren't re-translated under the String_ID key space. Runs off the seeded rows, so
-        // it only does anything while _cacheSeed is also on. Default OFF; remove once the
-        // external pipeline has drained the empty-target worklist. Enable via
-        // Custom:Translation:CacheBackfill.
-        private readonly bool _cacheBackfill;
-
         // Cache namespace for the per-key write throttle (~one DB round-trip per key per TTL).
         // The "T#" prefix is kept for cache-key continuity across the migration.
         private const string TranslationCachePrefix = "T#";
-
-        // Cache namespace throttling the TranslationCache backfill lookup per String_ID, separate
-        // from TranslationCachePrefix so a liveness-only touch doesn't skip a pending backfill.
-        private const string BackfillCachePrefix = "T#BF#";
-
-        // Fixed language set of the flat TranslationCache2 schema (TARGET_TEXT_ZH/_ES/_FR);
-        // legacy TranslationCache rows in any other language have no column to land in and are
-        // skipped by the backfill.
-        private const string LANGUAGE_ZH = "ZH";
-        private const string LANGUAGE_ES = "ES";
-        private const string LANGUAGE_FR = "FR";
 
         #endregion
 
@@ -68,7 +46,6 @@ namespace OE.Translation.Service.Repositories
             _memCache = memCache;
             _scopeFactory = scopeFactory;
             _cacheSeed = configuration.GetValue("Custom:Translation:CacheSeed", false);
-            _cacheBackfill = configuration.GetValue("Custom:Translation:CacheBackfill", false);
         }
 
         #endregion
@@ -350,8 +327,6 @@ namespace OE.Translation.Service.Repositories
 
             var dict = existing.ToDictionary(x => x.StringId);
 
-            var savedEntities = new List<TranslationCache2>();
-
             foreach (var item in distinctItems)
             {
                 // Defensive: SOURCE_TEXT is NVARCHAR(250) NOT NULL.
@@ -394,8 +369,6 @@ namespace OE.Translation.Service.Repositories
 
                         context.TranslationCache2.Add(variant);
                     }
-
-                    savedEntities.Add(variant);
 
                     _memCache.AddOrUpdateCache(TranslationCachePrefix + variantId, item.value, 24);
                     continue;
@@ -447,8 +420,6 @@ namespace OE.Translation.Service.Repositories
                     context.TranslationCache2.Add(entity);
                 }
 
-                savedEntities.Add(entity);
-
                 // Throttle-set must mirror AddIfValid's throttle key: per wording for MaTe:,
                 // per key for everything else.
                 _memCache.AddOrUpdateCache(
@@ -460,9 +431,6 @@ namespace OE.Translation.Service.Repositories
             }
 
             await context.SaveChangesAsync();
-
-            if (_cacheBackfill)
-                await BackfillTranslationCache2(context, savedEntities);
         }
 
         // MaTeP:{MaTeId} placeholder templates are seeded PROCESSED=1: deliberately OFF
@@ -488,117 +456,6 @@ namespace OE.Translation.Service.Repositories
             IsMarketTemplateKey(item.id)
                 ? MarketTemplateVariantId.Compute(MarketTemplateIdSegment(item.id), item.value)
                 : item.id;
-
-        // TEMPORARY bridge (ported from the removed BG.Translation.Service, adapted to the flat
-        // schema): the external TranslationCache table is keyed by SOURCE_HASH, TranslationCache2
-        // by String_ID. For each row just seeded/touched that still has an empty target column,
-        // hash its SOURCE_TEXT the way SQL Server computed the legacy persisted column and copy
-        // any matching EN-source targets into the EMPTY TARGET_TEXT_* columns only — a target the
-        // external pipeline already wrote is never overwritten. A row that received a backfilled
-        // target is marked PROCESSED = 1 (the legacy cache satisfied it — no DeepL pass needed).
-        // Throttled per String_ID via BackfillCachePrefix so a hot, already-checked key isn't
-        // re-queried on every message. Remove once the external pipeline has drained the worklist.
-        internal async Task BackfillTranslationCache2(TranslationContext context, List<TranslationCache2> entities)
-        {
-            var candidates = entities
-                .Where(e =>
-                    string.IsNullOrEmpty(e.TargetTextZh) ||
-                    string.IsNullOrEmpty(e.TargetTextEs) ||
-                    string.IsNullOrEmpty(e.TargetTextFr))
-                .Where(e => _memCache.GetCache<string>(BackfillCachePrefix + e.StringId) == null)
-                .GroupBy(e => e.StringId)
-                .Select(g => g.Last())
-                .ToList();
-
-            if (candidates.Count == 0)
-                return;
-
-            var hashByStringId = candidates.ToDictionary(e => e.StringId, e => SourceHash(e.SourceText));
-
-            var hashes = hashByStringId.Values
-                .Distinct()
-                .ToList();
-
-            var matches = await context.TranslationCache
-                .AsNoTracking()
-                .Where(x => hashes.Contains(x.SourceHash) && x.SourceLanguage == "EN")
-                .ToListAsync();
-
-            var matchesByHash = matches
-                .GroupBy(x => x.SourceHash)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
-            var backfilled = 0;
-
-            foreach (var candidate in candidates)
-            {
-                var candidateBackfilled = 0;
-
-                if (matchesByHash.TryGetValue(hashByStringId[candidate.StringId], out var hits))
-                {
-                    foreach (var hit in hits)
-                    {
-                        if (string.IsNullOrEmpty(hit.TargetText))
-                            continue; // legacy row not translated yet
-
-                        // Defensive: legacy TARGET_TEXT is unbounded, the flat columns are
-                        // NVARCHAR(250).
-                        var targetText = hit.TargetText.Length <= 250
-                            ? hit.TargetText
-                            : hit.TargetText.Substring(0, 250);
-
-                        switch (hit.TargetLanguage?.ToUpperInvariant())
-                        {
-                            case LANGUAGE_ZH when string.IsNullOrEmpty(candidate.TargetTextZh):
-                                candidate.TargetTextZh = targetText;
-                                candidateBackfilled++;
-                                break;
-
-                            case LANGUAGE_ES when string.IsNullOrEmpty(candidate.TargetTextEs):
-                                candidate.TargetTextEs = targetText;
-                                candidateBackfilled++;
-                                break;
-
-                            case LANGUAGE_FR when string.IsNullOrEmpty(candidate.TargetTextFr):
-                                candidate.TargetTextFr = targetText;
-                                candidateBackfilled++;
-                                break;
-
-                                // Any other language has no column in the flat schema — skipped.
-                        }
-                    }
-                }
-
-                if (candidateBackfilled > 0)
-                {
-                    // The legacy cache already carried this translation, so the row doesn't need
-                    // a DeepL pass — take it off the pipeline's worklist. If a configured language
-                    // is still empty, the pipeline's startup missing-language reset re-opens it.
-                    candidate.Processed = true;
-                    backfilled += candidateBackfilled;
-                }
-
-                _memCache.AddOrUpdateCache(BackfillCachePrefix + candidate.StringId, candidate.StringId, 24);
-            }
-
-            if (backfilled > 0)
-            {
-                await context.SaveChangesAsync();
-
-                _logger.LogInformation(
-                    "Backfilled {Count} translation targets from the legacy TranslationCache",
-                    backfilled);
-            }
-        }
-
-        // Matches the SQL Server formula behind the legacy persisted SOURCE_HASH column —
-        // CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', SOURCE_TEXT), 2): SHA-256 over the NVARCHAR
-        // (UTF-16LE) bytes, uppercase hex. Must stay byte-identical or the backfill join finds
-        // nothing.
-        internal static string SourceHash(string text)
-        {
-            return Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(text)));
-        }
 
         #endregion
     }

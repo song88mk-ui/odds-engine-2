@@ -70,33 +70,26 @@ odds-engine-2 uses **SQL Server via EF Core 3.1** for two **read-mostly referenc
   `OE.Translation.Service/Program.cs:47`, `OE.Translation.Job/Program.cs:13`. Conn string
   `ConnectionStrings:Translation` (AWS RDS) — **in use**, and required by all three.
 
-### `TranslationCache` (`LegacyTranslationCache`) — external, read-only, temporary
-- **DbSet:** `TranslationCache` → table **`TranslationCache`** (`TranslationContext.cs:15`), mapped as
-  `LegacyTranslationCache` so it can't be confused with the services' in-memory `TranslationCache`
-  classes.
-- **Externally owned** — OEv2 **never writes** it, and ships no DDL for it. Its `CREATE TABLE` lives in
-  `infrastructure/flyway/migrations/<env>/V1__Baseline.sql`.
-- **Columns:** `SOURCE_HASH` (`varchar(64)`), `SOURCE_LANGUAGE`, `TARGET_LANGUAGE`, `SOURCE_TEXT`,
-  `TARGET_TEXT`, `CREATED_AT`, `GLOSSARY_VERSION`, `UPDATED_AT`.
-- ⚠️ **It is a heap with no constraints at all.** Every column is `NULL`-able and there is **no primary
-  key, no unique index, and no index of any kind** in the flyway DDL. The
-  `HasKey(SourceHash, SourceLanguage, TargetLanguage)` in `TranslationContext.cs` is an **EF-side
-  fiction** required to map the entity — the database does not enforce it. Consequences:
-  duplicate `(hash, lang, lang)` rows are possible (the backfill correctly groups matches by hash and
-  iterates every hit rather than assuming one), and the backfill's
-  `WHERE SOURCE_HASH IN (...) AND SOURCE_LANGUAGE = 'EN'` is an **unindexed scan** of the whole table.
-- `SOURCE_HASH` holds `CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', SOURCE_TEXT), 2)` — SHA-256 over the
-  NVARCHAR (UTF-16LE) source text as uppercase hex. Note it is a **plain stored column** here, unlike
-  `SportsbookDynamic.SOURCE_HASH`, which is `AS (...) PERSISTED`. The bridge therefore computes the
-  hash client-side (`SourceHash(e.SourceText)`) to match.
-- **Only reader:** the temporary `Custom:Translation:CacheBackfill` bridge
-  (`OE.Translation.Service/Repositories/TranslationRepository.cs:501-529`), which copies legacy targets
-  into **empty** `TARGET_TEXT_*` columns only and marks those rows `PROCESSED = 1`.
-- ⚠️ **The bridge is live in production.** `CacheBackfill` defaults to `true` in
-  `OE.Translation.Service/appsettings.json:44` and is **not** overridden in argocd (unlike `CacheSeed`,
-  which is set explicitly per environment). Retiring the legacy table means setting
-  `Custom__Translation__CacheBackfill: false` in argocd first, then deleting the bridge — its own
-  comment says "remove once the external pipeline has drained the worklist".
+### `TranslationCache` (`LegacyTranslationCache`) — RETIRED (GM-784, 2026-09-14)
+The legacy, `SOURCE_HASH`-keyed `TranslationCache` table is **no longer read by this repo**. The
+`LegacyTranslationCache` entity, the `TranslationContext.TranslationCache` DbSet, the
+`Custom:Translation:CacheBackfill` bridge and its `SourceHash` helper were all deleted.
+`TranslationCache2` is now the context's only DbSet. The table itself still exists in SQL (it is
+externally owned, with DDL in `infrastructure/flyway/migrations/<env>/V1__Baseline.sql`); nothing in
+OEv2 touches it, so it can be dropped independently whenever the owning team is ready.
+
+**Why it was removed.** The bridge copied legacy targets into empty `TARGET_TEXT_*` columns and set
+`PROCESSED = 1` **in SQL only**. Nothing announced those rows: `update.py`'s worklist is
+`PROCESSED = 0`, and this service's in-memory cache, OE.Adapter and Mongo never learned about them.
+Team and player names therefore rendered **English** on the sportsbook while Backoffice showed them
+translated, until a Backoffice re-save (which publishes `OnTranslationChange` itself) or a service
+restart (which re-`Preload()`s from SQL and stamps missing `*NaTr` via `BackfillActiveSnapshot`).
+In production the bridge was silently swallowing **1,700-2,300 targets/day** while `update.py`
+logged `cache_hits=0` on every pass. Live from 2026-07-06 until this removal.
+
+Rows now seed with empty targets and `PROCESSED = 0`, so `update.py` translates them via DeepL and
+announces them normally. That roughly doubles daily DeepL volume, which is the intended trade:
+correctness over the cost saving the bridge existed to provide.
 
 ## Trading DB — `TradingContext` (`OE.Shared/Data/Trading/`)
 - **DbSets / tables:** `ClientOddsFeedConfiguration`, `ClientOddsFeedLiveFixture`.

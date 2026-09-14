@@ -13,7 +13,7 @@ All [Verified].
 | `ClientOdds` | `ClientCode`,`DecimalOdds`,`MalaysianOdds`,`HongkongOdds`,`IndonesianOdds`,`SelectionTemplateId`,`SelectionId` | per-client multi-format odds |
 | `TranslationMessage` | `LaCo`,`Tx` | **the** embedded translation type on every `*Tr` list |
 | `TranslationCache2` | `StringId`,`SourceText`,`TargetTextZh/Es/Fr`,`Processed`,`HasBetPlacement` | the SQL translation store (EF entity) |
-| `LegacyTranslationCache` | `SourceHash`,`SourceLanguage`,`TargetLanguage`,`TargetText` | external legacy table, read-only, temporary `CacheBackfill` bridge only |
+| ~~`LegacyTranslationCache`~~ | — | **deleted in GM-784** (2026-09-14) with the `CacheBackfill` bridge; the SQL table still exists but OEv2 no longer reads it |
 | ~~`TranslationBase`~~ / ~~`TranslationItem`~~ | — | **dead — zero references**; delete (see [TechnicalDebt.md](../TechnicalDebt.md) H7) |
 | `SportModel` | `SpId`,`FiSp`,`PrId` | sport ref + provider mapping |
 

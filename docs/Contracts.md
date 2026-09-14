@@ -73,10 +73,11 @@ OEv2 reads.** [Verified]/[Verified-sibling:backoffice-final]
 
 **C9 — Translation (two writers):** `TranslationCache2` (`ID`, `STRING_ID`, `SOURCE_LANGUAGE`,
 `SOURCE_TEXT`, `TARGET_TEXT_ZH`/`_ES`/`_FR`, `HAS_BET_PLACEMENT`, `PROCESSED`, `CREATED_AT`,
-`UPDATED_AT`), plus the external read-only `TranslationCache` (`SOURCE_HASH`, `SOURCE_LANGUAGE`,
-`TARGET_LANGUAGE`, `TARGET_TEXT`, …). Column ownership is the contract — see the C9 row above.
-`SportsbookDynamic`/`SportsbookGlossary` are retired from OEv2's code but **still exist in the
-schema**. Field listings: [SharedLibraries.md](./SharedLibraries.md) §1.2,
+`UPDATED_AT`). Column ownership is the contract — see the C9 row above.
+The legacy external `TranslationCache` (`SOURCE_HASH`, `SOURCE_LANGUAGE`, `TARGET_LANGUAGE`,
+`TARGET_TEXT`, …) is **no longer read by OEv2** — retired together with the `CacheBackfill` bridge
+in GM-784 (2026-09-14). It, like `SportsbookDynamic`/`SportsbookGlossary`, is retired from OEv2's
+code but **still exists in the schema**. Field listings: [SharedLibraries.md](./SharedLibraries.md) §1.2,
 [Database.md](./Database.md). [Verified]
 
 > **All SQL DDL for OEv2's databases lives in the `infrastructure/flyway` repo** (`migrations/<env>/`),
