@@ -249,7 +249,7 @@ Key sections (names only - values differ per service; see each service's
 |---|---|---|
 | `MessageBroker` | `Host`, `Port`, `Username`, `Password`, `VirtualHost`, `Exchange`, `Queue`, `Consumer`, `RoutingKey`, `IsPriority`, `IsExclusive` | all message-driven services |
 | `ExternalMessageBroker` | same shape, vhost `ext` | `OE.UOF.Client` |
-| `Custom` | `MongoDB-Sportsbook` (Mongo connection string), `DbContextTimeout`, plus per-service keys such as `APIKey`, `WebSocketAPI`, `PlatformAPI`, `AsianClientCodes`, `UseMessagePack`, `IsOEEnabled`, `InternalAPIKey` (Websocket; multi-tenant since GM-720 — clients are discovered from the Platform API `v1/clients`; run exactly one instance) and `BetGenius:{Uri,Env,User,Password,Key}` (LiveStream) | varies |
+| `Custom` | `MongoDB-Sportsbook` (Mongo connection string), `DbContextTimeout`, plus per-service keys such as `APIKey`, `WebSocketAPI`, `PlatformAPI`, `UseMessagePack`, `IsOEEnabled`, `InternalAPIKey` (Websocket; multi-tenant since GM-720 — clients are discovered from the Platform API `v1/clients`; run exactly one instance) and `BetGenius:{Uri,Env,User,Password,Key}` (LiveStream) | varies |
 | `ConnectionStrings` | `Translation` (Adapter, Translation.*), `Betting` (Job.Cleanup) | SQL-backed services |
 | `Serilog` | console sink config | all |
 | `Telemetry` | `Enabled`, `Environment` (OpenTelemetry) | most |

@@ -101,7 +101,7 @@ Fixture/Market/Selection (1) ──< boosted-for-Client (N)
 ```
 Fixture.ClCo / Fixture.ClMa        which clients see the fixture
 Market.ClCo / Market.ClCoMa        which clients see the market (mask)
-Websocket per-client instances + AsianClientCodes   per-client delivery/format
+Websocket per-client instances     per-client delivery
 ```
 - The catalogue is **multi-tenant**: documents carry client codes/masks; delivery (`OE.Websocket.Service`,
   `OE.UOF.Client`) is per-client.

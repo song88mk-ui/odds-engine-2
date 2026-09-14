@@ -15,13 +15,10 @@ namespace OE.Websocket.Service.Tests
     // fail on the lookup rather than silently passing.
     internal static class SportsbookRepositoryInternals
     {
-        internal const string AsianClientCodes = "TSO,S88";
-
         internal static IConfiguration BuildConfiguration(bool isOEEnabled = false) =>
             new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    { "Custom:AsianClientCodes", AsianClientCodes },
                     { "Custom:IsOEEnabled", isOEEnabled.ToString() }
                 })
                 .Build();

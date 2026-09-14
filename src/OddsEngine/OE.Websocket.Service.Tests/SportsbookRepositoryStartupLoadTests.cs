@@ -44,7 +44,6 @@ namespace OE.Websocket.Service.Tests
             return new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    { "Custom:AsianClientCodes", "TSO,S88" },
                     { "Custom:IsOEEnabled", "false" }
                 })
                 .Build();

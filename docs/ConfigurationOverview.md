@@ -22,7 +22,7 @@
 | Adapter.Service | `q.oe.adapter*` / `r.uof.#` (`r.bg.receiver.#|r.uof.#` in argocd) | — | — | — | — |
 | Sportsbook.Service | `q.sb.engine` / `r.oe.adapter.#.11` (dev stub; prod `.00–.10`) | `Sportsbook` @ 10.49.100.55 | `Translation` @ AWS RDS | `DbContextTimeout=180` | — |
 | UOF.Client | `q.uof.engine.client.TSO` / `r.oe.adapter.#.#|r.oe.uof.heartbeat|r.of.recovery.#.tso` + **external** vhost `ext` | — | `Trading` | `ClientId`, `ClientCode=TSO`, `AsianClient` | PlatformAPI + `x-api-key` |
-| Websocket.Service | `q.sb.engine.websocket.S88` / 9 piped keys (oddschange, betstop*, betstatus, cashout, wallet, favorites, boosted, sortorder) | reads Sportsbook | — | `ClientCode=S88`, `UseMessagePack`, `IsOEEnabled`, `AsianClientCodes`, `IsPriority/IsExclusive` | WebSocketAPI `/platform`, PlatformAPI |
+| Websocket.Service | `q.sb.engine.websocket.S88` / 9 piped keys (oddschange, betstop*, betstatus, cashout, wallet, favorites, boosted, sortorder) | reads Sportsbook | — | `ClientCode=S88`, `UseMessagePack`, `IsOEEnabled`, `IsPriority/IsExclusive` | WebSocketAPI `/platform`, PlatformAPI |
 | Job.Lookup | `q.oe.job.lookup` / `r.oe.adapter.onmarketchange.#` | `Sportsbook` @ 10.49.100.55 | — | — | — |
 | Job.Settlement | publisher only | `Sportsbook` | — | `EditSportsbook=true`, `ApiKey`(unused) | — |
 | Job.LiveStream | — (no broker) | `Sportsbook` @ localhost stub | — | `Enabled`, `BetGenius:{Uri,Env,User,Password,Key}` | `https://api.geniussports.com/` |

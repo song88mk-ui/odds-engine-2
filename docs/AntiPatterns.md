@@ -55,7 +55,6 @@ recognize them when reading/extending the code. This is the *pattern* view; the 
   CI. (L1, L2)
 - **Unused dependencies/helpers.** `IdGen` referenced unused (Sportsbook); status-mapper helpers
   never called (Adapter `TradingRepository.cs:95-113`); `Custom:ApiKey` unused (Settlement). (L3, L4)
-- **Stub methods.** `IntExtensions.IsVirtualSportId` returns from an empty list (TODO).
 
 ## Naming / clarity
 - **Misleading class names.** `TradingRepository` that does routing (Adapter) or SQL (UOF); 

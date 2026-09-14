@@ -46,7 +46,7 @@ Static `*Extensions` classes in `OE.Shared/Extensions/`:
   `[Project.Class.Member (file:line)] message | Data: {json}`. The standard logging entry point.
 - **`DateTimeExtension`** — `ToEpochTimestamp()` (ms since epoch via tick math), `ConvertToDateTime()`.
 - **`IntExtensions`** — `GetBetStatus(this int settlementStatusId)` (SettlementStatus→BetStatus switch,
-  throws on undefined), `IsVirtualSportId()` (stub — empty list + TODO).
+  throws on undefined), `IsVirtualSportId()` (true only for Virtual Cricket, sport 11205870).
 - Also `ServiceCollection` extensions for DI wiring (`AddProviders` in Job.LiveStream;
   `AddClient*` in platform-web).
 - Convention: `public static class XxxExtensions`, first param `this T`.

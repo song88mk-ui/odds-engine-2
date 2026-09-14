@@ -61,7 +61,7 @@ that are **currently disabled** in code (intent uncertain — see [Unknowns.md](
 ## Multi-tenancy / client visibility
 - **BR-16 [Verified]** The catalogue is **multi-tenant**: fixtures/markets carry client codes/masks
   (`ClCo`/`ClMa`/`ClCoMa`); delivery is **per-client** (per-client `OE.Websocket.Service` and
-  `OE.UOF.Client` instances, `AsianClientCodes`).
+  `OE.UOF.Client` instances).
 - **BR-17 ⚠️ [Verified — DISABLED]** **Client feed entitlement** (`ClientOddsFeedConfiguration`:
   `PrematchOdds`/`LiveOdds`/`MaxFixtures`) is meant to gate what each external client receives, but
   the validation and `MaxFixtures` enforcement in `OE.UOF.Client` are **commented out** — currently

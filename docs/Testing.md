@@ -141,9 +141,21 @@ fixed there, since GM-808 changed no production code:
    `FirstOrDefault` with no null check. A market with an empty `ClCoMa` throws inside the mapper and
    the caller's `catch` swallows it, so the whole fixture update is dropped rather than that one
    market. Pinned by `MainMarketsOE_MarketWithNoClientOddsConfiguration_SilentlyDropsTheWholeUpdate`.
-2. **GM-811.** The asian-odds branch at `SportsbookRepository.cs:1009` is unreachable: `_MaTeIds` at `:39` is an
-   empty list with its values commented out. Same for `IsVirtualSportId`
-   (`OE.Shared/Extensions/IntExtensions.cs:11`). Their mutants stay "no coverage" permanently.
+2. **GM-811** (fixed, both halves). The asian-odds branch in `GetClientOdds` was guarded by an empty
+   `_MaTeIds`, so its mutants could never be covered. It is now removed, along with the
+   `Custom:AsianClientCodes` key that only that branch read, and
+   `GetClientOdds_AsianClient_GetsMarginLikeAnyOtherClient` pins that an Asian client is priced like
+   any other client. Restoring it was never an option: the trigger (sport 1, market templates
+   16/18/66/68) is Betradar-era and cannot match a Genius Sports id.
+   `IsVirtualSportId` went the other way and was **populated**, because virtual sports are live:
+   Virtual Cricket is Genius Sports sport **11205870**, already acted on in platform-web
+   (`Utility2.cs`) and backoffice-final (`SportHelper.cs`) and configured in the Sportsbook
+   market-template lookup. That makes six branches in `OE.Websocket.Service` and one in
+   `OE.UOF.Client` reachable for the first time. `OE.Shared.Test/Extensions/IntExtensionsTests.cs`
+   pins the single valid id and the ids that must not creep in (the previous provider's 1001-1058,
+   and 11205863, which is real 3x3 Basketball in the same id block).
+   `ProcessTopFixtures_VirtualSport_SkipsEntirely` and `ProcessTopLeagues_VirtualSport_SkipsEntirely`
+   cover two of the six call sites; the remaining four are reachable but still untested.
 3. **GM-812.** `SportsbookRepository.cs:1329`, `:1339`, `:1429` and `:1439` append to a non-concurrent
    `List<string>` from inside `Parallel.ForEach`.
 

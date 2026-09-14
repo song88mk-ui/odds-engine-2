@@ -81,7 +81,7 @@ Suggested investigation**; **no refactoring is suggested**.
 - All 11 worker services + `OE.Shared` documented (purpose, lifecycle, data, config). High.
 - Cross-repo seams documented with classification. Medium (sibling-verified).
 - **Missing documentation in the code itself:** sparse XML doc comments; many "what is this number?"
-  TODOs (e.g. Websocket `_MaTeIds`); no in-repo README beyond a one-liner; no ADRs (the ones in
+  TODOs; no in-repo README beyond a one-liner; no ADRs (the ones in
   these docs are reverse-engineered). Confidence: High (observed absence).
 
 ## Net validation verdict

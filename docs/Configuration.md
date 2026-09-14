@@ -59,7 +59,7 @@ Plain boolean/numeric config keys act as feature flags (no FeatureManagement lib
 | `Custom:EditSportsbook` | Settlement | gate before processing |
 | `Custom:IsOEEnabled` | Websocket | selects OE vs legacy odds path |
 | `Custom:UseMessagePack` | Websocket | SignalR MessagePack vs JSON |
-| `Custom:AsianClient` / `Custom:AsianClientCodes` | UOF.Client / Websocket | enable Asian odds formats |
+| `Custom:AsianClient` | UOF.Client | enable Asian odds formats (Websocket `Custom:AsianClientCodes` removed in GM-811) |
 | `MessageBroker:IsExclusive` / `IsPriority` | broker users | exclusive autodelete queue / `x-max-priority=10` |
 | `Custom:EnableAzureSignalRService` | (platform-web only — not OEv2) | — |
 | `Telemetry:Enabled` | all | telemetry on/off |

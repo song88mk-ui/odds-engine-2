@@ -169,6 +169,24 @@ namespace OE.Websocket.Service.Tests
             Assert.Equal(1.90m, Assert.Single(result).DecimalOdds);
         }
 
+        // GM-811 removed the asian-odds passthrough that published source odds with no margin for
+        // clients listed in Custom:AsianClientCodes. Its trigger (sport 1, market templates
+        // 16/18/66/68) was inherited from the Betradar-era engine; in the Genius Sports id space the
+        // platform uses, soccer is sport 10 and its handicap template is 82, so the branch could
+        // never fire. Whether the legacy trigger ids or the real soccer handicap ids arrive, an Asian
+        // client is priced like any other client: 2.00 at 5% market margin re-priced to a 10% client
+        // margin is 1.90.
+        [Theory]
+        [InlineData(10, "82")]
+        [InlineData(1, "16")]
+        public void GetClientOdds_AsianClient_GetsMarginLikeAnyOtherClient(int sportId, string marketTemplateId)
+        {
+            var result = InvokeStatic<List<ClientOdds>>("GetClientOdds",
+                sportId, 2, 0.05m, new List<SelectionMessage> { Selection(1, 2.00m) }, "S88:0.10", "S88", marketTemplateId, NoPlayerProps);
+
+            Assert.Equal(1.90m, Assert.Single(result).DecimalOdds);
+        }
+
         // An inactive selection, or one with no price, is published verbatim - the margin maths
         // is skipped entirely.
         [Fact]

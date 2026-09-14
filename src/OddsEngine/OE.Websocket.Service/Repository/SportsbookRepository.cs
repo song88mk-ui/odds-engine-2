@@ -34,9 +34,6 @@ namespace OE.WebSocket.Service.Repository
         private readonly Counter<long> _publishedToWebSocketCounter;
 
         private readonly List<int> _fixtureStatus = new List<int> { (int)FixtureStatus.Prematch, (int)FixtureStatus.Live };
-        private static List<string> _asianClCo = new List<string>();
-        // TODO: doc: what are these numbers?
-        private static List<string> _MaTeIds = new List<string> { }; //"16", "18", "66", "68"
 
         private readonly List<int> _marketStatusToRemove = new List<int> { (int)MarketStatus.Inactive, (int)MarketStatus.Cancelled, (int)MarketStatus.Settled, (int)MarketStatus.HandedOver };
         private readonly List<int> _marketStatusToAdd = new List<int> { (int)MarketStatus.Active, (int)MarketStatus.Suspended };
@@ -52,8 +49,6 @@ namespace OE.WebSocket.Service.Repository
             _memCache = memCache;
             _activitySource = instrumentation.ActivitySource;
             _publishedToWebSocketCounter = instrumentation.PublishedToWebSocketCounter;
-
-            _asianClCo = _configuration["Custom:AsianClientCodes"].ToString().Split(',').ToList();
 
             _isOEEnabled = Convert.ToBoolean(_configuration["Custom:IsOEEnabled"]);
         }
@@ -1006,22 +1001,6 @@ namespace OE.WebSocket.Service.Repository
             {
                 foreach (var selection in selections)
                 {
-                    if (sportId == 1 && _MaTeIds.Contains(MaTeId) && _asianClCo.Contains(clientCode))
-                    {
-                        result.Add(new ClientOdds
-                        {
-                            ClientCode = client.Item1,
-                            DecimalOdds = selection.Od,
-                            MalaysianOdds = GetMalayOdds(selection.Od, isBinary),
-                            HongkongOdds = GetHongkongOdds(selection.Od, isBinary),
-                            IndonesianOdds = GetIndoOdds(selection.Od, isBinary),
-                            SelectionTemplateId = selection.SeTeId,
-                            SelectionId = selection.SeId
-                        });
-
-                        continue;
-                    }
-
                     if (activeSelectionCount == 1)
                         activeSelectionCount = selections.Count;
 

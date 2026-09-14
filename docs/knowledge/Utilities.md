@@ -36,7 +36,7 @@ Quick reference with signatures. All in `OE.Shared` unless noted. All [Verified]
 
 ### `IntExtensions`
 - `BetStatus int.GetBetStatus()` — SettlementStatus→BetStatus switch (throws on undefined id).
-- `bool int.IsVirtualSportId()` — ⚠️ stub (empty list + TODO).
+- `bool int.IsVirtualSportId()` returns true only for **Virtual Cricket, sport 11205870**, the one virtual sport onboarded on the Genius Sports feed. The other virtual sports still carry the previous provider's dead ids (1001-1058) downstream; the id range is no guide either (11205863 is real 3x3 Basketball). Populated in GM-811; gates six branches in `OE.Websocket.Service` and one in `OE.UOF.Client`.
 
 ## DI extensions
 - `IServiceCollection.AddProviders()` — wires `ILiveStreamProvider`+`ILiveStreamFactory`+

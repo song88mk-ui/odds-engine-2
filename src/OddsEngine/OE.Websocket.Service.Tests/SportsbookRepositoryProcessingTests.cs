@@ -23,7 +23,6 @@ namespace OE.Websocket.Service.Tests
             new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    { "Custom:AsianClientCodes", "TSO,S88" },
                     { "Custom:IsOEEnabled", "false" }
                 })
                 .Build();
@@ -93,6 +92,22 @@ namespace OE.Websocket.Service.Tests
             Assert.False(memCache.Contains($"{clientCode}:TF"));
         }
 
+        // The same early return as the Outright case above, but reached through IsVirtualSportId.
+        // FiTyId is Match, so a virtual sport is the only reason this skips.
+        [Fact]
+        public async Task ProcessTopFixtures_VirtualSport_SkipsEntirely()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var client = BuildClient(clientCode, _ => throw new InvalidOperationException("should not call HTTP"), out var handler);
+            var repository = BuildRepository(memCache);
+
+            await repository.ProcessTopFixtures(client, new OnMarketChangeMessage { FiTyId = (int)FixtureType.Match, SpId = 11205870 });
+
+            Assert.Equal(0, handler.CallCount);
+            Assert.False(memCache.Contains($"{clientCode}:TF"));
+        }
+
         // ---- ProcessTopLeagues ----
 
         [Fact]
@@ -123,6 +138,22 @@ namespace OE.Websocket.Service.Tests
             await repository.ProcessTopLeagues(client, new OnMarketChangeMessage { FiTyId = (int)FixtureType.Match, SpId = 10 });
 
             Assert.Equal(0, handler.CallCount);
+        }
+
+        // FiTyId is Match here, so the only thing causing the skip is IsVirtualSportId. That branch
+        // was unreachable until GM-811 put Virtual Cricket (11205870) into the list.
+        [Fact]
+        public async Task ProcessTopLeagues_VirtualSport_SkipsEntirely()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var client = BuildClient(clientCode, _ => throw new InvalidOperationException("should not call HTTP"), out var handler);
+            var repository = BuildRepository(memCache);
+
+            await repository.ProcessTopLeagues(client, new OnMarketChangeMessage { FiTyId = (int)FixtureType.Match, SpId = 11205870 });
+
+            Assert.Equal(0, handler.CallCount);
+            Assert.False(memCache.Contains($"{clientCode}:TL:11205870"));
         }
 
         // ---- ProcessMarketCount ----

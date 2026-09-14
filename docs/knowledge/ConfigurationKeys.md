@@ -26,7 +26,7 @@ come from argocd env (`__` delimiter) + AWS Secrets Manager. Full mechanics:
 | `Custom:DbContextTimeout` | Sportsbook | SQL command timeout (180s) |
 | `Custom:Trading` | UOF.Client | Trading SQL conn string |
 | `Custom:ClientId` / `Custom:ClientCode` | UOF.Client (`TSO`), Websocket (`S88`) | tenant id/code |
-| `Custom:AsianClient` / `Custom:AsianClientCodes` | UOF.Client / Websocket | enable Asian odds formats |
+| `Custom:AsianClient` | UOF.Client | enable Asian odds formats (Websocket `Custom:AsianClientCodes` removed in GM-811) |
 | `Custom:APIKey` / `Custom:ApiKey` | UOF.Client, Websocket, Settlement | Platform API key (note casing varies) |
 | `Custom:PlatformAPI` / `Custom:WebSocketAPI` | Websocket | Platform REST / SignalR `/platform` URLs |
 | `Custom:UseMessagePack` | Websocket | MessagePack vs JSON for SignalR |

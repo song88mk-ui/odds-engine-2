@@ -58,7 +58,7 @@ Phase-1 IDs (H/M/L) and Phase-6 IDs (P*) preserved.
 | P6 | `mtpp` cached 1 year, no refresh | `OE.UOF.Client/Repository/PlatformRepository.cs` | High | confirm config-drift acceptable |
 | P7 | O(n) cache prefix purge | `MemCache.cs:79` | High | (perf only) measure at cache scale |
 | P8 | Redundant Translation index (`IX_SBD_STRING_LANG` dup of unique) | `TranslationContext.cs:36-41` | High | confirm with SQL owner (schema owned externally) |
-| — | No XML doc comments / many "what is this number?" TODOs | e.g. Websocket `_MaTeIds`; repo TODOs | High | low priority; missing-doc inventory |
+| — | No XML doc comments / many "what is this number?" TODOs | repo TODOs (the Websocket `_MaTeIds` example went with GM-811) | High | low priority; missing-doc inventory |
 | — | No test projects found in-repo | `find` (none) | High | confirm tests exist elsewhere or are absent |
 
 ## Duplicate implementations (validated — see ArchitectureRisks.md)

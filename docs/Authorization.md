@@ -37,7 +37,7 @@ These are functional gates, not access control, but they are the nearest analogu
 | **Global bet-stop** (`_IsBetStopGlobally` / `BettingStatus`) | Sportsbook | suppresses betting activity when set | Sportsbook |
 | **Per-fixture bet-stop** (`IsBetStop`/`IsSu`) | Sportsbook | pauses a fixture's markets | Sportsbook |
 | **Client config** (`ClientOddsFeedConfiguration`: LiveOdds/PrematchOdds/MaxFixtures) | UOF.Client | which sports/fixtures a client is *entitled* to in the outbound feed | UOF.Client `IsMessageValid`/validation — **currently commented-out (disabled)** |
-| **Client-code masking** (`ClCo`/`ClCoMa` on markets, `AsianClientCodes`) | Sportsbook/Websocket | restricts which clients see a market / odds format | document fields + Websocket filtering |
+| **Client-code masking** (`ClCo`/`ClCoMa` on markets) | Sportsbook/Websocket | restricts which clients see a market / odds format | document fields + Websocket filtering |
 
 > ⚠️ The UOF.Client entitlement/validation gate (the closest thing to per-client authorization of
 > feed content) is **disabled** — the validation and `MaxFixtures` enforcement blocks are commented
