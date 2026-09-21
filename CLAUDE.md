@@ -10,14 +10,14 @@
 >    possible change.**
 > 5. **Production is READ-ONLY** — never run queries, deploy, change schema, or invalidate caches
 >    unless explicitly instructed.
-> 6. **If architecture changed, update `/docs` + CLAUDE.md/AGENTS.md and summarize changes, risks,
+> 6. **If architecture changed, update `docs/` + CLAUDE.md/AGENTS.md and summarize changes, risks,
 >    and validation.**
 >
 > A `UserPromptSubmit` hook in [.claude/settings.json](.claude/settings.json) re-injects this reminder
 > on every prompt. Full workflow + principles are in the section below.
 
-Guidance for Claude when working in this repository. Derived from the codebase + the `/docs`
-knowledge base (Phases 1–10). **Read the relevant `/docs` file before acting** — this file is the
+Guidance for Claude when working in this repository. Derived from the codebase + the `docs/`
+knowledge base (Phases 1–10). **Read the relevant `docs/` file before acting** — this file is the
 index + the rules that matter most.
 
 ## What this repo is
@@ -27,7 +27,7 @@ Server for translations + client config), and fan results out to (a) the platfor
 bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 **There is no UI and no inbound HTTP here** — the Blazor app is the sibling `platform-web`.
 
-- Source: `src/OddsEngine/` (solution `OddsEngine.sln`). Services are `OE.*` projects; shared kernel
+- Source: `src/OddsEngine/` (solution `src/OddsEngine/OddsEngine.sln`). Services are `OE.*` projects; shared kernel
   is `OE.Shared` (every service references only it — no worker→worker deps, no cycles).
 - Full map: [docs/README.md](docs/README.md) → [docs/Architecture.md](docs/Architecture.md),
   [docs/ProjectOverview.md](docs/ProjectOverview.md).
@@ -81,16 +81,16 @@ KeepAlive (heartbeat, 5s).
 6. **MongoDB writes use `w=0`** (unacknowledged) — write failures are silent; check Mongo logs.
 
 ## Conventions to follow (don't introduce new patterns)
-- Per-service skeleton: `Program.cs` (Generic Host + DI), `Worker.cs` (BackgroundService → dispatch
+- Per-service skeleton: a `Program.cs` (Generic Host + DI), a `Worker.cs` (BackgroundService → dispatch
   on `BasicProperties.Type`), `Repository|Repositories/` (`IXxx`+`Xxx`, Singleton), `Telemetry/
   Instrumentation.cs`, `appsettings.json`, `Dockerfile`.
 - Persistence: idempotent upsert via `BulkWrite<T>` (`UpdateOneModel`, `IsOrdered=false`), natural
   keys with `SetOnInsert`, mutable fields with `Set`. No transactions/unit-of-work.
-- Messaging: `IMessageBroker.Publish/CPublish` (sets `DeliveryMode=2`, `Type`, `CorrelationId`,
+- Messaging: `IMessageBroker.Publish` / `CPublish` (sets `DeliveryMode=2`, `Type`, `CorrelationId`,
   OTel headers). Topic exchange `e.central`, lowercase dotted routing keys.
 - Caching: in-process `MemCache` (`MemoryCache.Default`); **TTL `int` overload is in HOURS**;
   cache-aside + negative caching. No Redis.
-- Logging: Serilog (Compact JSON) + `LogInformationEx/LogErrorEx/LogWarningEx` extensions;
+- Logging: Serilog (Compact JSON) + `LogInformationEx`, `LogErrorEx`, `LogWarningEx` extensions;
   OpenTelemetry traces propagated through message headers.
 - Config: imperative `IConfiguration` (`cfg["A:B"]`, `GetValue<T>`) — **no Options pattern**.
 - No AutoMapper (manual `To*`/`Prepare*`/`Map*`), no MediatR, no FluentValidation (guard clauses).
@@ -102,8 +102,8 @@ KeepAlive (heartbeat, 5s).
 |---|---|
 | Decode an abbreviated field | [docs/SharedLibraries.md](docs/SharedLibraries.md) |
 | Which service owns a routing key | [docs/ConfigurationOverview.md](docs/ConfigurationOverview.md) |
-| Sharding / messaging spine | `OE.Shared/Utilities/{Helper,MessageBroker}.cs` |
-| Catalogue writes (the hot file) | `OE.Sportsbook.Service/Repositories/SportsbookRepository.cs` |
+| Sharding / messaging spine | `src/OddsEngine/OE.Shared/Utilities/Helper.cs` and `.../MessageBroker.cs` |
+| Catalogue writes (the hot file) | `src/OddsEngine/OE.Sportsbook.Service/Repositories/SportsbookRepository.cs` |
 | Cross-repo contracts | [docs/Contracts.md](docs/Contracts.md), [docs/OddsEngineIntegration.md](docs/OddsEngineIntegration.md) |
 | Known issues / risks / unknowns | [docs/TechnicalDebt.md](docs/TechnicalDebt.md), [docs/ArchitectureRisks.md](docs/ArchitectureRisks.md), [docs/Unknowns.md](docs/Unknowns.md) |
 | Symptom → cause | [docs/knowledge/Troubleshooting.md](docs/knowledge/Troubleshooting.md) |
@@ -114,7 +114,7 @@ KeepAlive (heartbeat, 5s).
 - Build: `dotnet build src/OddsEngine/OddsEngine.sln` (note: `OE.Job.KeepAlive` is NOT in the .sln but
   is built by CI; `OE.API` is dead — no code).
 - Local run: `dotnet run` from a service folder; needs local RabbitMQ + MongoDB (+ SQL for
-  Sportsbook/UOF). Uses committed `appsettings.json` + git-ignored `appsettings.Development.json`.
+  Sportsbook/UOF). Uses each service's committed settings file plus a git-ignored `Development` overlay.
 - `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
   (nullable-reference assignment warning) — don't be surprised it's silent on that class of bug.
 - Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project).
@@ -141,9 +141,9 @@ Fall back to `grep`/`/find-*` commands when the server is not registered.
 Follow this Standard Workflow for every task, in order. Do not skip steps; if a step is N/A, say so.
 
 1. **Understand the requirement** — restate it in one sentence.
-2. **Search the repository** for existing implementations (`/find-service`, `/find-pattern`; 6
+2. **Search the repository** for existing implementations (the `find-service` and `find-pattern` commands; 6
    `SportsbookRepository` copies exist — match the right one).
-3. **Consult the generated documentation** (`/docs`, [docs/README.md](docs/README.md)).
+3. **Consult the generated documentation** — [docs/README.md](docs/README.md).
 4. **Trace the feature end-to-end** (`/trace-*` commands) before changing behavior.
 5. **Identify reusable components** (`OE.Shared` contracts/helpers; the correct repo) — reuse, don't duplicate.
 6. **Explain the proposed solution** before implementing.
@@ -153,13 +153,13 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
    sharding changes).
 10. **Implement the smallest possible change.**
 11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`; state how
-    behavior was checked. Ten test projects exist, all in `OddsEngine.sln` — `OE.Shared.Test`,
+    behavior was checked. Nine test projects exist, all in the solution — `OE.Shared.Test`,
     `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
     `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`,
     `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests` — run `dotnet test`
     against the relevant project(s) when present; `OE.Job.LiveStream` and `OE.UOF.Client` have none.
     `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not).
-12. **Update documentation** if architectural knowledge changed (`/update-docs`; keep CLAUDE.md /
+12. **Update documentation** if architectural knowledge changed (the `update-docs` command; keep CLAUDE.md /
     AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
     change whenever the change affects anything the README documents** (projects/frameworks,
     prerequisites, build/run/test instructions, configuration, endpoints) — the README must never
@@ -194,19 +194,19 @@ Playbook: [.claude/checklists/standard-workflow.md](.claude/checklists/standard-
 **Dead — the old SQL path:** `OE.Sportsbook.Service`'s
 `TranslationRepository`/`TranslationContext` are gone, and nothing writes the `sb:translation:*`
 MemCache any more. One live remnant: `ProcessCacheInvalidationMessage` still deletes by that prefix on
-`ON_DELETE_CACHE` (`OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:340`
+`ON_DELETE_CACHE` (`src/OddsEngine/OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:340`
 `ProcessCacheInvalidationMessage`), so that handler now purges a namespace nothing populates.
 
 **Live — the current path:** `OE.Translation.Service` owns a message-driven path moved in
 from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment at
-`OE.Translation.Service/Repositories/MongoTranslationRepository.cs:682`). It:
+`src/OddsEngine/OE.Translation.Service/Repositories/MongoTranslationRepository.cs:682`). It:
 - **persists to Mongo** — `*NaTr` fields on the `Fixture`/`Market`/`Selection` collections (the
   `*Lookup` collections carry none); see `WriteFixtureTranslations` / `WriteMarketTranslations` /
   `ProcessTranslationChange` in that same file;
 - **publishes and pushes over SignalR** — translation-only `ON_ODDS_CHANGE` messages built in
   `PublishTranslationOnlyOddsChanges`, mapped into `OutgoingOddsChange`'s
   `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` at
-  `OE.Websocket.Service/Repository/SportsbookRepository.cs:1547-1927`.
+  `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1547-1927`.
 
 ## Claude assets
 Commands, skills, checklists, playbooks, templates, prompts live in `.claude/` — see
