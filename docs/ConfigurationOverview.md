@@ -26,7 +26,7 @@
 | Job.Lookup | `q.oe.job.lookup` / `r.oe.adapter.onmarketchange.#` | `Sportsbook` @ 10.49.100.55 | — | — | — |
 | Job.Settlement | publisher only | `Sportsbook` | — | `EditSportsbook=true`, `ApiKey`(unused) | — |
 | Job.LiveStream | — (no broker) | `Sportsbook` @ localhost stub | — | `Enabled`, `BetGenius:{Uri,Env,User,Password,Key}` | `https://api.geniussports.com/` |
-| Job.Cleanup | `q.oe.job.cleanup` / `r.bet.placement` (bet-fixture protection, 2026-07-13) | `Sportsbook` | `Betting` (preload fixtures with bets) | `Enabled=false`, `SportRetention=-30`, `UtcWindowHours:{Start,End}`, `BatchSize`, `BatchDelayMs`, `DbContextTimeout` | — |
+| Job.Cleanup | `q.oe.job.cleanup` / `r.bet.placement` (bet-fixture protection, 2026-07-13) | `Sportsbook` | `Betting` (preload fixtures with bets) | `Enabled=false`, `SportRetention=-30`, `UtcWindowHours:{Start,End}`, `BatchSize`, `BatchDelayMs`, `OrphanCleanupDryRun=false`, `OrphanSweepIntervalHours=24`, `DbContextTimeout` | — |
 | Job.KeepAlive | publisher only | — | — | — | — |
 | Translation.Job | `q.oe.translation.job` / `r.bet.placement` | — | `Translation` | `DbContextTimeout=180`, `Cleanup:{Enabled,IntervalMinutes,StartupDelaySeconds,RetentionDays,BatchSize,Prefixes}` | — |
 

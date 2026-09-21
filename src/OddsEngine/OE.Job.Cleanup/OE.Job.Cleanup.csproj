@@ -32,4 +32,8 @@
     <ProjectReference Include="..\OE.Shared\OE.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OE.Job.Cleanup.Tests" />
+  </ItemGroup>
+
 </Project>

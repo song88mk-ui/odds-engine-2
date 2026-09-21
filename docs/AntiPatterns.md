@@ -32,8 +32,6 @@ recognize them when reading/extending the code. This is the *pattern* view; the 
   `0` (instant expiry); the cache TTL API takes **hours**. Works at 60 min only by luck. (P2)
 - **`new DbContext()` per call.** UOF.Client `TradingRepository` constructs a context per method
   instead of pooling/injecting. (M9)
-- **Per-document delete loop.** Job.Cleanup deletes fixtures one-by-one (`DeleteOneAsync`) instead of
-  `DeleteMany`. (M7)
 - **O(n) cache prefix purge.** `DeleteCacheByPrefix` scans every key in the process cache. (P7)
 - **Dual Mongo client.** DI registers `IMongoClient`/`IMongoDatabase` (used only by index bootstrap)
   while `SportsbookRepository` news its own client. (P5)

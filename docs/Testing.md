@@ -7,24 +7,26 @@ before quoting them; they are a snapshot, not a contract.
 
 ## Test inventory
 
-Nine xUnit test projects, all in `OddsEngine.sln`. Framework is xunit 2.5.3 (not v3). There is no
+Ten xUnit test projects, all in `OddsEngine.sln`. Framework is xunit 2.5.3 (not v3). There is no
 mocking library anywhere in the solution: test doubles are hand-written `Fake*` classes in
 `OE.Shared.Test` (`FakeConfiguration`, `FakeMemCache`, `FakeMessageBroker`, `FakeHttpMessageHandler`,
 `FakeModel`, ...), which the service test projects reuse via a project reference.
 
 | Test project | Tests | Covers |
 |---|---|---|
-| `OE.Shared.Test` | 174 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
-| `OE.Translation.Service.Tests` | 92 | Translation persistence and the translation-only odds-change path |
+| `OE.Shared.Test` | 183 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
+| `OE.Websocket.Service.Tests` | 136 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
+| `OE.Translation.Service.Tests` | 84 | Translation persistence and the translation-only odds-change path |
 | `OE.Adapter.Service.Tests` | 54 | Adapter routing, trading repository, translation cache |
 | `OE.Sportsbook.Service.Tests` | 40 | Catalogue writes, translation gate, worker dispatch |
-| `OE.Websocket.Service.Tests` | 132 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
+| `OE.Job.Cleanup.Tests` | 21 | Orphan sweep: which fixture ids are swept, the delete filters, sweep interval, UTC window |
 | `OE.Job.Lookup.Tests` | 7 | Lookup worker |
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 546 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running.
+All 572 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
+2026-09-21 from a full `dotnet test` run; the previous table had drifted.
 
 ```bash
 # everything

@@ -201,13 +201,27 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Deletes (MongoDB):** Fixture + related Market + Selection older than `SportRetention`
   (default −30 days), batched `DeleteMany` with `Filter.In` on `FiId`. Mapping-collection deletes
   are commented out.
+- **Orphan sweep (2026-09-16):** a second pass over markets and selections whose **fixture document
+  no longer exists** — invisible to the pass above, which only reaches a child through its fixture.
+  They are created by `OE.Sportsbook.Service` upserting markets with `IsUpsert = true` without
+  checking the fixture, so a market-change arriving after the fixture was purged (or for a fixture
+  never ingested) writes the market back on its own, and it then stays resolvable by the
+  `Platform.Sportsbook.API` paths that look a market up by `MaId` alone. Distinct `FiId` values are
+  streamed out of Market and Selection with a `{FiId: 1, _id: 0}` projection (covered by
+  `idx_fiid_mastid_mateid`), checked against Fixture in `BatchSize` chunks, and whatever is left
+  after subtracting the bet-placement set is deleted under the same `SportRetention` cutoff.
+  Because it walks both child collections it is throttled to once per
+  `Custom:OrphanSweepIntervalHours` (default 24) rather than running on every 5-minute dispatch,
+  and `Custom:OrphanCleanupDryRun` (default `false`) logs the counts instead of deleting.
 - **Bet protection (2026-07-13):** fixtures with at least one persisted bet are never deleted.
   Fixture ids are preloaded from the platform **Betting SQL DB** (`ConnectionStrings:Betting`,
   `SELECT DISTINCT FixtureId FROM BetSelection`) and kept current by a `BetPlacementWorker`
   consuming `r.bet.placement` (`OnBetPlacement`, queue `q.oe.job.cleanup`) — same pattern as
-  `OE.Translation.Job`. Cleanup throws (fail-safe) until the preload succeeds.
-- **Notes:** disabled by default (`Custom:Enabled=false`) — **and disabled in prod argocd since
-  2026-02-05, so it has never purged prod**; window logic can't cross midnight.
+  `OE.Translation.Job`. Cleanup throws (fail-safe) until the preload succeeds. It applies to the
+  orphan sweep too, so a purged fixture that still has bets keeps its markets and selections.
+- **Notes:** disabled by default in `appsettings.json` (`Custom:Enabled=false`) but **enabled in
+  argocd for dev, stg and prd since 2026-07-13** (`ca6dfa224`; prd window widened to 01–24 UTC by
+  `7251bb3dd`, `SportRetention` −30 prd / −7 stg+dev). Window logic can't cross midnight.
 
 ---
 

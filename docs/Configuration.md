@@ -64,6 +64,7 @@ Plain boolean/numeric config keys act as feature flags (no FeatureManagement lib
 | `Custom:EnableAzureSignalRService` | (platform-web only — not OEv2) | — |
 | `Telemetry:Enabled` | all | telemetry on/off |
 | `Custom:UtcWindowHours:Start/End`, `Custom:SportRetention` | Cleanup | window + retention tuning |
+| `Custom:OrphanCleanupDryRun`, `Custom:OrphanSweepIntervalHours` | Cleanup | orphan sweep: count instead of delete (default **false**), and how often it may run (default **24**h) |
 
 ## 5. Secrets management — [Verified] / [Verified-argocd]
 

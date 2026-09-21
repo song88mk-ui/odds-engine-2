@@ -153,11 +153,11 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
    sharding changes).
 10. **Implement the smallest possible change.**
 11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`; state how
-    behavior was checked. Nine test projects exist, all in `OddsEngine.sln` — `OE.Shared.Test`,
+    behavior was checked. Ten test projects exist, all in `OddsEngine.sln` — `OE.Shared.Test`,
     `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
     `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`,
-    `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests` — run `dotnet test` against the relevant
-    project(s) when present; `OE.Job.Cleanup`, `OE.Job.LiveStream` and `OE.UOF.Client` have none.
+    `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests` — run `dotnet test`
+    against the relevant project(s) when present; `OE.Job.LiveStream` and `OE.UOF.Client` have none.
     `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not).
 12. **Update documentation** if architectural knowledge changed (`/update-docs`; keep CLAUDE.md /
     AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
