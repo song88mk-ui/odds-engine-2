@@ -36,7 +36,7 @@ Chain: `OE.Adapter.Service` (preload, read) → `OE.Sportsbook.Service` → `OE.
   `OE.Sportsbook.Service`).
 - **SignalR** — translation-only `ON_ODDS_CHANGE` messages built in `PublishTranslationOnlyOddsChanges`
   and mapped into `OutgoingOddsChange` at
-  `OE.Websocket.Service/Repository/SportsbookRepository.cs:1547-1927`.
+  `OE.Websocket.Service/Repository/SportsbookRepository.cs:1526-1925`.
 - ⚠️ **The wire props were renamed, not just re-added** (C6/R9): `OutgoingOddsChange` now carries
   `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr` (fixture), `MaTeTr` (market) and `SeNaTr` (selection), all
   `List<OutgoingTranslation> {LaCo, Tx}`. MessagePack Contractless keys on property name, so a consumer

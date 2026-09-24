@@ -5,7 +5,7 @@ description: Implement a feature in odds-engine-2 the way this team does — tra
 
 # Feature Development (OEv2)
 
-odds-engine-2 = 9 headless .NET RabbitMQ workers + `OE.Shared`. Follow the repo's conventions; do not
+odds-engine-2 = 11 headless .NET executable projects (RabbitMQ services and jobs) + `OE.Shared`. Follow the repo's conventions; do not
 introduce new patterns/libraries without approval.
 
 ## Procedure

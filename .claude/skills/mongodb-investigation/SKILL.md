@@ -15,9 +15,11 @@ file: `OE.Sportsbook.Service/Repositories/SportsbookRepository.cs`. Reference: [
   `idx_fiid_mastid_mateid` (Market+Selection); `idx_maid` (Selection).
 - Writes: unordered `BulkWrite` upserts, `Set`/`SetOnInsert`, **`w=0` (unacked — silent failures)**.
 - Reads: `Builders<T>.Filter` + `Find`; primary read pref in OEv2.
-- ⚠️ **Translations/`LiId`/`ClMa`/`GeAl`/`IsBo`/`PeSc` are NOT persisted** (commented out). **(2026-06-30)
-  translations are also no longer in the published message** — the `*Tr`/`*NaTr` were removed from the
-  pipeline entirely (the `*NaTr` Mongo fields still exist but stay unwritten). ⚠️ Settlement read
+- ⚠️ **`LiId`/`ClMa`/`GeAl`/`IsBo`/`PeSc` are NOT persisted** by `OE.Sportsbook.Service` (commented out).
+  Translations ARE persisted: `OE.Translation.Service` writes the `*NaTr` fields on
+  `Fixture`/`Market`/`Selection` (`OE.Translation.Service/Repositories/MongoTranslationRepository.cs`,
+  e.g. `Update.Set` of `SpNaTr`/`SegNaTr` at :98/:102); the `*Lookup` collections carry none. See
+  the live translation path in CLAUDE.md for the publish side. ⚠️ Settlement read
   `PrFiId+MaTeId+SeTeId+SeSp` is **unindexed** (P1).
 - Dual client wiring (DI vs self-newed, P5).
 

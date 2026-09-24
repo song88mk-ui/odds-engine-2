@@ -11,7 +11,7 @@ description: Investigate the real-time SignalR push path (RabbitMQ → OE.Websoc
 ## Map
 - RabbitMQ in: `r.oe.sb.engine.*` (OEv2-origin), `r.bet.*`/`r.wallet.*` (platform-origin, relayed).
 - Hub methods out: `PublishOddsChangeForMainMarkets/AllMarkets`, `PublishBetStop*`, `PublishBetStatus`,
-  `PublishCashOutChange`, `PublishWalletChange`, `PublishPayableChange`.
+  `PublishCashOutChange`, `PublishWalletChange`, `PublishPayableChange`, `PublishWebPropsChange`.
 - Groups: `endpoint:{clientCode}:sports:{SpId}:…` / `fixturedetails:{FiId}` /
   `on{betstatus|cashoutchange|walletchange}:{cc}:{userId}`.
 - Hub host = separate gateway (`Platform.Websocket.API2`), not platform-web (Unknown #19).

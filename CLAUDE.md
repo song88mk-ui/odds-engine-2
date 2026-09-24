@@ -21,7 +21,7 @@ knowledge base (Phases 1–10). **Read the relevant `docs/` file before acting**
 index + the rules that matter most.
 
 ## What this repo is
-An **event-driven pipeline of 9 headless .NET worker services** that ingest normalized odds/fixture/
+An **event-driven pipeline of 11 headless .NET executable projects (services and jobs)** that ingest normalized odds/fixture/
 settlement messages from RabbitMQ (`e.central`), persist a MongoDB **Sportsbook** catalogue (SQL
 Server for translations + client config), and fan results out to (a) the platform via a SignalR push
 bridge + settlement messages and (b) an external white-label Unified Odds Feed.
@@ -37,7 +37,7 @@ bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 |---|---|
 | Runtime | `net10.0` for every service and job |
 | Shared kernel | `OE.Shared` targets **`netstandard2.1`** — new shared code must stay inside that API surface |
-| Host model | `Microsoft.NET.Sdk.Worker` (Websocket, UOF.Client, Job.*) and `Microsoft.NET.Sdk` + `OutputType=Exe` (Adapter, Sportsbook, Translation) |
+| Host model | `Microsoft.NET.Sdk.Worker` (Websocket, UOF.Client, Job.Lookup, Job.Settlement, Translation.Job) and `Microsoft.NET.Sdk` + `OutputType=Exe` (Adapter, Sportsbook, Translation.Service, Job.Cleanup, Job.KeepAlive, Job.LiveStream) |
 | Mongo | `MongoDB.Driver` 3.11.1 |
 | Broker | `RabbitMQ.Client` 5.2.0 — raw client behind `IMessageBroker`; **no Wolverine/MassTransit** |
 | SQL | `Microsoft.EntityFrameworkCore(.SqlServer)` 3.1.32 |
@@ -45,7 +45,7 @@ bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 | Push | `Microsoft.AspNetCore.SignalR.Client` + `.Protocols.MessagePack` |
 | Cache | `System.Runtime.Caching` (`MemoryCache.Default`) — no Redis |
 | Tests | `xunit` **2.5.3** (not v3) + `coverlet.collector`; no Testcontainers |
-| Language | `<Nullable>enable</Nullable>`, no `LangVersion` pin; `.editorconfig` mandates **block-scoped** namespaces (`csharp_style_namespace_declarations = block_scoped`) — do not convert files to file-scoped |
+| Language | `<Nullable>enable</Nullable>` everywhere except Job.Cleanup, Job.KeepAlive, Job.LiveStream and Job.Lookup, no `LangVersion` pin; `.editorconfig` mandates **block-scoped** namespaces (`csharp_style_namespace_declarations = block_scoped`) — do not convert files to file-scoped |
 
 Note: EF Core 3.1.32 is an out-of-support package running on a `net10.0` target. Recorded as an
 observation, not a change request — upgrading it is a cross-repo decision.
@@ -112,7 +112,7 @@ KeepAlive (heartbeat, 5s).
 
 ## Build / run
 - Build: `dotnet build src/OddsEngine/OddsEngine.sln` (note: `OE.Job.KeepAlive` is NOT in the .sln but
-  is built by CI; `OE.API` is dead — no code).
+  CI builds it, `.github/workflows/ci.yml:57`).
 - Local run: `dotnet run` from a service folder; needs local RabbitMQ + MongoDB (+ SQL for
   Sportsbook/UOF). Uses each service's committed settings file plus a git-ignored `Development` overlay.
 - `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
@@ -153,7 +153,7 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
    sharding changes).
 10. **Implement the smallest possible change.**
 11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`; state how
-    behavior was checked. Nine test projects exist, all in the solution — `OE.Shared.Test`,
+    behavior was checked. Ten test projects exist, all in the solution — `OE.Shared.Test`,
     `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
     `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`,
     `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests` — run `dotnet test`
@@ -206,7 +206,7 @@ from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment
 - **publishes and pushes over SignalR** — translation-only `ON_ODDS_CHANGE` messages built in
   `PublishTranslationOnlyOddsChanges`, mapped into `OutgoingOddsChange`'s
   `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` at
-  `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1547-1927`.
+  `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1526-1925`.
 
 ## Claude assets
 Commands, skills, checklists, playbooks, templates, prompts live in `.claude/` — see
