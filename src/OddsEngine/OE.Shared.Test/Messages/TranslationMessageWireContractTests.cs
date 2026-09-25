@@ -31,6 +31,71 @@ namespace OE.Shared.Test.Messages
         }
 
         [Fact]
+        public void OnTranslationChangeMessage_WireCarriesSrcTx()
+        {
+            // GM-852: SrcTx (added in GM-646, MaTe wording-variant scoping + content-addressed
+            // index) was declared on this class from day one, but no sender ever populated it,
+            // so it was always null in production. This pins that the wire name is exactly SrcTx
+            // once a sender does set it.
+            var message = new OnTranslationChangeMessage
+            {
+                Tr = new List<TranslationChangeItem>
+                {
+                    new TranslationChangeItem { StId = "MaTe:16", LaCo = "ZH", Tx = "独赢", SrcTx = "Match Winner" }
+                }
+            };
+
+            var json = JsonSerializer.Serialize(message);
+
+            using var document = JsonDocument.Parse(json);
+            var item = document.RootElement.GetProperty("Tr")[0];
+
+            Assert.Equal("Match Winner", item.GetProperty("SrcTx").GetString());
+        }
+
+        [Fact]
+        public void OnTranslationChangeMessage_BindsSrcTx_FromEitherPublisherShape()
+        {
+            // GM-852 regression guard: platform-final's Platform.Shared.MessageModels and
+            // backoffice-final's Backoffice.Shared.OutgoingEngineMessages each keep their own
+            // hand-maintained copy of TranslationChangeItem (no shared package across the three
+            // repos), and it was exactly this drift, one copy missing a field, that left SrcTx
+            // permanently null. Both copies use the SAME wire names as this class (StId, LaCo,
+            // Tx, SrcTx), so a payload shaped like either publisher's JSON output must still bind
+            // correctly here — this literal represents that shape without a cross-repo reference.
+            const string payloadFromEitherPublisher = @"{
+                ""Tr"": [
+                    { ""StId"": ""MaTe:259~a1b2c3d4"", ""LaCo"": ""ZH"", ""Tx"": ""大/小"", ""SrcTx"": ""Over/Under"" }
+                ]
+            }";
+
+            var message = JsonSerializer.Deserialize<OnTranslationChangeMessage>(payloadFromEitherPublisher);
+
+            Assert.NotNull(message);
+            var item = message!.Tr.Single();
+            Assert.Equal("MaTe:259~a1b2c3d4", item.StId);
+            Assert.Equal("ZH", item.LaCo);
+            Assert.Equal("大/小", item.Tx);
+            Assert.Equal("Over/Under", item.SrcTx);
+        }
+
+        [Fact]
+        public void OnTranslationChangeMessage_SrcTx_StaysNull_WhenThePublisherOmitsIt()
+        {
+            // A sender that has not been updated yet (or an older message on the wire during a
+            // rolling deploy) omits sourceText/SrcTx entirely. Consumers must keep tolerating
+            // that, per TranslationChangeItem's own contract comment.
+            const string payloadFromAnUnupdatedSender = @"{
+                ""Tr"": [ { ""StId"": ""Te:H1"", ""LaCo"": ""ZH"", ""Tx"": ""阿森纳"" } ]
+            }";
+
+            var message = JsonSerializer.Deserialize<OnTranslationChangeMessage>(payloadFromAnUnupdatedSender);
+
+            Assert.NotNull(message);
+            Assert.Null(message!.Tr.Single().SrcTx);
+        }
+
+        [Fact]
         public void TranslationLists_RoundTripOnMarketChangeMessage()
         {
             var message = new OnMarketChangeMessage
