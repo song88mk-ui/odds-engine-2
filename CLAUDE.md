@@ -206,7 +206,12 @@ from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment
 - **publishes and pushes over SignalR** — translation-only `ON_ODDS_CHANGE` messages built in
   `PublishTranslationOnlyOddsChanges`, mapped into `OutgoingOddsChange`'s
   `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` at
-  `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1526-1925`.
+  `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1526-1925`;
+- **scopes MaTe updates by `SrcTx`** — since GM-852 every producer sends the row's SOURCE_TEXT, so
+  a `MaTe:` delta, base or variant, updates only the open markets whose `MaNa` matches it, ignoring
+  case. The filter and grouping are pure methods (`GroupDeltas`, `AddMarketTemplateDelta`,
+  `BuildMaTeMarketFilter`) tested in `MongoTranslationRepositoryTests` by rendering the filter
+  (GM-874).
 
 ## Claude assets
 Commands, skills, checklists, playbooks, templates, prompts live in `.claude/` — see
