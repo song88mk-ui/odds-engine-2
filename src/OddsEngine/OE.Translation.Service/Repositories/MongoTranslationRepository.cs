@@ -690,27 +690,7 @@ namespace OE.Translation.Service.Repositories
             if (message?.Tr == null || message.Tr.Count == 0)
                 return;
 
-            // One delta list per glossary key, all changed languages together. An empty Tx stays
-            // in the delta as a removal so consumers revert to the English name.
-            var deltasByKey = new Dictionary<string, List<TranslationMessage>>();
-
-            // The row's SOURCE_TEXT when the sender provides it (additive SrcTx, 2026-07-16) —
-            // scopes MaTe wording-variant updates to the markets carrying that wording.
-            var sourceTextByKey = new Dictionary<string, string>();
-
-            foreach (var item in message.Tr)
-            {
-                if (item == null || string.IsNullOrEmpty(item.StId) || string.IsNullOrEmpty(item.LaCo))
-                    continue;
-
-                if (!deltasByKey.TryGetValue(item.StId, out var deltas))
-                    deltasByKey[item.StId] = deltas = new List<TranslationMessage>();
-
-                deltas.Add(new TranslationMessage { LaCo = item.LaCo.ToUpperInvariant(), Tx = item.Tx ?? string.Empty });
-
-                if (!string.IsNullOrEmpty(item.SrcTx))
-                    sourceTextByKey[item.StId] = item.SrcTx;
-            }
+            var (deltasByKey, sourceTextByKey) = GroupDeltas(message.Tr);
 
             if (deltasByKey.Count == 0)
                 return;
@@ -783,33 +763,15 @@ namespace OE.Translation.Service.Repositories
                         // — strip to the base template id. When the announce carries SrcTx, the
                         // update applies only to markets whose MaNa is that wording (the feed
                         // emits concurrent wordings per template id); without it, template-wide.
-                        var baseMaTeId = MarketTemplateVariantId.GetBaseId(id);
                         sourceTextByKey.TryGetValue(entry.Key, out var maTeSourceText);
-
-                        if (!marketTemplateDeltas.TryGetValue(baseMaTeId, out var maTeEntries))
-                            marketTemplateDeltas[baseMaTeId] = maTeEntries = new List<(string SrcTx, List<TranslationMessage> Deltas)>();
-
-                        maTeEntries.Add((maTeSourceText, entry.Value));
+                        var baseMaTeId = AddMarketTemplateDelta(marketTemplateDeltas, id, maTeSourceText, entry.Value);
 
                         // The raw-text update applies to REGULAR markets only: a player market's
                         // MaNaTr is COMPOSED (Pl: + MaTe:, GM-528), so raw template text would
                         // stomp the composed name — and a player market's MaNa (player-inclusive)
                         // never equals a template wording, so a wording-scoped announce could not
                         // reach it anyway. Player markets are recomposed below instead.
-                        var maTeFilter = Builders<Market>.Filter.And(
-                            Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
-                            Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
-                            Builders<Market>.Filter.Eq(m => m.MaTeId, baseMaTeId),
-                            Builders<Market>.Filter.Eq(m => m.CompId, null));
-
-                        if (!string.IsNullOrEmpty(maTeSourceText))
-                        {
-                            // Case-insensitive exact match — doc MaNa and TC2 SOURCE_TEXT come
-                            // from the same feed wording but their casing may drift independently.
-                            maTeFilter = Builders<Market>.Filter.And(
-                                maTeFilter,
-                                Builders<Market>.Filter.Regex(m => m.MaNa, new BsonRegularExpression("^" + Regex.Escape(maTeSourceText) + "$", "i")));
-                        }
+                        var maTeFilter = BuildMaTeMarketFilter(openFixtureIds, openMarketStatusIds, baseMaTeId, maTeSourceText);
 
                         UpdateTranslationArray(_marketCollection, maTeFilter, "MaNaTr", entry.Value, t => new MarketTranslationMDB { LaCo = t.LaCo, MaNa = t.Tx });
                         RecomposePlayerMarketNames(Builders<Market>.Filter.And(
@@ -1331,9 +1293,75 @@ namespace OE.Translation.Service.Repositories
             }
         }
 
-        // Base-template announces (SrcTx null) apply to every market of the template; wording-
-        // variant announces (see MarketTemplateVariantId) apply only to markets whose MaNa
-        // carries that wording. An exact-wording entry wins over an unscoped one.
+        // One delta list per glossary key, all changed languages together. An empty Tx stays in the
+        // delta as a removal so consumers revert to the English name. SourceTextByKey holds the
+        // row's SOURCE_TEXT when the sender provides it (SrcTx, set by every producer since GM-852);
+        // it scopes MaTe updates to the markets carrying that wording.
+        internal static (Dictionary<string, List<TranslationMessage>> DeltasByKey, Dictionary<string, string> SourceTextByKey) GroupDeltas(IEnumerable<TranslationChangeItem> items)
+        {
+            var deltasByKey = new Dictionary<string, List<TranslationMessage>>();
+            var sourceTextByKey = new Dictionary<string, string>();
+
+            foreach (var item in items)
+            {
+                if (item == null || string.IsNullOrEmpty(item.StId) || string.IsNullOrEmpty(item.LaCo))
+                    continue;
+
+                if (!deltasByKey.TryGetValue(item.StId, out var deltas))
+                    deltasByKey[item.StId] = deltas = new List<TranslationMessage>();
+
+                deltas.Add(new TranslationMessage { LaCo = item.LaCo.ToUpperInvariant(), Tx = item.Tx ?? string.Empty });
+
+                if (!string.IsNullOrEmpty(item.SrcTx))
+                    sourceTextByKey[item.StId] = item.SrcTx;
+            }
+
+            return (deltasByKey, sourceTextByKey);
+        }
+
+        // Records a MaTe announce under its BASE template id (a wording-variant id such as
+        // "259~a1b2c3d4" is stripped, see MarketTemplateVariantId) together with its SrcTx, so the
+        // push path can pick the entry matching each market's MaNa (ResolveMarketTemplateDeltas).
+        // Returns the base id.
+        internal static string AddMarketTemplateDelta(
+            Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> marketTemplateDeltas,
+            string maTeId,
+            string srcTx,
+            List<TranslationMessage> deltas)
+        {
+            var baseMaTeId = MarketTemplateVariantId.GetBaseId(maTeId);
+
+            if (!marketTemplateDeltas.TryGetValue(baseMaTeId, out var entries))
+                marketTemplateDeltas[baseMaTeId] = entries = new List<(string SrcTx, List<TranslationMessage> Deltas)>();
+
+            entries.Add((srcTx, deltas));
+
+            return baseMaTeId;
+        }
+
+        // The Mongo filter for a MaTe raw-text update: open, player-visible REGULAR markets (CompId
+        // null) of the base template, narrowed to the markets whose MaNa is srcTx when one is given.
+        internal static FilterDefinition<Market> BuildMaTeMarketFilter(IEnumerable<long> openFixtureIds, IEnumerable<int> openMarketStatusIds, string baseMaTeId, string srcTx)
+        {
+            var filter = Builders<Market>.Filter.And(
+                Builders<Market>.Filter.In(m => m.FiId, openFixtureIds),
+                Builders<Market>.Filter.In(m => m.MaStId, openMarketStatusIds),
+                Builders<Market>.Filter.Eq(m => m.MaTeId, baseMaTeId),
+                Builders<Market>.Filter.Eq(m => m.CompId, null));
+
+            if (string.IsNullOrEmpty(srcTx))
+                return filter;
+
+            // Case-insensitive exact match — doc MaNa and TC2 SOURCE_TEXT come from the same feed
+            // wording but their casing may drift independently.
+            return Builders<Market>.Filter.And(
+                filter,
+                Builders<Market>.Filter.Regex(m => m.MaNa, new BsonRegularExpression("^" + Regex.Escape(srcTx) + "$", "i")));
+        }
+
+        // Every producer now sends SrcTx (GM-852), so base and variant announces alike apply only
+        // to markets whose MaNa matches it, ignoring case. An entry with no SrcTx comes only from
+        // older senders and applies template-wide. An exact-wording entry wins over an unscoped one.
         internal static List<TranslationMessage> ResolveMarketTemplateDeltas(
             Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>> marketTemplateDeltas,
             string maTeId,

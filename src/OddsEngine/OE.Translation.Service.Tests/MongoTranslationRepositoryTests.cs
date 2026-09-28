@@ -1,3 +1,7 @@
+using System.Text.RegularExpressions;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
+using MongoDB.Driver;
 using OE.Shared.Data.Sportsbook.MongoDB.Collections;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Messages.OutgoingSportsbookMessages;
@@ -203,6 +207,143 @@ namespace OE.Translation.Service.Tests
             Assert.Same(unscoped, MongoTranslationRepository.ResolveMarketTemplateDeltas(deltas, "MT1", "Total Goals Over / Under"));
             Assert.Null(MongoTranslationRepository.ResolveMarketTemplateDeltas(deltas, "MT2", "Over/Under"));
         }
+
+        #region Change path: SrcTx grouping and MaTe market scoping (GM-852, GM-874)
+
+        // ProcessTranslationChange itself needs a live Mongo, so these cover the pure pieces it is
+        // built from: how the announce is grouped, which Mongo filter a MaTe update runs with, and
+        // which deltas the push path then picks per market.
+
+        private static BsonDocument Render(FilterDefinition<Market> filter) =>
+            filter.Render(new RenderArgs<Market>(BsonSerializer.SerializerRegistry.GetSerializer<Market>(), BsonSerializer.SerializerRegistry));
+
+        private static TranslationChangeItem Item(string stId, string laCo, string? tx, string? srcTx) =>
+            new TranslationChangeItem { StId = stId, LaCo = laCo, Tx = tx!, SrcTx = srcTx! };
+
+        [Fact]
+        public void GroupDeltas_KeepsSrcTxPerKeyAndGroupsLanguages()
+        {
+            var (deltasByKey, sourceTextByKey) = MongoTranslationRepository.GroupDeltas(new List<TranslationChangeItem>
+            {
+                Item("MaTe:16", "zh", "总进球", "Total Goals"),
+                Item("MaTe:16", "ES", "Goles totales", "Total Goals"),
+                Item("Te:2", "FR", null, null)
+            });
+
+            Assert.Equal(new[] { "ZH", "ES" }, deltasByKey["MaTe:16"].Select(d => d.LaCo)); // upper-cased
+            Assert.Equal(string.Empty, Assert.Single(deltasByKey["Te:2"]).Tx); // null Tx is a removal
+            Assert.Equal("Total Goals", sourceTextByKey["MaTe:16"]);
+            Assert.False(sourceTextByKey.ContainsKey("Te:2")); // no SrcTx: unscoped, not an empty wording
+        }
+
+        [Fact]
+        public void GroupDeltas_SkipsItemsWithoutKeyOrLanguage()
+        {
+            var (deltasByKey, sourceTextByKey) = MongoTranslationRepository.GroupDeltas(new List<TranslationChangeItem>
+            {
+                null!,
+                Item("", "ZH", "x", "Total Goals"),
+                Item("MaTe:16", "", "x", "Total Goals")
+            });
+
+            Assert.Empty(deltasByKey);
+            Assert.Empty(sourceTextByKey);
+        }
+
+        [Fact]
+        public void BuildMaTeMarketFilter_WithSrcTx_AddsAnchoredEscapedCaseInsensitiveMaNaRegex()
+        {
+            var rendered = Render(MongoTranslationRepository.BuildMaTeMarketFilter(new[] { 42L }, new[] { 1, 2 }, "259", "Over/Under (1.5)"));
+
+            var regex = rendered["MaNa"].AsBsonRegularExpression;
+            Assert.Equal(@"^Over/Under\ \(1\.5\)$", regex.Pattern);
+            Assert.Equal("i", regex.Options);
+
+            var asDotNet = new Regex(regex.Pattern, RegexOptions.IgnoreCase);
+            Assert.Matches(asDotNet, "over/under (1.5)"); // casing drift between TC2 and the feed
+            Assert.DoesNotMatch(asDotNet, "Over/Under (1x5)"); // "." escaped
+            Assert.DoesNotMatch(asDotNet, "1st Half Over/Under (1.5)"); // anchored: exact wording only
+            Assert.DoesNotMatch(asDotNet, "Over/Under (1.5) Corners");
+        }
+
+        [Fact]
+        public void BuildMaTeMarketFilter_KeepsOpenFixtureStatusTemplateAndRegularMarketScope()
+        {
+            var rendered = Render(MongoTranslationRepository.BuildMaTeMarketFilter(new[] { 42L, 43L }, new[] { 1, 2 }, "259", "Asian Handicap"));
+
+            Assert.Equal(new BsonArray { 42L, 43L }, rendered["FiId"]["$in"].AsBsonArray);
+            Assert.Equal(new BsonArray { 1, 2 }, rendered["MaStId"]["$in"].AsBsonArray);
+            Assert.Equal("259", rendered["MaTeId"].AsString);
+            Assert.Equal(BsonNull.Value, rendered["CompId"]); // player markets are recomposed, not overwritten
+        }
+
+        // Older senders omit SrcTx: the update stays template-wide.
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        public void BuildMaTeMarketFilter_WithoutSrcTx_HasNoMaNaClause(string? srcTx)
+        {
+            var rendered = Render(MongoTranslationRepository.BuildMaTeMarketFilter(new[] { 42L }, new[] { 1 }, "259", srcTx!));
+
+            Assert.False(rendered.Contains("MaNa"));
+            Assert.Equal("259", rendered["MaTeId"].AsString);
+        }
+
+        [Fact]
+        public void AddMarketTemplateDelta_VariantId_StoresUnderBaseIdWithSrcTx()
+        {
+            var marketTemplateDeltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>();
+            var deltas = Delta("让球");
+
+            var baseId = MongoTranslationRepository.AddMarketTemplateDelta(marketTemplateDeltas, "259~a1b2c3d4", "Asian Handicap", deltas);
+
+            Assert.Equal("259", baseId);
+            var entry = Assert.Single(marketTemplateDeltas["259"]);
+            Assert.Equal("Asian Handicap", entry.SrcTx);
+            Assert.Same(deltas, entry.Deltas);
+        }
+
+        // The whole change path end to end without Mongo: announce, group, record, then resolve per
+        // market. A variant announce reaches only the market carrying its wording.
+        [Fact]
+        public void ChangePath_VariantAnnounce_ReachesOnlyTheMarketWithThatWording()
+        {
+            var (deltasByKey, sourceTextByKey) = MongoTranslationRepository.GroupDeltas(new List<TranslationChangeItem>
+            {
+                Item("MaTe:259~a1b2c3d4", "ZH", "亚洲让球", "Asian Handicap")
+            });
+            var marketTemplateDeltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>();
+            foreach (var entry in deltasByKey)
+            {
+                sourceTextByKey.TryGetValue(entry.Key, out var srcTx);
+                MongoTranslationRepository.AddMarketTemplateDelta(marketTemplateDeltas, entry.Key.Substring("MaTe:".Length), srcTx!, entry.Value);
+            }
+
+            var matching = MongoTranslationRepository.ResolveMarketTemplateDeltas(marketTemplateDeltas, "259", "asian handicap");
+            Assert.Equal("亚洲让球", Assert.Single(matching).Tx);
+            Assert.Null(MongoTranslationRepository.ResolveMarketTemplateDeltas(marketTemplateDeltas, "259", "Asian Handicap 1st Half"));
+        }
+
+        // Behaviour change from GM-852: a BASE announce now carries SrcTx too, so it is scoped to its
+        // own wording. A market of the same template with another wording no longer receives it
+        // until that wording has its own variant row.
+        [Fact]
+        public void ChangePath_BaseAnnounceWithSrcTx_IsScopedToItsWording()
+        {
+            var (deltasByKey, sourceTextByKey) = MongoTranslationRepository.GroupDeltas(new List<TranslationChangeItem>
+            {
+                Item("MaTe:16", "ZH", "总进球", "Total Goals")
+            });
+            var marketTemplateDeltas = new Dictionary<string, List<(string SrcTx, List<TranslationMessage> Deltas)>>();
+            sourceTextByKey.TryGetValue("MaTe:16", out var srcTx);
+            var baseId = MongoTranslationRepository.AddMarketTemplateDelta(marketTemplateDeltas, "16", srcTx!, deltasByKey["MaTe:16"]);
+
+            Assert.True(Render(MongoTranslationRepository.BuildMaTeMarketFilter(new[] { 42L }, new[] { 1 }, baseId, srcTx!)).Contains("MaNa"));
+            Assert.NotNull(MongoTranslationRepository.ResolveMarketTemplateDeltas(marketTemplateDeltas, "16", "Total Goals"));
+            Assert.Null(MongoTranslationRepository.ResolveMarketTemplateDeltas(marketTemplateDeltas, "16", "Total Goals Odd/Even"));
+        }
+
+        #endregion
 
         [Fact]
         public void ApplyTranslationDeltas_SelectionTemplateDelta_MatchesByMarketAndSelectionTemplateIdPair()

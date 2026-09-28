@@ -15,6 +15,10 @@ everything is either **TTL-expiry only** or reloaded at startup. All [Verified] 
 > - `ON_TRANSLATION_CHANGE` (`r.oe.ontranslationchange`) → consumed by **`OE.Translation.Service`** →
 >   the **live** path: persist the Mongo `*NaTr` delta and republish translation-only odds changes.
 >   That is how a changed translation actually reaches clients now.
+>   A `MaTe:` delta is scoped by its `SrcTx` (the row's SOURCE_TEXT, sent by every producer since
+>   GM-852): only open markets whose `MaNa` matches it, ignoring case, are updated. A base `MaTe:{id}`
+>   row therefore no longer updates every wording of its template; a delta without `SrcTx` (older
+>   senders) still does. Tested in `MongoTranslationRepositoryTests` (GM-874).
 
 ## Invalidation mechanisms in play
 | Cache | Invalidation | Trigger |
