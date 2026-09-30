@@ -383,7 +383,7 @@ namespace OE.UOF.Client.Repository
 
         #region Utilities
 
-        private string GetSportName(int sportId)
+        private static string GetSportName(int sportId)
         {
             switch (sportId)
             {
@@ -842,7 +842,7 @@ namespace OE.UOF.Client.Repository
             //}
         }
 
-        private void PublishMessage(IMessageBroker messageBroker, string payload, string messageType, string routingKey, string correlationId)
+        private static void PublishMessage(IMessageBroker messageBroker, string payload, string messageType, string routingKey, string correlationId)
         {
             var stopwatch = new Stopwatch();
             stopwatch.Start();

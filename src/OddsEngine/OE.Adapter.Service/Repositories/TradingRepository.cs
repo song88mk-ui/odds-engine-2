@@ -190,22 +190,22 @@ namespace OE.Adapter.Service.Repositories
             return translations;
         }
 
-        private FixtureStatus GetFixtureStatus(int fixtureStatusId)
+        private static FixtureStatus GetFixtureStatus(int fixtureStatusId)
         {
             return (FixtureStatus)fixtureStatusId;
         }
 
-        private FixtureType GetFixtureType(int fixtureTypeId)
+        private static FixtureType GetFixtureType(int fixtureTypeId)
         {
             return (FixtureType)fixtureTypeId;
         }
 
-        private MarketStatus GetMarketStatus(int marketStatusId)
+        private static MarketStatus GetMarketStatus(int marketStatusId)
         {
             return (MarketStatus)marketStatusId;
         }
 
-        private CashoutStatus GetCashoutStatus(int cashoutStatusId)
+        private static CashoutStatus GetCashoutStatus(int cashoutStatusId)
         {
             return (CashoutStatus)cashoutStatusId;
         }

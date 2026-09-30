@@ -158,6 +158,8 @@ namespace OE.Translation.Service.Tests
             var worker = await StartAndWaitAsync(BuildWorker(broker));
 
             await worker.StopAsync(CancellationToken.None); // must not throw
+
+            Assert.Equal(1, broker.DisposeCalls);
         }
 
         // ---- Message dispatch ----

@@ -218,17 +218,13 @@ namespace OE.Shared.Test.Utilities
 
         private static void InvokeInjectTraceContext(RabbitMQ.Client.IBasicProperties properties, string key, string value)
         {
-            var broker = new MessageBroker(
-                new FakeConfiguration(new Dictionary<string, string?>()),
-                NullLogger<MessageBroker>.Instance);
-
             var method = typeof(MessageBroker).GetMethod(
                 "InjectTraceContextIntoBasicProperties",
-                BindingFlags.Instance | BindingFlags.NonPublic);
+                BindingFlags.Static | BindingFlags.NonPublic);
 
             Assert.NotNull(method);
 
-            method!.Invoke(broker, new object[] { properties, key, value });
+            method!.Invoke(null, new object[] { properties, key, value });
         }
 
         private static bool InvokeRetryableException(Exception exception)

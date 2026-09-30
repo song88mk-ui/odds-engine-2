@@ -496,30 +496,28 @@ namespace OE.Websocket.Service.Tests
         [InlineData("66", "1715", "-1.5", "Home (+1.5)")]
         public void PrepareSelectionName_HandicapMarket_AppendsTheSignedLine(string maTeId, string seTeId, string line, string expected)
         {
-            Assert.Equal(expected, Invoke<string>(BuildRepository(new MemCache()), "PrepareSelectionName",
+            Assert.Equal(expected, InvokeStatic<string>("PrepareSelectionName",
                 maTeId, seTeId, "Home", line));
         }
 
         [Fact]
         public void PrepareSelectionName_ZeroLine_AppendsPlainZeroForEitherTemplate()
         {
-            var repository = BuildRepository(new MemCache());
-
-            Assert.Equal("Home (0)", Invoke<string>(repository, "PrepareSelectionName", "16", "1714", "Home", "0"));
-            Assert.Equal("Home (0)", Invoke<string>(repository, "PrepareSelectionName", "16", "1715", "Home", "0"));
+            Assert.Equal("Home (0)", InvokeStatic<string>("PrepareSelectionName", "16", "1714", "Home", "0"));
+            Assert.Equal("Home (0)", InvokeStatic<string>("PrepareSelectionName", "16", "1715", "Home", "0"));
         }
 
         [Fact]
         public void PrepareSelectionName_UnknownSelectionTemplate_LeavesTheNameAlone()
         {
-            Assert.Equal("Home", Invoke<string>(BuildRepository(new MemCache()), "PrepareSelectionName",
+            Assert.Equal("Home", InvokeStatic<string>("PrepareSelectionName",
                 "16", "9999", "Home", "1.5"));
         }
 
         [Fact]
         public void PrepareSelectionName_NonHandicapMarket_LeavesTheNameAlone()
         {
-            Assert.Equal("Home", Invoke<string>(BuildRepository(new MemCache()), "PrepareSelectionName",
+            Assert.Equal("Home", InvokeStatic<string>("PrepareSelectionName",
                 "18", "1714", "Home", "1.5"));
         }
 

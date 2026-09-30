@@ -388,9 +388,37 @@ namespace OE.Shared.Utilities
                     contextToInject = Activity.Current.Context;
                 }
 
-                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, InjectTraceContextIntoBasicProperties);
 
                 var payloadBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+
+                _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
+            }
+        }
+
+        public void Publish(string payload, string messageType, string routingKey, string correlationId)
+        {
+            var activityName = $"{routingKey} send";
+            using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
+            {
+                var properties = _model.CreateBasicProperties();
+                properties.CorrelationId = correlationId;
+                properties.DeliveryMode = 2;
+                properties.Type = messageType;
+
+                ActivityContext contextToInject = default;
+                if (activity != null)
+                {
+                    contextToInject = activity.Context;
+                }
+                else if (Activity.Current != null)
+                {
+                    contextToInject = Activity.Current.Context;
+                }
+
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, InjectTraceContextIntoBasicProperties);
+
+                var payloadBytes = Encoding.UTF8.GetBytes(payload);
 
                 _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
             }
@@ -419,39 +447,11 @@ namespace OE.Shared.Utilities
                     contextToInject = Activity.Current.Context;
                 }
 
-                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, InjectTraceContextIntoBasicProperties);
 
                 var payloadBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
 
                 channel.BasicPublish(_exchange, routingKey, properties, payloadBytes);
-            }
-        }
-
-        public void Publish(string payload, string messageType, string routingKey, string correlationId)
-        {
-            var activityName = $"{routingKey} send";
-            using (var activity = _activitySource.StartActivity(activityName, ActivityKind.Producer))
-            {
-                var properties = _model.CreateBasicProperties();
-                properties.CorrelationId = correlationId;
-                properties.DeliveryMode = 2;
-                properties.Type = messageType;
-
-                ActivityContext contextToInject = default;
-                if (activity != null)
-                {
-                    contextToInject = activity.Context;
-                }
-                else if (Activity.Current != null)
-                {
-                    contextToInject = Activity.Current.Context;
-                }
-
-                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
-
-                var payloadBytes = Encoding.UTF8.GetBytes(payload);
-
-                _model.BasicPublish(_exchange, routingKey, properties, payloadBytes);
             }
         }
 
@@ -478,15 +478,14 @@ namespace OE.Shared.Utilities
                     contextToInject = Activity.Current.Context;
                 }
 
-                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, this.InjectTraceContextIntoBasicProperties);
+                Propagator.Inject(new PropagationContext(contextToInject, Baggage.Current), properties, InjectTraceContextIntoBasicProperties);
 
                 var payloadBytes = Encoding.UTF8.GetBytes(payload);
 
                 channel.BasicPublish(_exchange, routingKey, properties, payloadBytes);
             }
         }
-
-        private void InjectTraceContextIntoBasicProperties(IBasicProperties props, string key, string value)
+        private static void InjectTraceContextIntoBasicProperties(IBasicProperties props, string key, string value)
         {
             try
             {

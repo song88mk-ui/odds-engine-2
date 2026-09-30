@@ -166,6 +166,8 @@ namespace OE.Translation.Job.Tests.Workers
             var worker = await StartAndWaitAsync(BuildWorker(broker));
 
             await worker.StopAsync(CancellationToken.None); // must not throw
+
+            Assert.Equal(1, broker.DisposeCalls);
         }
         private sealed class FakeCleanupRepository : ITranslationCleanupRepository
         {

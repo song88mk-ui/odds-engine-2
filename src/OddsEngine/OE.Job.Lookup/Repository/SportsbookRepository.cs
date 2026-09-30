@@ -196,12 +196,12 @@ namespace OE.Job.Lookup.Repository
         {
             collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
         }
-        private string ConvertToPascalCase(string value)
+        private static string ConvertToPascalCase(string value)
         {
             if (string.IsNullOrEmpty(value) || string.IsNullOrWhiteSpace(value)) return string.Empty;
 
             var list = new List<string>();
-            var words = value.Trim().Split(new[] { ' ' }).Where(c => !string.IsNullOrEmpty(c) && !string.IsNullOrWhiteSpace(c)).ToList();
+            var words = value.Trim().Split(' ').Where(c => !string.IsNullOrEmpty(c) && !string.IsNullOrWhiteSpace(c)).ToList();
 
             foreach (var item in words)
             {

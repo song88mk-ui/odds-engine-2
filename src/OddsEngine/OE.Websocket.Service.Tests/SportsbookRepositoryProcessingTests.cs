@@ -419,7 +419,10 @@ namespace OE.Websocket.Service.Tests
             var repository = BuildRepository(memCache);
             var client = BuildClient(NewClientCode(), _ => throw new InvalidOperationException("no HTTP expected"), out _);
 
-            await repository.ProcessBetStopGlobal(client, new OnBetStopGlobalMessage { IsBetStop = true }, UnstartedHubConnection());
+            var exception = await Record.ExceptionAsync(() =>
+                repository.ProcessBetStopGlobal(client, new OnBetStopGlobalMessage { IsBetStop = true }, UnstartedHubConnection()));
+
+            Assert.Null(exception);
         }
 
         [Fact]
@@ -429,12 +432,14 @@ namespace OE.Websocket.Service.Tests
             var repository = BuildRepository(memCache);
             var client = BuildClient(NewClientCode(), _ => throw new InvalidOperationException("no HTTP expected"), out _);
 
-            await repository.ProcessBetStatus(client, new IncomingBetStatus
+            var exception = await Record.ExceptionAsync(() => repository.ProcessBetStatus(client, new IncomingBetStatus
             {
                 UserId = "U1",
                 BetId = "b1",
                 BetStatus = BetStatus.Won
-            }, UnstartedHubConnection());
+            }, UnstartedHubConnection()));
+
+            Assert.Null(exception);
         }
 
         [Fact]
@@ -444,7 +449,10 @@ namespace OE.Websocket.Service.Tests
             var repository = BuildRepository(memCache);
             var client = BuildClient(NewClientCode(), _ => throw new InvalidOperationException("no HTTP expected"), out _);
 
-            await repository.ProcessPayableChange(client, new IncomingPayableChange { UserId = "U1", Payable = 10m }, UnstartedHubConnection());
+            var exception = await Record.ExceptionAsync(() =>
+                repository.ProcessPayableChange(client, new IncomingPayableChange { UserId = "U1", Payable = 10m }, UnstartedHubConnection()));
+
+            Assert.Null(exception);
         }
         private sealed class FakeHttpMessageHandler : HttpMessageHandler
         {

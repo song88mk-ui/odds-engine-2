@@ -922,7 +922,7 @@ namespace OE.Sportsbook.Service.Repositories
             };
         }
 
-        private int GetSortOrder(string id)
+        private static int GetSortOrder(string id)
         {
             _ = int.TryParse(id, out int result);
 

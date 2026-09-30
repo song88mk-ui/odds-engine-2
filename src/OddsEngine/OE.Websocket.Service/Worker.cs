@@ -618,15 +618,14 @@ namespace OE.Websocket.Service
         }
 
         private async void MessageReceivedEvent(object sender, BasicDeliverEventArgs e)
-        {//
-            var parentContext = Propagator.Extract(default, e.BasicProperties, this.ExtractTraceFromBasicProperties);
+        {
+            var parentContext = Propagator.Extract(default, e.BasicProperties, ExtractTraceFromBasicProperties);
             Baggage.Current = parentContext.Baggage;
 
             var payload = Encoding.UTF8.GetString(e.Body);
             var msgType = e.BasicProperties.Type;
-            var correlationId = e.BasicProperties.CorrelationId;
 
-            _logger.LogInformation("{messageType}:[{routingKey}] {@payload}", msgType, e.RoutingKey, payload);
+            _logger.LogInformation("{MessageType}:[{RoutingKey}] {@Payload}", msgType, e.RoutingKey, payload);
 
             using (var activity = _activitySource.StartActivity($"{e.RoutingKey} receive", ActivityKind.Consumer, parentContext.ActivityContext))
                 try
@@ -776,14 +775,14 @@ namespace OE.Websocket.Service
 
                     activity?.SetTag("stack.trace", exception.StackTrace);
                     activity?.SetStatus(ActivityStatusCode.Error, exception.Message);
-                    _logger.LogError(exception, "error processing message: {trace}", exception.StackTrace);
+                    _logger.LogError(exception, "error processing message: {Trace}", exception.StackTrace);
                     // abruptly terminate the process and let the operating system
                     // supervisor handles its job of restarting it
                     System.Environment.Exit(1);
                 }
         }
 
-        private IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
+        private static IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
         {
             try
             {

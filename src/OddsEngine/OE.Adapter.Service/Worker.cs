@@ -127,7 +127,7 @@ namespace OE.Adapter.Service
 
         private void MessageReceivedEvent(object sender, BasicDeliverEventArgs ea)
         {
-            var parentContext = Propagator.Extract(default, ea.BasicProperties, this.ExtractTraceFromBasicProperties);
+            var parentContext = Propagator.Extract(default, ea.BasicProperties, ExtractTraceFromBasicProperties);
             Baggage.Current = parentContext.Baggage;
 
             var payload = Encoding.UTF8.GetString(ea.Body.ToArray());
@@ -214,18 +214,18 @@ namespace OE.Adapter.Service
                 }
         }
 
-        private void ProcessMessage<T>(string payload, Action<T> processor)
+        private static void ProcessMessage<T>(string payload, Action<T> processor)
         {
             if (string.IsNullOrWhiteSpace(payload)) return;
 
             var message = JsonSerializer.Deserialize<T>(payload);
-            if (message != null)
+            if (!EqualityComparer<T>.Default.Equals(message, default))
             {
                 processor(message);
             }
         }
 
-        private IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
+        private static IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
         {
             try
             {

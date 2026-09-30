@@ -97,20 +97,19 @@ namespace OE.UOF.Client
             var fixtureConfigurationPayload = JsonSerializer.Serialize(_fixtureConfigurations);
             _logger.LogDebug(fixtureConfigurationPayload);
 
-            _logger.LogInformation("connecting to external broker");
+            _logger.LogInformation("processed market template player props and client configurations; connecting to external broker");
             _messageBrokerExternal.ExternalConnect();
 
-            _logger.LogInformation("connecting to broker/RabbitMQ");
             _messageBroker.Connect();
             _messageBroker.MessageReceived += MessageReceivedEvent;
-            _logger.LogInformation("connected, processing incoming messages");
+            _logger.LogInformation("connected to broker/RabbitMQ, processing incoming messages");
 
             return Task.CompletedTask;
         }
 
         private void MessageReceivedEvent(object sender, BasicDeliverEventArgs ea)
         {
-            var parentContext = Propagator.Extract(default, ea.BasicProperties, this.ExtractTraceFromBasicProperties);
+            var parentContext = Propagator.Extract(default, ea.BasicProperties, ExtractTraceFromBasicProperties);
             Baggage.Current = parentContext.Baggage;
 
             var payload = Encoding.UTF8.GetString(ea.Body.ToArray());
@@ -210,12 +209,12 @@ namespace OE.UOF.Client
             handler(message);
         }
 
-        private void ProcessMessage<T>(string payload, Action<T> handler)
+        private static void ProcessMessage<T>(string payload, Action<T> handler)
         {
             var message = JsonSerializer.Deserialize<T>(payload);
             handler(message);
         }
-        private void ProcessRawMessage(string payload, Action<string> handler)
+        private static void ProcessRawMessage(string payload, Action<string> handler)
         {
             handler(payload);
         }
@@ -260,7 +259,7 @@ namespace OE.UOF.Client
             }
         }
 
-        private IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
+        private static IEnumerable<string> ExtractTraceFromBasicProperties(IBasicProperties props, string key)
         {
             try
             {

@@ -1429,7 +1429,7 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
-        private string PrepareSelectionName(string MaTeId, string selectionTemplateId, string selectionName, string line)
+        private static string PrepareSelectionName(string MaTeId, string selectionTemplateId, string selectionName, string line)
         {
             var MaTeIds = new string[] { "16", "66" };
 
