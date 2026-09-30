@@ -7,14 +7,12 @@ namespace OE.Translation.Job.Repositories
     public class TranslationCleanupRepository : ITranslationCleanupRepository
     {
         private readonly TranslationContext _context;
-        private readonly ILogger<TranslationCleanupRepository> _logger;
 
         public TranslationCleanupRepository(
             TranslationContext context,
             ILogger<TranslationCleanupRepository> logger)
         {
             _context = context;
-            _logger = logger;
         }
 
         public async Task<int> FlagBetPlacementAsync(

@@ -24,11 +24,9 @@ namespace OE.Sportsbook.Service.Repositories
 
         private readonly IConfiguration _configuration;
         private readonly IMemCache _memCache;
-        private readonly IHelper _helper;
 
         private readonly Histogram<double> _bulkWriteDurationHistogram;
 
-        private IMongoDatabase _db;
 
         private IMongoCollection<BettingStatus> _bettingStatusCollection;
         private IMongoCollection<Fixture> _fixtureCollection;
@@ -67,7 +65,6 @@ namespace OE.Sportsbook.Service.Repositories
         {
             _configuration = configuration;
             _memCache = memCache;
-            _helper = helper;
             _bulkWriteDurationHistogram = instrumentation.BulkWriteDurationHistogram;
             _logger = logger;
 
@@ -147,8 +144,6 @@ namespace OE.Sportsbook.Service.Repositories
                 return;
             try
             {
-                var timestamp = DateTime.UtcNow.ToEpochTimestamp();
-
                 var data = ToMarketAndSelection(message, correlationId);
 
 
@@ -161,7 +156,6 @@ namespace OE.Sportsbook.Service.Repositories
                 foreach (var market in message.Ma)
                 {
                     var marketColection = _marketCollection.Find(f => f.MaId == market.MaId).FirstOrDefault();
-                    var fixtureSpecifier = message.FiSp;
 
                     if (marketColection is null)
                         continue;
@@ -358,12 +352,12 @@ namespace OE.Sportsbook.Service.Repositories
         private void PrepareDatabaseConnection()
         {
             var client = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
-            _db = client.GetDatabase("Sportsbook");
+            var db = client.GetDatabase("Sportsbook");
 
-            _fixtureCollection = _db.GetCollection<Fixture>("Fixture");
-            _marketCollection = _db.GetCollection<Market>("Market");
-            _selectionCollection = _db.GetCollection<Selection>("Selection");
-            _bettingStatusCollection = _db.GetCollection<BettingStatus>("BettingStatus");
+            _fixtureCollection = db.GetCollection<Fixture>("Fixture");
+            _marketCollection = db.GetCollection<Market>("Market");
+            _selectionCollection = db.GetCollection<Selection>("Selection");
+            _bettingStatusCollection = db.GetCollection<BettingStatus>("BettingStatus");
         }
 
         internal WriteModel<Fixture>[] ToFixture(OnFixtureChangeMessage message)

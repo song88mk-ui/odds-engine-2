@@ -19,7 +19,6 @@ namespace OE.Job.Cleanup
         private readonly IBetFixtureCache _betFixtureCache;
         private readonly IConfiguration _configuration;
 
-        private readonly ActivitySource _activitySource;
         private readonly Gauge<long> _jobLastExecutionTimestampSeconds;
         private readonly Gauge<short> _jobSuccessResult;
         private readonly Counter<long> _jobRunCount;
@@ -31,7 +30,6 @@ namespace OE.Job.Cleanup
             _sportsbookRepository = sportsbookRepository;
             _betFixtureCache = betFixtureCache;
 
-            _activitySource = instrumentation.ActivitySource;
             _jobLastExecutionTimestampSeconds = instrumentation.JobLastExecutionTimestampSeconds;
             _jobSuccessResult = instrumentation.JobSuccessResult;
             _jobRunCount = instrumentation.JobRunCount;

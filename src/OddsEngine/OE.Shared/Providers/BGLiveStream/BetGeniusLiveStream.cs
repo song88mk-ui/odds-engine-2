@@ -15,7 +15,6 @@ namespace OE.Shared.Providers.BGLiveStream
         public ChannelType ChannelType => ChannelType.BG;
 
         private readonly IBetGeniusRepository _bgRepo;
-        private readonly IConfiguration _configuration;
         private readonly ILogger<BetGeniusLiveStream> _logger;
 
         public BetGeniusLiveStream(
@@ -23,7 +22,6 @@ namespace OE.Shared.Providers.BGLiveStream
             ILogger<BetGeniusLiveStream> logger,
             IBetGeniusRepository bgRepo)
         {
-            _configuration = configuration;
             _logger = logger;
             _bgRepo = bgRepo;
         }

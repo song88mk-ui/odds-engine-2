@@ -14,23 +14,21 @@ namespace OE.UOF.Client.Repository
         };
 
         private readonly IMemCache _memCache;
-        private readonly IConfiguration _configuration;
         private readonly HttpClient _httpClient;
 
         public PlatformRepository(IConfiguration configuration, IMemCache memCache)
         {
-            _configuration = configuration;
             _memCache = memCache;
 
             if (_httpClient == null)
             {
                 _httpClient = new HttpClient
                 {
-                    BaseAddress = new Uri(_configuration["API:PlatformAPI"]),
+                    BaseAddress = new Uri(configuration["API:PlatformAPI"]),
                     Timeout = TimeSpan.FromSeconds(5)
                 };
 
-                _httpClient.DefaultRequestHeaders.Add("x-api-key", _configuration["API:APIKey"]);
+                _httpClient.DefaultRequestHeaders.Add("x-api-key", configuration["API:APIKey"]);
                 _httpClient.DefaultRequestHeaders.Add("x-client-id", string.Empty);
             }
         }

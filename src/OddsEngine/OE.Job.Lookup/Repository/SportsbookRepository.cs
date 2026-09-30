@@ -10,9 +10,6 @@ namespace OE.Job.Lookup.Repository
 {
     public class SportsbookRepository : ISportsbookRepository
     {
-        private readonly IMongoDatabase _db;
-        private readonly IConfiguration _configuration;
-
         private IMongoCollection<SportLookup> sportLookupCollection;
         private IMongoCollection<SegmentLookup> segmentLookupCollection;
         private IMongoCollection<LeagueLookup> leagueLookupCollection;
@@ -21,16 +18,14 @@ namespace OE.Job.Lookup.Repository
 
         public SportsbookRepository(IConfiguration configuration)
         {
-            _configuration = configuration;
+            var client = new MongoClient(configuration["Custom:MongoDB-Sportsbook"]);
+            var db = client.GetDatabase("Sportsbook");
 
-            var client = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
-            _db = client.GetDatabase("Sportsbook");
-
-            sportLookupCollection = _db.GetCollection<SportLookup>("SportLookup");
-            segmentLookupCollection = _db.GetCollection<SegmentLookup>("SegmentLookup");
-            leagueLookupCollection = _db.GetCollection<LeagueLookup>("LeagueLookup");
-            marketLookupCollection = _db.GetCollection<MarketLookup>("MarketLookup");
-            selectionLookupCollection = _db.GetCollection<SelectionLookup>("SelectionLookup");
+            sportLookupCollection = db.GetCollection<SportLookup>("SportLookup");
+            segmentLookupCollection = db.GetCollection<SegmentLookup>("SegmentLookup");
+            leagueLookupCollection = db.GetCollection<LeagueLookup>("LeagueLookup");
+            marketLookupCollection = db.GetCollection<MarketLookup>("MarketLookup");
+            selectionLookupCollection = db.GetCollection<SelectionLookup>("SelectionLookup");
 
         }
         public void ProcessOnOddsChangeMessage(OnMarketChangeMessage message)

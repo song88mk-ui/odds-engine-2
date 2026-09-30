@@ -26,7 +26,6 @@ namespace OE.WebSocket.Service.Repository
 
         private readonly bool _isOEEnabled;
 
-        private readonly IConfiguration _configuration;
         private readonly IMemCache _memCache;
         private readonly ILogger<SportsbookRepository> _logger;
 
@@ -45,12 +44,11 @@ namespace OE.WebSocket.Service.Repository
         public SportsbookRepository(IConfiguration configuration, IMemCache memCache, Instrumentation instrumentation, ILogger<SportsbookRepository> logger)
         {
             _logger = logger;
-            _configuration = configuration;
             _memCache = memCache;
             _activitySource = instrumentation.ActivitySource;
             _publishedToWebSocketCounter = instrumentation.PublishedToWebSocketCounter;
 
-            _isOEEnabled = Convert.ToBoolean(_configuration["Custom:IsOEEnabled"]);
+            _isOEEnabled = Convert.ToBoolean(configuration["Custom:IsOEEnabled"]);
         }
 
         #endregion

@@ -54,9 +54,6 @@ namespace OE.Shared.Utilities
         private string _externalPassword = string.Empty;
         private string _externalVirtualHost = string.Empty;
         private string _externalExchange = string.Empty;
-        private string _externalQueue = string.Empty;
-        private string _externalConsumerName = string.Empty;
-        private string _externalRoutingKey = string.Empty;
 
         private static readonly ActivitySource _activitySource = new ActivitySource(nameof(MessageBroker));
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
@@ -84,9 +81,6 @@ namespace OE.Shared.Utilities
             _externalPassword = _configuration["ExternalMessageBroker:Password"];
             _externalVirtualHost = _configuration["ExternalMessageBroker:VirtualHost"];
             _externalExchange = _configuration["ExternalMessageBroker:Exchange"];
-            _externalQueue = _configuration["ExternalMessageBroker:Queue"];
-            _externalConsumerName = _configuration["ExternalMessageBroker:Consumer"];
-            _externalRoutingKey = _configuration["ExternalMessageBroker:RoutingKey"];
             _externalPort = _configuration.GetValue<int>("ExternalMessageBroker:Port", 5672);
 
             PrepareExternalConnection();
@@ -99,9 +93,6 @@ namespace OE.Shared.Utilities
             _externalPassword = model.Password;
             _externalVirtualHost = model.VirtualHost;
             _externalExchange = model.Exchange;
-            _externalQueue = model.Queue;
-            _externalConsumerName = model.Consumer;
-            _externalRoutingKey = model.RoutingKey;
 
             if (!string.IsNullOrEmpty(model.Port))
                 _externalPort = int.Parse(model.Port);

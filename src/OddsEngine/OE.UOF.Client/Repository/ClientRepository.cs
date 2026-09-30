@@ -15,16 +15,9 @@ namespace OE.UOF.Client.Repository
     {
         #region Fields
 
-        private readonly IMemCache _memCache;
-        private readonly IConfiguration _configuration;
-        private readonly IPlatformRepository _platformRepository;
         private readonly HttpClient _httpClient;
-        private readonly string _clientCode = string.Empty;
-        private readonly bool _asianClient = false;
-        private readonly List<string> _languageCodes = new List<string>();
         private readonly List<string> _MaTeIds = new List<string> { "16", "18", "66", "68" };
         private readonly ActivitySource _activitySource;
-        private readonly ILogger<ClientRepository> _logger;
 
         private readonly JsonSerializerOptions _options;
 
@@ -38,26 +31,18 @@ namespace OE.UOF.Client.Repository
                 Instrumentation instrumentation,
                 ILogger<ClientRepository> logger)
         {
-            _configuration = configuration;
-            _memCache = memCache;
-            _platformRepository = platformRepository;
-            _logger = logger;
-
-            _clientCode = _configuration["Custom:ClientCode"];
-            _asianClient = Convert.ToBoolean(_configuration["Custom:AsianClient"]);
-            _languageCodes = _configuration["Custom:LanguageCodes"].Split(',').Select(s => s).ToList();
             _activitySource = instrumentation.ActivitySource;
 
             if (_httpClient == null)
             {
                 _httpClient = new HttpClient
                 {
-                    BaseAddress = new Uri(_configuration["API:PlatformAPI"]),
+                    BaseAddress = new Uri(configuration["API:PlatformAPI"]),
                     Timeout = TimeSpan.FromSeconds(5)
                 };
 
-                _httpClient.DefaultRequestHeaders.Add("x-client-id", _configuration["Custom:ClientId"]);
-                _httpClient.DefaultRequestHeaders.Add("x-api-key", _configuration["Custom:APIKey"]);
+                _httpClient.DefaultRequestHeaders.Add("x-client-id", configuration["Custom:ClientId"]);
+                _httpClient.DefaultRequestHeaders.Add("x-api-key", configuration["Custom:APIKey"]);
             }
 
             _options = new JsonSerializerOptions
@@ -73,8 +58,6 @@ namespace OE.UOF.Client.Repository
         public void ProcessFixtureChange(OnFixtureChangeMessage message, IMessageBroker messageBroker, string correlationId)
         {
             //CheckDelay(message, "START");
-
-            var payloadStr = string.Empty;
 
             using (var activity = _activitySource.StartActivity("UOFClient ProcessFixture"))
             {
@@ -109,8 +92,6 @@ namespace OE.UOF.Client.Repository
         public void ProcessMarketChange(OnMarketChangeMessage message, IMessageBroker messageBroker, string correlationId, List<ClientLiveFixtureModel> fixtureConfigurations, List<ClientConfigurationModel> sportConfigurations)
         {
             //CheckDelay(message, "START");
-
-            var payloadStr = string.Empty;
 
             using (var activity = _activitySource.StartActivity("ProcessMarkets"))
             {
@@ -197,9 +178,6 @@ namespace OE.UOF.Client.Repository
 
         public void ProcessBetStopGlobal(OnBetStopGlobalMessage message, IMessageBroker messageBroker, string correlationId)
         {
-
-            var payloadStr = string.Empty;
-
             using (var activity = _activitySource.StartActivity("ProcessBetStopGlobal"))
             {
                 if (message == null)
@@ -861,7 +839,6 @@ namespace OE.UOF.Client.Repository
             var stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            var strPayload = JsonSerializer.Serialize(payload, _options);
             messageBroker.ExternalPublish(payload, messageType, routingKey, correlationId);
 
             if (stopwatch.Elapsed.TotalMilliseconds >= 500)

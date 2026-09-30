@@ -19,9 +19,7 @@ namespace OE.Job.LiveStream.Repository
 {
     public class SportsbookRepository : ISportsbookRepository
     {
-        private readonly IBetGeniusRepository _bgRepo;
         private readonly ILogger<SportsbookRepository> _logger;
-        private readonly IConfiguration _configuration;
         private readonly IServiceScopeFactory _scopeFactory;
 
         private IMongoCollection<Fixture> _fixtureCollection;
@@ -30,16 +28,14 @@ namespace OE.Job.LiveStream.Repository
 
         public SportsbookRepository(IConfiguration configuration, ILogger<SportsbookRepository> logger, Instrumentation instrumentation, IServiceScopeFactory scopeFactory, IBetGeniusRepository bgRepo)
         {
-            _configuration = configuration;
             _logger = logger;
             _jobRunFixturesUpdated = instrumentation.JobRunFixturesUpdated;
 
-            var mongoClient = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
+            var mongoClient = new MongoClient(configuration["Custom:MongoDB-Sportsbook"]);
             var db = mongoClient.GetDatabase("Sportsbook");
 
             _fixtureCollection = db.GetCollection<Fixture>("Fixture");
             _scopeFactory = scopeFactory;
-            _bgRepo = bgRepo;
         }
 
         public async Task ProcessLiveStream()

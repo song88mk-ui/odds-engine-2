@@ -16,11 +16,7 @@ namespace OE.Job.Settlement.Repository
         #region Fields
 
         private readonly ILogger<SportsbookRepository> _logger;
-        private readonly IMongoDatabase _db;
-        private readonly IConfiguration _configuration;
-        private readonly HttpClient _httpClient;
 
-        private readonly string _apiKey;
         private readonly bool _editSportsbook;
 
         private readonly Counter<long> _jobRunProcessedTotal;
@@ -34,17 +30,13 @@ namespace OE.Job.Settlement.Repository
         public SportsbookRepository(ILogger<SportsbookRepository> logger, HttpClient httpClient, IConfiguration configuration, Instrumentation instrumentation)
         {
             _logger = logger;
-            _configuration = configuration;
             _jobRunProcessedTotal = instrumentation.JobRunProcessedTotal;
 
-            var client = new MongoClient(_configuration["Custom:MongoDB-Sportsbook"]);
-            _db = client.GetDatabase("Sportsbook");
-            fixtureCollection = _db.GetCollection<Fixture>("Fixture");
+            var client = new MongoClient(configuration["Custom:MongoDB-Sportsbook"]);
+            var db = client.GetDatabase("Sportsbook");
+            fixtureCollection = db.GetCollection<Fixture>("Fixture");
 
-            _httpClient = httpClient;
-
-            _apiKey = _configuration["Custom:ApiKey"];
-            _editSportsbook = Convert.ToBoolean(_configuration["Custom:EditSportsbook"]);
+            _editSportsbook = Convert.ToBoolean(configuration["Custom:EditSportsbook"]);
         }
 
         #endregion
@@ -72,12 +64,11 @@ namespace OE.Job.Settlement.Repository
         {
             foreach (var fixture in fixtures)
             {
-                var statistics = string.Empty;
                 var timestampDelivered = DateTime.UtcNow.ToEpochTimestamp();
 
                 try
                 {
-                    if ((fixture.FiStDa < DateTime.UtcNow && fixture.IsOfLi == false && fixture.FiStId == 0) //Prematch fixture that is already started
+                    if ((fixture.FiStDa < DateTime.UtcNow && !fixture.IsOfLi && fixture.FiStId == 0) //Prematch fixture that is already started
                         || (fixture.FiTyId == (int)FixtureType.Match && fixture.FiStDa.AddHours(6) < DateTime.UtcNow))
                     {
                         var payload = new OnFixtureChangeMessage

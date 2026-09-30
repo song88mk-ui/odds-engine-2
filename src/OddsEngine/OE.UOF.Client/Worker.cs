@@ -27,7 +27,6 @@ namespace OE.UOF.Client
         private readonly ActivitySource _activitySource;
         private readonly Counter<long> _forwardedMessagesCounter;
         private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
-        private readonly IConfiguration _configuration;
         private readonly string _clientCode;
 
         private int _currentMonth;
@@ -44,7 +43,6 @@ namespace OE.UOF.Client
                       Instrumentation instrumentation,
                       IConfiguration configuration)
         {
-            _configuration = configuration;
             _messageBroker = messageBroker;
             _clientRepository = clientRepository;
             _platformRepository = platformRepository;

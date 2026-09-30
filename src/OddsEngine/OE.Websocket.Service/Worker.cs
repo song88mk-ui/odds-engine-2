@@ -57,20 +57,6 @@ namespace OE.Websocket.Service
         // (or payload ClientId), so the dispatch threads do not have to re-resolve.
         private sealed record ClientScoped<T>(ClientContext Client, T Message);
 
-        private Thread _threadTopFixtures;
-        private Thread _threadTopLeagues;
-        private Thread _threadMarketCount;
-        private Thread _threadMainMarketsOddsChange;
-        private Thread _threadAllMarketsOddsChange;
-        private Thread _threadBetStatus;
-        private Thread _threadCashOut;
-        private Thread _threadWallet;
-        private Thread _threadFavorites;
-        private Thread _threadRemoveFavorites;
-        private Thread _threadBoostedFixtures;
-        private Thread _threadPayable;
-        private Thread _threadMarketSortOrderChange;
-        private Thread _threadWebPropsChange;
 
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesTopFixtures = new BlockingCollection<OnMarketChangeMessage>();
         private readonly BlockingCollection<OnMarketChangeMessage> _messagesTopLeagues = new BlockingCollection<OnMarketChangeMessage>();
@@ -403,42 +389,40 @@ namespace OE.Websocket.Service
                 clients = await _clientRegistry.RefreshAsync();
             }
 
-            _logger.LogInformation("serving {clientCount} client(s): {clientCodes}",
+            _logger.LogInformation("serving {ClientCount} client(s): {ClientCodes}",
                     _clientRegistry.Clients.Count, string.Join(",", _clientRegistry.Clients.Select(c => c.ClientCode)));
 
             await LoadClientData(clients);
 
-            _logger.LogInformation("Preparing threads");
-            _threadTopFixtures = CreateDispatchThread(ThreadTopFixtures, "ws-top-fixtures");
-            _threadTopLeagues = CreateDispatchThread(ThreadTopLeagues, "ws-top-leagues");
-            _threadMarketCount = CreateDispatchThread(ThreadMarketCount, "ws-market-count");
-            _threadMainMarketsOddsChange = CreateDispatchThread(ThreadMainMarketsOddsChange, "ws-main-markets-odds");
-            _threadAllMarketsOddsChange = CreateDispatchThread(ThreadAllMarketsOddsChange, "ws-all-markets-odds");
-            _threadBetStatus = CreateDispatchThread(ThreadBetStatus, "ws-bet-status");
-            _threadCashOut = CreateDispatchThread(ThreadCashOut, "ws-cashout");
-            _threadWallet = CreateDispatchThread(ThreadWallet, "ws-wallet");
-            _threadFavorites = CreateDispatchThread(ThreadFavorites, "ws-favorites");
-            _threadRemoveFavorites = CreateDispatchThread(ThreadRemoveFavorites, "ws-remove-favorites");
-            _threadBoostedFixtures = CreateDispatchThread(ThreadBoostedFixtures, "ws-boosted-fixtures");
-            _threadPayable = CreateDispatchThread(ThreadPayable, "ws-payable");
-            _threadMarketSortOrderChange = CreateDispatchThread(ThreadMarketSortOrder, "ws-market-sort-order");
-            _threadWebPropsChange = CreateDispatchThread(ThreadWebPropsChange, "ws-webprops-change");
+            var threadTopFixtures = CreateDispatchThread(ThreadTopFixtures, "ws-top-fixtures");
+            var threadTopLeagues = CreateDispatchThread(ThreadTopLeagues, "ws-top-leagues");
+            var threadMarketCount = CreateDispatchThread(ThreadMarketCount, "ws-market-count");
+            var threadMainMarketsOddsChange = CreateDispatchThread(ThreadMainMarketsOddsChange, "ws-main-markets-odds");
+            var threadAllMarketsOddsChange = CreateDispatchThread(ThreadAllMarketsOddsChange, "ws-all-markets-odds");
+            var threadBetStatus = CreateDispatchThread(ThreadBetStatus, "ws-bet-status");
+            var threadCashOut = CreateDispatchThread(ThreadCashOut, "ws-cashout");
+            var threadWallet = CreateDispatchThread(ThreadWallet, "ws-wallet");
+            var threadFavorites = CreateDispatchThread(ThreadFavorites, "ws-favorites");
+            var threadRemoveFavorites = CreateDispatchThread(ThreadRemoveFavorites, "ws-remove-favorites");
+            var threadBoostedFixtures = CreateDispatchThread(ThreadBoostedFixtures, "ws-boosted-fixtures");
+            var threadPayable = CreateDispatchThread(ThreadPayable, "ws-payable");
+            var threadMarketSortOrderChange = CreateDispatchThread(ThreadMarketSortOrder, "ws-market-sort-order");
+            var threadWebPropsChange = CreateDispatchThread(ThreadWebPropsChange, "ws-webprops-change");
 
-            _logger.LogInformation("Starting threads");
-            _threadTopFixtures.Start();
-            _threadTopLeagues.Start();
-            _threadMarketCount.Start();
-            _threadMainMarketsOddsChange.Start();
-            _threadAllMarketsOddsChange.Start();
-            _threadBetStatus.Start();
-            _threadCashOut.Start();
-            _threadWallet.Start();
-            _threadFavorites.Start();
-            _threadRemoveFavorites.Start();
-            _threadBoostedFixtures.Start();
-            _threadPayable.Start();
-            _threadMarketSortOrderChange.Start();
-            _threadWebPropsChange.Start();
+            threadTopFixtures.Start();
+            threadTopLeagues.Start();
+            threadMarketCount.Start();
+            threadMainMarketsOddsChange.Start();
+            threadAllMarketsOddsChange.Start();
+            threadBetStatus.Start();
+            threadCashOut.Start();
+            threadWallet.Start();
+            threadFavorites.Start();
+            threadRemoveFavorites.Start();
+            threadBoostedFixtures.Start();
+            threadPayable.Start();
+            threadMarketSortOrderChange.Start();
+            threadWebPropsChange.Start();
 
             // The hub is a separate deployment that may be down or restarting while this pod
             // starts. Keep retrying instead of faulting ExecuteAsync (which stops the host), and

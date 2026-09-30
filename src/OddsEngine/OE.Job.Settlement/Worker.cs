@@ -12,7 +12,6 @@ namespace OE.Job.Settlement
         private readonly IMessageBroker _messageBroker;
         private readonly ISportsbookRepository _sportsbookRepository;
 
-        private readonly ActivitySource _activitySource;
         private readonly Histogram<double> _jobDurationMs;
         private readonly Gauge<long> _jobLastExecutionTimestampSeconds;
         private readonly Gauge<short> _jobSuccessResult;
@@ -23,7 +22,6 @@ namespace OE.Job.Settlement
             _logger = logger;
             _sportsbookRepository = sportsbookRepository;
             _messageBroker = messageBroker;
-            _activitySource = instrumentation.ActivitySource;
             _jobDurationMs = instrumentation.JobDurationMs;
             _jobLastExecutionTimestampSeconds = instrumentation.JobLastExecutionTimestampSeconds;
             _jobSuccessResult = instrumentation.JobSuccessResult;

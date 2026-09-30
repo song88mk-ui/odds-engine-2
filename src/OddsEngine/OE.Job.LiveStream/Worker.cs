@@ -17,7 +17,6 @@ namespace OE.Job.LiveStream
         private readonly ISportsbookRepository _sportsbookRepository;
         private readonly IConfiguration _configuration;
 
-        private readonly ActivitySource _activitySource;
         private readonly Gauge<long> _jobLastExecutionTimestampSeconds;
         private readonly Gauge<short> _jobSuccessResult;
         private readonly Counter<long> _jobRunCount;
@@ -28,14 +27,13 @@ namespace OE.Job.LiveStream
             _configuration = configuration;
             _sportsbookRepository = sportsbookRepository;
 
-            _activitySource = instrumentation.ActivitySource;
             _jobLastExecutionTimestampSeconds = instrumentation.JobLastExecutionTimestampSeconds;
             _jobSuccessResult = instrumentation.JobSuccessResult;
             _jobRunCount = instrumentation.JobRunCount;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {//
+        {
             _logger.LogInformation("Running OE Job LiveStream...");
 
             while (true)
