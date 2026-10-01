@@ -39,6 +39,18 @@ OE.Websocket.Service ──(SignalR client)──►  /platform hub  ◄──(S
   with bounded parallelism (`Worker.LoadClientConcurrency`, 16 clients at a time). A client joins the
   odds fan-out (`IsReady`) only once its main-market templates loaded; clients whose load failed are
   retried on the 5-minute client refresh. Bet stops and user-specific messages are not gated.
+- **Client resolution per message (`Worker.ResolveClient`, `ClientRegistry`):** most client-scoped
+  message types resolve the target client by SBC client code (`ClientRegistry.ResolveByRoutingKey`,
+  the routing key's last dot-segment against `_byCode`). A few message types instead carry the
+  client as a Platform GUID in the payload and fall back to `ClientRegistry.ResolveByClientId`
+  (`_byId`) when the routing-key lookup misses: `OnBetStatus`, `OnCashOutChange`, `OnWalletChange`,
+  `OnPayableChange`, and (since BO-108) `OnWebPropsChange`. `OnWebPropsChange`'s routing key always
+  carries a GUID, never an SBC code (backoffice-final's `WebPropsRepository` publishes it that way,
+  because webprops-api itself is keyed by the client's Platform GUID), so for that message type the
+  routing-key branch always misses and resolution always goes through `ResolveByClientId`. Before
+  BO-108, `OnWebPropsChange` didn't deserialize the payload or pass a GUID fallback at all, so every
+  push for this message type was silently dropped and Client Site Config toggle changes reached
+  players only through platform-web's 60-minute webprops cache.
 
 ## Hub methods OEv2 calls (outbound) — [Verified]
 | Method | Triggered by (RabbitMQ) | Target group |

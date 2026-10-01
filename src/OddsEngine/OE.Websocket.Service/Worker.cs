@@ -742,7 +742,11 @@ namespace OE.Websocket.Service
                             break;
 
                         case "OnWebPropsChange":
-                            var webPropsClient = ResolveClient(e.RoutingKey);
+                            // BO-108: the routing key's last segment is a Platform GUID, which
+                            // never matches ResolveByRoutingKey's SBC-client-code lookup, so this
+                            // always falls back to the GUID from the payload (ResolveByClientId).
+                            var onWebPropsChange = JsonSerializer.Deserialize<IncomingWebPropsChange>(payload);
+                            var webPropsClient = ResolveClient(e.RoutingKey, onWebPropsChange.ClientId);
 
                             if (webPropsClient == null)
                             {
