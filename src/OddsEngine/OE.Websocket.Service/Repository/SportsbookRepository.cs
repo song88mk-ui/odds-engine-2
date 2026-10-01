@@ -19,6 +19,11 @@ namespace OE.WebSocket.Service.Repository
     {
         #region Fields
 
+        private const string METHOD_TAG = "method";
+        private const string CLIENT_CODE_TAG = "client.code";
+        private const string PUBLISH_ODDS_CHANGE_FOR_MAIN_MARKETS = "PublishOddsChangeForMainMarkets";
+        private const string PUBLISH_ODDS_CHANGE_FOR_ALL_MARKETS = "PublishOddsChangeForAllMarkets";
+
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -111,19 +116,19 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBetStopGlobal(ClientContext client, OnBetStopGlobalMessage message, HubConnection hubConnection)
+        public async Task ProcessBetStopGlobal(ClientContext client, OnBetStopGlobalMessage onBetStopGlobal, HubConnection hubConnection)
         {
             try
             {
                 var payload = new OutgoingBetStopGlobal
                 {
-                    IsBeSt = message.IsBetStop
+                    IsBeSt = onBetStopGlobal.IsBetStop
                 };
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishBetStopGlobal"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishBetStopGlobal"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishBetStopGlobal", hubConnection, payload);
             }
             catch (Exception e)
@@ -132,53 +137,53 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessBetStopFixture(ClientContext client, OnBetStopFixtureMessage message, HubConnection hubConnection)
+        public async Task ProcessBetStopFixture(ClientContext client, OnBetStopFixtureMessage onBetStopFixtureMessage, HubConnection hubConnection)
         {
             try
             {
-                _logger.LogInformationEx($"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(message)}");
+                _logger.LogInformationEx($"FixtureId:{onBetStopFixtureMessage.PrFiId} Incoming OnBetStopFixtureMessage --> {JsonSerializer.Serialize(onBetStopFixtureMessage)}");
 
                 var payload = new OutgoingBetStopFixture
                 {
-                    Gr = GetGroups(client, message),
+                    Gr = GetGroups(client, onBetStopFixtureMessage),
                     Pa = new BetStopFixture
                     {
-                        FiId = message.FiId.ToString(),
-                        IsBeSt = message.IsBetStop,
-                        SeAcMaToIn = message.SetActiveMarketsToInactive
+                        FiId = onBetStopFixtureMessage.FiId.ToString(),
+                        IsBeSt = onBetStopFixtureMessage.IsBetStop,
+                        SeAcMaToIn = onBetStopFixtureMessage.SetActiveMarketsToInactive
                     }
                 };
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishBetStopFixture"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishBetStopFixture"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishBetStopFixture", hubConnection, payload);
 
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"FixtureId:{message.PrFiId} Incoming OnBetStopFixtureMessage: error processing bet stop fixture");
+                _logger.LogError(e, $"FixtureId:{onBetStopFixtureMessage.PrFiId} Incoming OnBetStopFixtureMessage: error processing bet stop fixture");
             }
         }
 
-        public async Task ProcessBetStatus(ClientContext client, IncomingBetStatus message, HubConnection hubConnection)
+        public async Task ProcessBetStatus(ClientContext client, IncomingBetStatus onBetStatus, HubConnection hubConnection)
         {
             try
             {
                 var payload = new OutgoingBetStatus
                 {
-                    UsId = message.UserId,
-                    BeId = message.BetId.ToUpper(),
-                    BeStId = (int)message.BetStatus,
-                    BeStNa = message.BetStatus.ToString(),
-                    Me = string.IsNullOrEmpty(message.Message) ? string.Empty : message.Message
+                    UsId = onBetStatus.UserId,
+                    BeId = onBetStatus.BetId.ToUpper(),
+                    BeStId = (int)onBetStatus.BetStatus,
+                    BeStNa = onBetStatus.BetStatus.ToString(),
+                    Me = string.IsNullOrEmpty(onBetStatus.Message) ? string.Empty : onBetStatus.Message
                 };
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishBetStatus"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishBetStatus"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishBetStatus", hubConnection, payload);
             }
             catch (Exception e)
@@ -187,23 +192,23 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessCashOutChange(ClientContext client, IncomingCashOutChange message, HubConnection hubConnection)
+        public async Task ProcessCashOutChange(ClientContext client, IncomingCashOutChange onCashOutChange, HubConnection hubConnection)
         {
             try
             {
                 var payload = new OutgoingCashOutChange
                 {
-                    UsId = message.UserId,
-                    BeId = message.BetId.ToUpper(),
-                    CaOuStId = (int)message.CashOutStatus,
-                    CaOuStNa = message.CashOutStatus.ToString(),
-                    CaOuSt = message.CashOutStake
+                    UsId = onCashOutChange.UserId,
+                    BeId = onCashOutChange.BetId.ToUpper(),
+                    CaOuStId = (int)onCashOutChange.CashOutStatus,
+                    CaOuStNa = onCashOutChange.CashOutStatus.ToString(),
+                    CaOuSt = onCashOutChange.CashOutStake
                 };
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishCashOutChange"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishCashOutChange"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishCashOutChange", hubConnection, payload);
             }
             catch (Exception e)
@@ -212,20 +217,20 @@ namespace OE.WebSocket.Service.Repository
             }
         }
 
-        public async Task ProcessWalletChange(ClientContext client, IncomingWalletChange message, HubConnection hubConnection)
+        public async Task ProcessWalletChange(ClientContext client, IncomingWalletChange onWalletChange, HubConnection hubConnection)
         {
             try
             {
                 var payload = new OutgoingWalletChange
                 {
-                    UsId = message.UserId,
-                    Ba = message.Balance
+                    UsId = onWalletChange.UserId,
+                    Ba = onWalletChange.Balance
                 };
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishWalletChange"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishWalletChange"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishWalletChange", hubConnection, payload);
             }
             catch (Exception ex)
@@ -310,7 +315,7 @@ namespace OE.WebSocket.Service.Repository
                 }
 
                 var marketToRemove = message.Ma.Where(c => _marketStatusToRemove.Contains(c.MaStId)).Select(s => s.MaId).ToHashSet();
-                var marketToAdd = _isOEEnabled == false || message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright
+                var marketToAdd = !_isOEEnabled || message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright
                     ? message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId)).Select(s => s.MaId).ToHashSet()
                     : message.Ma.Where(c => _marketStatusToAdd.Contains(c.MaStId) && c.ClCo.Contains(client.ClientCode.ToUpper())).Select(s => s.MaId).ToHashSet();
 
@@ -391,7 +396,7 @@ namespace OE.WebSocket.Service.Repository
                     }
                     else
                     {
-                        if (cache.UserIds.Contains(message.UserId) == false)
+                        if (!cache.UserIds.Contains(message.UserId))
                         {
                             cache.UserIds.Add(message.UserId);
 
@@ -582,8 +587,8 @@ namespace OE.WebSocket.Service.Repository
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishPayableChange"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishPayableChange"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishPayableChange", hubConnection, payload);
             }
             catch (Exception ex)
@@ -600,8 +605,8 @@ namespace OE.WebSocket.Service.Repository
 
                 if (_publishedToWebSocketCounter.Enabled)
                     _publishedToWebSocketCounter.Add(1,
-                            new KeyValuePair<string, object?>("method", "PublishWebPropsChange"),
-                            new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                            new KeyValuePair<string, object?>(METHOD_TAG, "PublishWebPropsChange"),
+                            new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
                 await PublishToWebSocket(client, "PublishWebPropsChange", hubConnection, payload);
             }
             catch (Exception ex)
@@ -985,12 +990,12 @@ namespace OE.WebSocket.Service.Repository
             List<Tuple<string, decimal>> clients;
 
             if (clientCode.ToUpper() == "OE")
-                clients = clientMarketConfig.Split('|').Select(s => new Tuple<string, decimal>(s.Split(':').First(), Convert.ToDecimal(s.Split(':').Last()))).ToList();
+                clients = clientMarketConfig.Split('|').Select(s => new Tuple<string, decimal>(s.Split(':')[0], Convert.ToDecimal(s.Split(':')[^1]))).ToList();
             else
-                clients = clientMarketConfig.Split('|').Select(s => new Tuple<string, decimal>(s.Split(':').First(), Convert.ToDecimal(s.Split(':').Last()))).Where(c => c.Item1 == clientCode).ToList();
+                clients = clientMarketConfig.Split('|').Select(s => new Tuple<string, decimal>(s.Split(':')[0], Convert.ToDecimal(s.Split(':')[^1]))).Where(c => c.Item1 == clientCode).ToList();
 
             var result = new List<ClientOdds>();
-            var isBinary = selections.Count > 2 ? false : true;
+            var isBinary = selections.Count <= 2;
 
             // prepare market player props
             var playerPropMaTeIds = string.Join(",", marketTemplateGroups.Select(s => s.MarketTemplates).ToList()).Split(",").ToList();
@@ -1002,7 +1007,7 @@ namespace OE.WebSocket.Service.Repository
                     if (activeSelectionCount == 1)
                         activeSelectionCount = selections.Count;
 
-                    if (selection.IsAc == true && selection.Od > 0m)
+                    if (selection.IsAc && selection.Od > 0m)
                     {
                         var targetMargin = client.Item2;
 
@@ -1167,7 +1172,7 @@ namespace OE.WebSocket.Service.Repository
         private static decimal GetMalayOdds(decimal odds, bool isBinary)
         {
             // add binary condition if more than 2 value is decimal
-            if (isBinary == false)
+            if (!isBinary)
                 return odds;
 
             if (odds == 1m)
@@ -1184,7 +1189,7 @@ namespace OE.WebSocket.Service.Repository
         private static decimal GetHongkongOdds(decimal odds, bool isBinary)
         {
             // add binary condition if more than 2 value is decimal
-            if (isBinary == false)
+            if (!isBinary)
                 return odds;
 
             if (odds == 1m)
@@ -1196,7 +1201,7 @@ namespace OE.WebSocket.Service.Repository
         private static decimal GetIndoOdds(decimal odds, bool isBinary)
         {
             // add binary condition if more than 2 value is decimal
-            if (isBinary == false)
+            if (!isBinary)
                 return odds;
 
             if (odds == 1m)
@@ -1466,7 +1471,7 @@ namespace OE.WebSocket.Service.Repository
 
         private async Task ProcessMatchOddsChangeForMainMarketsOE(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection, List<MarketMessage> finalMarkets)
         {
-            if (message.ClCo == null || message.ClCo.Contains(client.ClientCode.ToUpper()) == false)
+            if (message.ClCo == null || !message.ClCo.Contains(client.ClientCode.ToUpper()))
                 return;
 
             var betBuilderMarketTemplates = GetBetBuilderMarketTemplates(client);
@@ -1496,7 +1501,7 @@ namespace OE.WebSocket.Service.Repository
 
                 if (market.Se.Count > 0)
                 {
-                    var activeSelections = market.Se.Where(c => c.IsAc == true && c.Od > 0m).ToList();
+                    var activeSelections = market.Se.Where(c => c.IsAc && c.Od > 0m).ToList();
 
                     if (activeSelections.Count == 1)
                         activeSelections = market.Se.Where(c => c.Od > 0m).ToList();
@@ -1591,10 +1596,10 @@ namespace OE.WebSocket.Service.Repository
 
             if (_publishedToWebSocketCounter.Enabled)
             {
-                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>(METHOD_TAG, PUBLISH_ODDS_CHANGE_FOR_MAIN_MARKETS), new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
             }
 
-            await PublishToWebSocket(client, "PublishOddsChangeForMainMarkets", hubConnection, payload);
+            await PublishToWebSocket(client, PUBLISH_ODDS_CHANGE_FOR_MAIN_MARKETS, hubConnection, payload);
         }
 
         private async Task ProcessMatchOddsChangeForMainMarkets(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection, List<MarketMessage> finalMarkets)
@@ -1654,9 +1659,9 @@ namespace OE.WebSocket.Service.Repository
                             SeId = s.SeId.ToString(),
                             SeNa = s.SeNa,
                             DeOd = s.Od.ToString("0.00"),
-                            MaOd = GetMalayOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
-                            HoOd = GetHongkongOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
-                            InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
+                            MaOd = GetMalayOdds(s.Od, m.Se.Count <= 2).ToString("0.00"),
+                            HoOd = GetHongkongOdds(s.Od, m.Se.Count <= 2).ToString("0.00"),
+                            InOd = GetIndoOdds(s.Od, m.Se.Count <= 2).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
                             SeNaTr = ToOutgoingTranslations(s.SeNaTr),
@@ -1667,7 +1672,7 @@ namespace OE.WebSocket.Service.Repository
 
             if (_publishedToWebSocketCounter.Enabled)
             {
-                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>("method", "PublishOddsChangeForMainMarkets"), new KeyValuePair<string, object?>("client.code", client.ClientCode));
+                _publishedToWebSocketCounter.Add(1, new KeyValuePair<string, object?>(METHOD_TAG, PUBLISH_ODDS_CHANGE_FOR_MAIN_MARKETS), new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
             }
 
             if (message.FiStId == (int)FixtureStatus.Closed)
@@ -1675,7 +1680,7 @@ namespace OE.WebSocket.Service.Repository
             if (message.FiStId == (int)FixtureStatus.Ended)
                 _logger.LogInformationEx($"FixtureId:{message.PrFiId} OnOddsChange Ended");
 
-            await PublishToWebSocket(client, "PublishOddsChangeForMainMarkets", hubConnection, payload);
+            await PublishToWebSocket(client, PUBLISH_ODDS_CHANGE_FOR_MAIN_MARKETS, hubConnection, payload);
         }
 
         private async Task ProcessMatchOddsChangeForAllMarkets(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection)
@@ -1735,9 +1740,9 @@ namespace OE.WebSocket.Service.Repository
                             SeId = s.SeId.ToString(),
                             SeNa = s.SeNa,
                             DeOd = s.Od.ToString("0.00"),
-                            MaOd = GetMalayOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
-                            HoOd = GetHongkongOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
-                            InOd = GetIndoOdds(s.Od, m.Se.Count > 2 ? false : true).ToString("0.00"),
+                            MaOd = GetMalayOdds(s.Od, m.Se.Count <= 2).ToString("0.00"),
+                            HoOd = GetHongkongOdds(s.Od, m.Se.Count <= 2).ToString("0.00"),
+                            InOd = GetIndoOdds(s.Od, m.Se.Count <= 2).ToString("0.00"),
                             IsAc = s.IsAc,
                             SoOr = s.SoOr,
                             SeNaTr = ToOutgoingTranslations(s.SeNaTr),
@@ -1748,14 +1753,14 @@ namespace OE.WebSocket.Service.Repository
 
             if (_publishedToWebSocketCounter.Enabled)
                 _publishedToWebSocketCounter.Add(1,
-                        new KeyValuePair<string, object?>("method", "PublishOddsChangeForAllMarkets"),
-                        new KeyValuePair<string, object?>("client.code", client.ClientCode));
-            await PublishToWebSocket(client, "PublishOddsChangeForAllMarkets", hubConnection, payload);
+                        new KeyValuePair<string, object?>(METHOD_TAG, PUBLISH_ODDS_CHANGE_FOR_ALL_MARKETS),
+                        new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
+            await PublishToWebSocket(client, PUBLISH_ODDS_CHANGE_FOR_ALL_MARKETS, hubConnection, payload);
         }
 
         private async Task ProcessMatchOddsChangeForAllMarketsOE(ClientContext client, OnMarketChangeMessage message, HubConnection hubConnection)
         {
-            if (message.ClCo == null || message.ClCo.Contains(client.ClientCode.ToUpper()) == false)
+            if (message.ClCo == null || !message.ClCo.Contains(client.ClientCode.ToUpper()))
                 return;
 
             var betBuilderMarketTemplates = GetBetBuilderMarketTemplates(client);
@@ -1788,7 +1793,7 @@ namespace OE.WebSocket.Service.Repository
 
                 if (market.Se.Count > 0)
                 {
-                    var activeSelections = market.Se.Where(c => c.IsAc == true && c.Od > 0m).ToList();
+                    var activeSelections = market.Se.Where(c => c.IsAc && c.Od > 0m).ToList();
 
                     if (activeSelections.Count == 1)
                         activeSelections = market.Se.Where(c => c.Od > 0m).ToList();
@@ -1824,7 +1829,7 @@ namespace OE.WebSocket.Service.Repository
 
                 if (betBuilderMarketTemplate != null)
                 {
-                    var isQuarterMarket = Convert.ToDecimal(market.Li).ToString("0.00").Contains(".25") || Convert.ToDecimal(market.Li).ToString("0.00").Contains(".75") ? true : false;
+                    var isQuarterMarket = Convert.ToDecimal(market.Li).ToString("0.00").Contains(".25") || Convert.ToDecimal(market.Li).ToString("0.00").Contains(".75");
                     if (!isQuarterMarket && message.FiStId == (int)FixtureStatus.Prematch && betBuilderMarketTemplate.Prematch == 1)
                     {
                         isMarketBetBuilder = true;
@@ -1836,7 +1841,7 @@ namespace OE.WebSocket.Service.Repository
 
                     var isDecimal = decimal.TryParse(market.Li, out decimal tempLine);
 
-                    if (isDecimal == true)
+                    if (isDecimal)
                     {
                         var modulo = tempLine % 1.00m;
 
@@ -1907,9 +1912,9 @@ namespace OE.WebSocket.Service.Repository
 
             if (_publishedToWebSocketCounter.Enabled)
                 _publishedToWebSocketCounter.Add(1,
-                        new KeyValuePair<string, object?>("method", "PublishOddsChangeForAllMarkets"),
-                        new KeyValuePair<string, object?>("client.code", client.ClientCode));
-            await PublishToWebSocket(client, "PublishOddsChangeForAllMarkets", hubConnection, payload);
+                        new KeyValuePair<string, object?>(METHOD_TAG, PUBLISH_ODDS_CHANGE_FOR_ALL_MARKETS),
+                        new KeyValuePair<string, object?>(CLIENT_CODE_TAG, client.ClientCode));
+            await PublishToWebSocket(client, PUBLISH_ODDS_CHANGE_FOR_ALL_MARKETS, hubConnection, payload);
         }
 
         // Forwards translation deltas only when there is something to forward (count > 0);

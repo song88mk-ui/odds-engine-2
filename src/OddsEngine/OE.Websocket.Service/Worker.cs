@@ -32,6 +32,8 @@ namespace OE.Websocket.Service
         // up half-configured.
         internal const int LoadClientConcurrency = 16;
 
+        private const string SkippingUnservedClientLogTemplate = "skipping {MessageType} for unserved client (routingKey={RoutingKey})";
+
         private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
@@ -646,7 +648,7 @@ namespace OE.Websocket.Service
 
                             if (betStatusClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -659,7 +661,7 @@ namespace OE.Websocket.Service
 
                             if (cashOutClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -672,7 +674,7 @@ namespace OE.Websocket.Service
 
                             if (walletClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -685,7 +687,7 @@ namespace OE.Websocket.Service
 
                             if (favoritesClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -697,7 +699,7 @@ namespace OE.Websocket.Service
 
                             if (removeFavoritesClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -709,7 +711,7 @@ namespace OE.Websocket.Service
 
                             if (boostedClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -721,7 +723,7 @@ namespace OE.Websocket.Service
 
                             if (payableClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -732,7 +734,7 @@ namespace OE.Websocket.Service
 
                             if (sortOrderClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 
@@ -744,7 +746,7 @@ namespace OE.Websocket.Service
 
                             if (webPropsClient == null)
                             {
-                                _logger.LogDebug("skipping {messageType} for unserved client (routingKey={routingKey})", msgType, e.RoutingKey);
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
                                 break;
                             }
 

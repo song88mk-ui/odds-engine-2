@@ -130,7 +130,7 @@ namespace OE.Shared.Utilities
                     suffix = sb.ToString().Substring(0, 5);
                 }
             }
-            _queue = _isExclusive == true ? $"{_configuration["MessageBroker:Queue"]}.{suffix}" : _configuration["MessageBroker:Queue"];
+            _queue = _isExclusive ? $"{_configuration["MessageBroker:Queue"]}.{suffix}" : _configuration["MessageBroker:Queue"];
             _consumerName = _configuration["MessageBroker:Consumer"];
             _routingKey = _configuration.GetValue<string>("MessageBroker:RoutingKey", "");
             _prefetchCount = _configuration.GetValue<ushort>("MessageBroker:PrefetchCount", 1000);
@@ -151,7 +151,7 @@ namespace OE.Shared.Utilities
                         VirtualHost = _virtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _hostPort == 5671 ? true : false, ServerName = _hostName },
+                        Ssl = new SslOption { Enabled = _hostPort == 5671, ServerName = _hostName },
                         ClientProperties = clientProperties
                     };
                 }
@@ -282,7 +282,7 @@ namespace OE.Shared.Utilities
                     VirtualHost = _virtualHost,
                     RequestedHeartbeat = 60,
                     NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                    Ssl = new SslOption { Enabled = _hostPort == 5671 ? true : false, ServerName = _hostName },
+                    Ssl = new SslOption { Enabled = _hostPort == 5671, ServerName = _hostName },
                     ClientProperties = clientProperties
                 };
 
@@ -509,7 +509,7 @@ namespace OE.Shared.Utilities
                         VirtualHost = _externalVirtualHost,
                         RequestedHeartbeat = 60,
                         NetworkRecoveryInterval = TimeSpan.FromSeconds(5),
-                        Ssl = new SslOption { Enabled = _externalPort == 5671 ? true : false, ServerName = _externalHostName },
+                        Ssl = new SslOption { Enabled = _externalPort == 5671, ServerName = _externalHostName },
                         ClientProperties = clientProperties
                     };
                 }

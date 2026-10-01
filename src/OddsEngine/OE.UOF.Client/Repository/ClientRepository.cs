@@ -417,10 +417,10 @@ namespace OE.UOF.Client.Repository
                 return new List<ClientOdds>();
 
             List<Tuple<string, decimal>> clients;
-            clients = clientMarketConfig.Split('|').Select(s => new Tuple<string, decimal>(s.Split(':').First(), Convert.ToDecimal(s.Split(':').Last()))).Where(c => c.Item1 == clientCode).ToList();
+            clients = clientMarketConfig.Split('|').Select(s => new Tuple<string, decimal>(s.Split(':')[0], Convert.ToDecimal(s.Split(':')[^1]))).Where(c => c.Item1 == clientCode).ToList();
 
             var result = new List<ClientOdds>();
-            var isBinary = selections.Count > 2 ? false : true;
+            var isBinary = selections.Count <= 2;
 
             // prepare market player props
             var playerPropMaTeIds = string.Join(",", marketTemplateGroups.Select(s => s.MarketTemplates).ToList()).Split(",").ToList();
@@ -447,7 +447,7 @@ namespace OE.UOF.Client.Repository
                     if (activeSelectionCount == 1)
                         activeSelectionCount = selections.Count;
 
-                    if (selection.IsAc == true && selection.Od > 0m)
+                    if (selection.IsAc && selection.Od > 0m)
                     {
                         var targetMargin = client.Item2;
 
@@ -604,7 +604,7 @@ namespace OE.UOF.Client.Repository
         private static decimal GetMalayOdds(decimal odds, bool isBinary)
         {
             // add binary condition if more than 2 value is decimal
-            if (isBinary == false)
+            if (!isBinary)
                 return odds;
 
             if (odds == 1m)
@@ -621,7 +621,7 @@ namespace OE.UOF.Client.Repository
         private static decimal GetHongkongOdds(decimal odds, bool isBinary)
         {
             // add binary condition if more than 2 value is decimal
-            if (isBinary == false)
+            if (!isBinary)
                 return odds;
 
             if (odds == 1m)
@@ -633,7 +633,7 @@ namespace OE.UOF.Client.Repository
         private static decimal GetIndoOdds(decimal odds, bool isBinary)
         {
             // add binary condition if more than 2 value is decimal
-            if (isBinary == false)
+            if (!isBinary)
                 return odds;
 
             if (odds == 1m)
@@ -681,8 +681,8 @@ namespace OE.UOF.Client.Repository
                 var scoreString = string.IsNullOrEmpty(message.Sc) ? "0-0" : message.Sc;
                 var scoreSplit = scoreString.Split('-');
 
-                homeScore = scoreSplit.First().Trim();
-                awayScore = scoreSplit.Last().Trim();
+                homeScore = scoreSplit[0].Trim();
+                awayScore = scoreSplit[^1].Trim();
             }
             //TODO: see comments below
             return new OFOddsChangeMessage
