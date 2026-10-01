@@ -32,4 +32,5 @@ RUN apt-get update && \
     update-ca-certificates
 
 COPY --from=build /app .
+USER app
 ENTRYPOINT ["dotnet", "OE.Translation.Job.dll"]

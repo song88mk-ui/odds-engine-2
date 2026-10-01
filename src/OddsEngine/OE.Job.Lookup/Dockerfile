@@ -37,4 +37,5 @@ RUN apt-get update && \
     update-ca-certificates
 
 COPY --from=build /src/OE.Job.Lookup/publish .
+USER app
 CMD ["/usr/bin/dotnet", "OE.Job.Lookup.dll"]

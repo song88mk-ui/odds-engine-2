@@ -30,4 +30,5 @@ RUN apt-get update -qq && \
     rm -fr /var/lib/apt/lists/*
 
 COPY --from=build /app .
+USER app
 ENTRYPOINT ["dotnet", "OE.UOF.Client.dll"]

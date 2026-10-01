@@ -26,4 +26,5 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 
 COPY --from=build /app .
+USER app
 ENTRYPOINT ["dotnet", "OE.Job.KeepAlive.dll"]
