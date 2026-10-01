@@ -62,12 +62,12 @@ namespace OE.Job.LiveStream
                 }
                 catch (InvalidOperationException e)
                 {
-                    _logger.LogError("The Job failed: {message}", e.Message);
+                    _logger.LogError(e, "The Job failed");
                     await Task.Delay(300000, stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("Unknown error: {exception}", ex);
+                    _logger.LogError(ex, "Unknown error");
                     if (_jobSuccessResult.Enabled)
                         _jobSuccessResult.Record(0);
 

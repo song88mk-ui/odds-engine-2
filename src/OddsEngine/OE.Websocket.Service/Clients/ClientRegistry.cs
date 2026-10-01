@@ -88,11 +88,11 @@ namespace OE.WebSocket.Service.Clients
                     added.Add(context);
                     next.Add(context);
 
-                    _logger.LogInformation("client registry: added {clientCode} ({clientId})", code, clientId);
+                    _logger.LogInformation("client registry: added {ClientCode} ({ClientId})", code, clientId);
                 }
 
                 foreach (var removed in _clients.Where(c => next.All(n => n.ClientCode != c.ClientCode)))
-                    _logger.LogWarning("client registry: removed {clientCode} ({clientId})", removed.ClientCode, removed.ClientId);
+                    _logger.LogWarning("client registry: removed {ClientCode} ({ClientId})", removed.ClientCode, removed.ClientId);
 
                 _clients = next;
                 _byCode = next.ToDictionary(c => c.ClientCode);
@@ -111,7 +111,7 @@ namespace OE.WebSocket.Service.Clients
             if (discovered == null)
             {
                 // Discovery failed: keep serving the current snapshot rather than dropping clients.
-                _logger.LogWarning("client discovery failed, keeping current client list ({count} clients)", _clients.Count);
+                _logger.LogWarning("client discovery failed, keeping current client list ({Count} clients)", _clients.Count);
                 return _clients.Select(c => (c.ClientCode.ToUpper(), c.ClientId)).ToList();
             }
 

@@ -40,7 +40,7 @@ namespace OE.Job.Cleanup
             var startHour = _configuration.GetValue<uint>("Custom:UtcWindowHours:Start", 1);
             var endHour = _configuration.GetValue<uint>("Custom:UtcWindowHours:End", 10);
 
-            _logger.LogInformation("Running OE CleanUp Crew. Schedule is from {start}-{end} UTC Hours",
+            _logger.LogInformation("Running OE CleanUp Crew. Schedule is from {Start}-{End} UTC Hours",
                     startHour, endHour);
             while (true)
             {
@@ -84,12 +84,12 @@ namespace OE.Job.Cleanup
                 }
                 catch (InvalidOperationException e)
                 {
-                    _logger.LogError("The Job failed: {message}", e.Message);
+                    _logger.LogError(e, "The Job failed");
                     await Task.Delay(300000, stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("Unknown error: {exception}", ex);
+                    _logger.LogError(ex, "Unknown error");
                     if (_jobSuccessResult.Enabled)
                         _jobSuccessResult.Record(0);
 

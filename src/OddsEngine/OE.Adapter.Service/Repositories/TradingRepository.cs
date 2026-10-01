@@ -70,8 +70,7 @@ namespace OE.Adapter.Service.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError($"{MessageType.ON_BET_SETTLEMENT} {JsonSerializer.Serialize(message)} {ex.Message}");
-                _logger.LogError($"{MessageType.ON_BET_SETTLEMENT} {ex.StackTrace}");
+                _logger.LogError(ex, $"{MessageType.ON_BET_SETTLEMENT} {JsonSerializer.Serialize(message)}");
                 throw;
             }
         }
@@ -224,8 +223,7 @@ namespace OE.Adapter.Service.Repositories
             }
             catch (Exception ex)
             {
-                _logger.LogError($"{messageType} {JsonSerializer.Serialize<T>(payload)} {ex.Message}");
-                _logger.LogError($"{messageType} {ex.StackTrace}");
+                _logger.LogError(ex, $"{messageType} {JsonSerializer.Serialize<T>(payload)}");
                 throw;
             }
         }

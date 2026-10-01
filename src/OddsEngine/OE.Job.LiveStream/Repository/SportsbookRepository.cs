@@ -101,15 +101,14 @@ namespace OE.Job.LiveStream.Repository
                         if (isLiveStream)
                             _logger.LogInformation($"ProcessLiveStream: {ch} fixture {fixture.Id}-{fixture.PrFiId} have {liveStream} permission.");
 
-                        var result = await _fixtureCollection.BulkWriteAsync(ToFixture(fixture.Id, isLiveStream, liveStream), new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
+                        await _fixtureCollection.BulkWriteAsync(ToFixture(fixture.Id, isLiveStream, liveStream), new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
                         if (_jobRunFixturesUpdated.Enabled)
                             _jobRunFixturesUpdated.Add(1);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"ProcessLiveStream: Error processing {ex.Message}-{ex.StackTrace}");
-                    continue;
+                    _logger.LogError(ex, "ProcessLiveStream: Error processing");
                 }
 
             }

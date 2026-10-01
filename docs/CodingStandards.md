@@ -43,6 +43,9 @@
 ## Logging standards
 - Serilog + the `LogXxxEx` extension helpers (carry class/member/file/line + optional JSON `Data`).
 - Prefer message templates over interpolation (mixed adherence in practice).
+- **Exceptions:** always `_logger.LogError(ex, "...")` (exception first), never `ex.Message` /
+  `ex.StackTrace` in the message; PascalCase placeholders; don't drop operational start/connect log
+  lines to satisfy S6664. Full rule: [Logging.md §3a](./Logging.md).
 - Per-service `Instrumentation` for metrics; per-message Activities for traces.
 
 ## Error-handling standards

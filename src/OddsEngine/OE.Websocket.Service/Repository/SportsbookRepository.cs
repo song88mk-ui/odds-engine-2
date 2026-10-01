@@ -73,8 +73,8 @@ namespace OE.WebSocket.Service.Repository
                 else
                     finalMarkets = message.Ma;
 
-                _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@finalMarkets}", JsonSerializer.Serialize(finalMarkets));
-                _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@markets}", JsonSerializer.Serialize(message.Ma));
+                _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@FinalMarkets}", JsonSerializer.Serialize(finalMarkets));
+                _logger.LogDebug("ProcessOddsChangeForMainMarkets: {@Markets}", JsonSerializer.Serialize(message.Ma));
 
                 if (message.SpId.IsVirtualSportId() || message.FiTyId == (int)FixtureType.Outright)
                 {
@@ -326,14 +326,14 @@ namespace OE.WebSocket.Service.Repository
                 // Runs once per client per odds change: at 500 clients this line alone is
                 // 500 log entries and 500 JSON serializations per message, so Debug-only.
                 if (_logger.IsEnabled(LogLevel.Debug))
-                    _logger.LogDebug("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {cache}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, cache == null ? "Null" : JsonSerializer.Serialize(cache));
+                    _logger.LogDebug("ProcessMarketCount {ClientId} {FixtureId} {FixtureName} {FixtureStatus} {Cache}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, cache == null ? "Null" : JsonSerializer.Serialize(cache));
 
                 if (cache == null)
                 {
                     var result = await GetFixtureDetails(client, message.FiId);
                     if (result.StatusCode != StatusCode.Success)
                     {
-                        _logger.LogError("ProcessMarketCount {clientId} {fixtureId} {fixtureName} {fixtureStatus} {fixturedetailsStatus} {resultMessage}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, result.StatusCode, result.Message);
+                        _logger.LogError("ProcessMarketCount {ClientId} {FixtureId} {FixtureName} {FixtureStatus} {FixturedetailsStatus} {ResultMessage}", clientId, message.FiId.ToString(), message.FiNa, message.FiStNa, result.StatusCode, result.Message);
                         activity?.SetStatus(ActivityStatusCode.Error, result.Message);
                         return;
                     }
@@ -356,7 +356,7 @@ namespace OE.WebSocket.Service.Repository
                 var changed = cache == null || !currentMarketIds.SetEquals(cache?.MarketIds ?? Enumerable.Empty<long>());
                 if (changed)
                 {
-                    _logger.LogDebug("ProcessMarketCount {fixtureId} {fixtureName} {fixtureStatus} {marketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
+                    _logger.LogDebug("ProcessMarketCount {FixtureId} {FixtureName} {FixtureStatus} {MarketCount}", message.FiId, message.FiNa, message.FiStNa, currentMarketIds.Count);
                     _memCache.AddOrUpdateCache(key, new MarketCount { FiId = message.FiId, MarketIds = currentMarketIds.ToList() }, DateTimeOffset.UtcNow.AddDays(7));
                 }
 
@@ -481,7 +481,7 @@ namespace OE.WebSocket.Service.Repository
                 }
 
                 if (_logger.IsEnabled(LogLevel.Debug))
-                    _logger.LogDebug("ProcessMainMarketTemplates: {@marketTemplates}", JsonSerializer.Serialize(client.MainMarketTemplates));
+                    _logger.LogDebug("ProcessMainMarketTemplates: {@MarketTemplates}", JsonSerializer.Serialize(client.MainMarketTemplates));
 
                 return true;
             }
@@ -627,7 +627,7 @@ namespace OE.WebSocket.Service.Repository
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "error publishing {method} to websocket hub. HubState={hubState}", method, hubConnection.State);
+                _logger.LogError(e, "error publishing {Method} to websocket hub. HubState={HubState}", method, hubConnection.State);
             }
         }
 

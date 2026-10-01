@@ -39,7 +39,7 @@ namespace OE.Job.Lookup
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Error stopping service: {message}", e.Message);
+                _logger.LogError(e, "Error stopping service: {Message}", e.Message);
             }
 
             return base.StopAsync(cancellationToken);
@@ -55,7 +55,7 @@ namespace OE.Job.Lookup
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Error running service: {message}", e.Message);
+                _logger.LogError(e, "Error running service: {Message}", e.Message);
                 throw; // up to stack, so it can fail early
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
@@ -77,9 +77,9 @@ namespace OE.Job.Lookup
                         break;
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
+                _logger.LogError(ex, "Error processing message");
             }
         }
     }

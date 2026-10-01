@@ -21,7 +21,9 @@ introduce new patterns/libraries without approval.
    Abbreviated field naming ([docs/SharedLibraries.md](../../../docs/SharedLibraries.md)).
 5. **Sharding.** Don't break per-fixture routing (`GetInstanceName`); new routing keys must fit the
    `r.oe.*.<NN>` scheme if shard-bound.
-6. **Implement the smallest change.** Add Activities/metrics + `LogXxxEx` logging.
+6. **Implement the smallest change.** Add Activities/metrics + `LogXxxEx` logging. Log exceptions
+   with the exception as the first argument (`LogError(ex, ...)`), per
+   [docs/Logging.md §3a](../../../docs/Logging.md).
 7. **Validate.** `dotnet build src/OddsEngine/OddsEngine.sln`; reason about behavior; no committed
    secrets; thread-safety for shared Singleton state (cf. H3).
 8. **Sync docs/assets** ([/update-docs](../../commands/update-docs.md)).

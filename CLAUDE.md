@@ -92,6 +92,13 @@ KeepAlive (heartbeat, 5s).
   cache-aside + negative caching. No Redis.
 - Logging: Serilog (Compact JSON) + `LogInformationEx`, `LogErrorEx`, `LogWarningEx` extensions;
   OpenTelemetry traces propagated through message headers.
+  - **Exceptions: pass the exception as the first argument**, `_logger.LogError(ex, "... {Payload}",
+    payload)` (or `LogErrorEx("...", ex)`). Never put `ex.Message` / `ex.StackTrace` in the message
+    text and never pass the exception as a template argument. No empty `catch` blocks.
+  - **PascalCase placeholders** (`{Message}`, `{Payload}`).
+  - **Keep operational log lines** (start / connecting / connected / progress). Don't remove or merge
+    them to satisfy SonarQube S6664.
+  - Full rule: [docs/Logging.md §3a](docs/Logging.md).
 - Config: imperative `IConfiguration` (`cfg["A:B"]`, `GetValue<T>`) — **no Options pattern**.
 - No AutoMapper (manual `To*`/`Prepare*`/`Map*`), no MediatR, no FluentValidation (guard clauses).
 - Full pattern catalog: [docs/ImplementationPatterns.md](docs/ImplementationPatterns.md);

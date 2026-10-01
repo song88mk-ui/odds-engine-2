@@ -69,7 +69,7 @@ namespace OE.Adapter.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError($"caught exception on stop: {ex.Message}");
+                _logger.LogError(ex, "caught exception on stop");
             }
 
             return base.StopAsync(cancellationToken);
@@ -87,7 +87,7 @@ namespace OE.Adapter.Service
             }
             catch (Exception e)
             {
-                _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
+                _logger.LogError(e, "Error connecting to RabbitMQ");
                 throw;
             }
             _messageBroker.MessageReceived += MessageReceivedEvent;
@@ -111,7 +111,7 @@ namespace OE.Adapter.Service
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError($"Error preloading translation cache (attempt {attempt}/{PRELOAD_RETRY_COUNT}): {e.Message}");
+                    _logger.LogError(e, $"Error preloading translation cache (attempt {attempt}/{PRELOAD_RETRY_COUNT})");
 
                     if (attempt >= PRELOAD_RETRY_COUNT)
                         throw;

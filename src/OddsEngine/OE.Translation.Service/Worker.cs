@@ -72,7 +72,7 @@ namespace OE.Translation.Service
             }
             catch (Exception ex)
             {
-                _logger.LogError($"caught exception on stop: {ex.Message}");
+                _logger.LogError(ex, "caught exception on stop");
             }
 
             return base.StopAsync(cancellationToken);
@@ -92,7 +92,7 @@ namespace OE.Translation.Service
                 }
                 catch (Exception ex) when (attempt < PRELOAD_RETRY_ATTEMPTS && !stoppingToken.IsCancellationRequested)
                 {
-                    _logger.LogWarning($"Translation cache preload attempt {attempt}/{PRELOAD_RETRY_ATTEMPTS} failed: {ex.Message}");
+                    _logger.LogWarning(ex, $"Translation cache preload attempt {attempt}/{PRELOAD_RETRY_ATTEMPTS} failed");
                     await Task.Delay(TimeSpan.FromSeconds(PRELOAD_RETRY_DELAY_SECONDS), stoppingToken);
                 }
             }
@@ -135,7 +135,7 @@ namespace OE.Translation.Service
             }
             catch (Exception e)
             {
-                _logger.LogError($"Error connecting to RabbitMQ: {e.Message}");
+                _logger.LogError(e, "Error connecting to RabbitMQ");
                 throw;
             }
 

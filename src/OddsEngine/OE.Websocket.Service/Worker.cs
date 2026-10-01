@@ -277,13 +277,13 @@ namespace OE.Websocket.Service
 
         private Task OnHubConnectionReconnecting(Exception error)
         {
-            _logger.LogWarning(error, "hub connection lost, automatic reconnect in progress. State={state}", _hubConnection.State);
+            _logger.LogWarning(error, "hub connection lost, automatic reconnect in progress. State={State}", _hubConnection.State);
             return Task.CompletedTask;
         }
 
         private Task OnHubConnectionReconnected(string connectionId)
         {
-            _logger.LogInformation("hub connection reconnected. connectionId: {connectionId}", connectionId);
+            _logger.LogInformation("hub connection reconnected. connectionId: {ConnectionId}", connectionId);
             return Task.CompletedTask;
         }
 
@@ -326,7 +326,7 @@ namespace OE.Websocket.Service
                 try
                 {
                     await _hubConnection.StartAsync(cancellationToken);
-                    _logger.LogInformation("hub connection established. State={state}", _hubConnection.State);
+                    _logger.LogInformation("hub connection established. State={State}", _hubConnection.State);
                     return;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -335,7 +335,7 @@ namespace OE.Websocket.Service
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "hub connect attempt failed, retrying in {delaySeconds}s", delay.TotalSeconds);
+                    _logger.LogError(ex, "hub connect attempt failed, retrying in {DelaySeconds}s", delay.TotalSeconds);
                 }
 
                 await Task.Delay(delay, cancellationToken);
@@ -372,7 +372,7 @@ namespace OE.Websocket.Service
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError(e, "Error stopping service: {message}", e.Message);
+                    _logger.LogError(e, "Error stopping service: {Message}", e.Message);
                 }
             }
         }
@@ -471,7 +471,7 @@ namespace OE.Websocket.Service
             var hubUri = new Uri(_configuration["Custom:WebSocketAPI"]);
             var presenceUrl = $"{hubUri.GetLeftPart(UriPartial.Authority)}/v1/activeclients";
 
-            _logger.LogInformation("polling presence at {presenceUrl}", presenceUrl);
+            _logger.LogInformation("polling presence at {PresenceUrl}", presenceUrl);
 
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(ClientPresence.PollSeconds));
@@ -590,7 +590,7 @@ namespace OE.Websocket.Service
             var notReady = clients.Count(c => !c.IsReady);
 
             if (notReady > 0)
-                _logger.LogWarning("{notReady} of {total} client(s) not ready (template load failed); retrying in {minutes}m",
+                _logger.LogWarning("{NotReady} of {Total} client(s) not ready (template load failed); retrying in {Minutes}m",
                         notReady, clients.Count, ClientRefreshMinutes);
         }
 

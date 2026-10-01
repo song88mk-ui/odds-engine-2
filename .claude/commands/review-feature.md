@@ -16,6 +16,9 @@ Checklist:
 - **Sharding:** per-fixture routing preserved?
 - **Config/secrets:** no committed secrets; flags via `Custom:*`; argocd-overridable?
 - **Observability:** Activities/metrics/logging via `LogXxxEx`?
+- **Exception logging:** exception passed as the first argument (`LogError(ex, ...)`), no
+  `ex.Message`/`ex.StackTrace` in the message, no empty `catch`, operational log lines kept
+  ([docs/Logging.md §3a](../../docs/Logging.md))?
 - **Anti-patterns:** check against [docs/AntiPatterns.md](../../docs/AntiPatterns.md).
 
 Output findings as Correctness / Contract / Risk / Style, each with file:line + confidence. Suggest

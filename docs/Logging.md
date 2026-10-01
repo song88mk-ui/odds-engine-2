@@ -49,6 +49,36 @@ From `appsettings.json` (`Serilog` section), representative (Sportsbook):
   `MessageBroker.cs:151`); others use string interpolation (esp. `BetGeniusRepository` error logs)
   which loses structure. Prefer templates.
 
+## 3a. Exception logging standard (required for new and changed code)
+
+When logging an exception, pass the **exception object itself as the first argument**. Serilog then
+records the exception type, message, full stack trace and inner exceptions as a structured
+`Exception` field, instead of a flattened string.
+
+```csharp
+catch (Exception ex)
+{
+    _logger.LogError(ex, "Error processing message: Payload: {@Payload}", payload);
+}
+```
+
+- **Do:** `_logger.LogError(ex, "...")`. With the `LogXxxEx` helpers, pass it as the `ex` argument
+  (`_logger.LogErrorEx("...", ex)`); the helper forwards it to `LogError(ex, ...)`.
+- **Don't** put `ex.Message` or `ex.StackTrace` into the message text
+  (`$"... {ex.Message}-{ex.StackTrace}"`), and don't pass the exception as a template argument
+  (`"... {exception}", ex`). Both drop the structured exception and its inner exceptions.
+  (SonarQube S6667)
+- **Don't** swallow exceptions. A `catch` block must at least log. (S2486)
+- Use **PascalCase** template placeholders (`{Message}`, `{Payload}`, `{State}`) and keep the same
+  name for the same value across services. (S6678)
+- **Keep operational log lines.** Start, connecting, connected and progress lines (for example
+  `"Connecting to RabbitMQ Server"`, `"GetLiveStream Start : {fixtureId}"`) are how a service's
+  lifecycle is followed in production. Don't remove or merge them to satisfy SonarQube's "too many
+  logging calls" rule (S6664); accept that finding instead.
+- Prefer message templates over `$"..."` interpolation in new code (see §3).
+
+This standard was applied across the services in DEVOPS-370.
+
 ## 4. Correlation IDs & distributed tracing — [Verified] (the real correlation mechanism)
 
 Correlation across the pipeline is **trace-based**, not a logged `correlationId` field:
@@ -85,9 +115,11 @@ Other services expose `processed.messages` / `forwarded.messages` (UOF.Client) a
   with stack + payload.
 
 ## 7. Known logging issues — [Verified] (see TechnicalDebt.md)
-- **Silent swallows:** Lookup message handler (`catch {}`), UOF.Client `PlatformRepository`
-  (`async void` + empty catch) — failures invisible in logs.
+- **Silent swallows:** UOF.Client `PlatformRepository` (`async void` + empty catch), so failures
+  are invisible in logs. (The Lookup message handler's `catch {}` now logs, DEVOPS-370.)
 - **KeepAlive `IsHealthy=true` hardcoded** — heartbeat log/metric is not a true health indicator.
-- **String-interpolated error logs** in `BetGeniusRepository` reduce structured-log value.
+- **String-interpolated error logs** in `BetGeniusRepository` reduce structured-log value. Its
+  exception catches now use `LogError(ex, ...)` (DEVOPS-370); the non-exception HTTP-error logs are
+  still interpolated.
 - **No correlation enricher** in Serilog — correlation lives only in traces; a log line in
   isolation can't be tied to a trace without the trace/span id (consider adding a trace-id enricher).

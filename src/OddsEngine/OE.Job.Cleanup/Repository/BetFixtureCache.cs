@@ -49,7 +49,7 @@ namespace OE.Job.Cleanup.Repository
 
             _isLoaded = true;
 
-            _logger.LogInformation("Preloaded {count} fixture id(s) with bet placements", _fixtureIds.Count);
+            _logger.LogInformation("Preloaded {Count} fixture id(s) with bet placements", _fixtureIds.Count);
         }
 
         public void Add(long fixtureId)

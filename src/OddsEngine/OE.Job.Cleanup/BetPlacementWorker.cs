@@ -48,7 +48,7 @@ namespace OE.Job.Cleanup
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error stopping BetPlacementWorker: {exception}", ex);
+                _logger.LogError(ex, "Error stopping BetPlacementWorker");
             }
 
             return base.StopAsync(cancellationToken);
@@ -89,8 +89,8 @@ namespace OE.Job.Cleanup
             {
                 // Best-effort: acknowledge rather than requeue to avoid poison loops. A missed
                 // fixture id is repaired by the SQL preload on the next restart.
-                _logger.LogError("Failed to process bet placement message. Type: {type} Exception: {exception}",
-                        messageType, ex);
+                _logger.LogError(ex, "Failed to process bet placement message. Type: {Type}",
+                        messageType);
             }
 
             _messageBroker.Acknowledge(e);

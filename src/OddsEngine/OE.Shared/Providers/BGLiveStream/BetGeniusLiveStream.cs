@@ -70,7 +70,7 @@ namespace OE.Shared.Providers.BGLiveStream
             }
             catch (Exception ex)
             {
-                _logger.LogError($"GetLiveStream Error: {ex.Message}-{ex.StackTrace}");
+                _logger.LogError(ex, "GetLiveStream Error");
                 return new List<string>();
             }
         }
@@ -130,7 +130,7 @@ namespace OE.Shared.Providers.BGLiveStream
             }
             catch (Exception ex)
             {
-                _logger.LogError($"GetLiveStream Error: {ex.Message}-{ex.StackTrace}");
+                _logger.LogError(ex, "GetLiveStream Error");
                 return (false, string.Empty);
             }
         }

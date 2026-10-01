@@ -139,8 +139,8 @@ namespace OE.Shared.Utilities
             {
                 if (_connectionFactory == null)
                 {
-                    _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}",
-                            _hostName, _hostPort, _hostPort == 5671 ? true : false);
+                    _logger.LogInformation("Connecting to RabbitMQ on [{Host}:{Port}]; TlsEnabled: {TlsEnabled}",
+                            _hostName, _hostPort, _hostPort == 5671);
 
                     _connectionFactory = new ConnectionFactory
                     {
@@ -270,8 +270,8 @@ namespace OE.Shared.Utilities
             {
                 if (_connectionFactory == null)
 
-                    _logger.LogInformation("Connecting to RabbitMQ on [{host}:{port}]; TlsEnabled: {tlsEnabled}; ManualAck",
-                            _hostName, _hostPort, _hostPort == 5671 ? true : false);
+                    _logger.LogInformation("Connecting to RabbitMQ on [{Host}:{Port}]; TlsEnabled: {TlsEnabled}; ManualAck",
+                            _hostName, _hostPort, _hostPort == 5671);
 
                 _connectionFactory = new ConnectionFactory
                 {

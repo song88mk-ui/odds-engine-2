@@ -111,7 +111,7 @@ namespace OE.Shared.Repositories
                 catch (Exception ex)
                 {
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    _logger.LogError($"GetBetGeniusAuthorizationToken Error: {ex.Message}-{ex.StackTrace}");
+                    _logger.LogError(ex, "GetBetGeniusAuthorizationToken Error");
 
                     _memCache.DeleteCache(cacheKey);
 
@@ -215,7 +215,7 @@ namespace OE.Shared.Repositories
                 catch (Exception ex)
                 {
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    _logger.LogError($"GetBetGeniusFixture Error: {ex.Message}-{ex.StackTrace}");
+                    _logger.LogError(ex, "GetBetGeniusFixture Error");
 
                     _memCache.DeleteCache(cacheKey);
 
@@ -303,7 +303,7 @@ namespace OE.Shared.Repositories
                 catch (Exception ex)
                 {
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-                    _logger.LogError($"GetBetGeniusFixtures Error: {ex.Message}-{ex.StackTrace}");
+                    _logger.LogError(ex, "GetBetGeniusFixtures Error");
 
                     return new BaseResponseDTO<BGEvents>
                     {

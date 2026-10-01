@@ -64,7 +64,7 @@ namespace OE.Job.Settlement
                         _jobLastExecutionTimestampSeconds.Record(DateTimeOffset.Now.ToUnixTimeSeconds());
                     }
 
-                    _logger.LogInformation("Done at: {time}", DateTimeOffset.Now);
+                    _logger.LogInformation("Done at: {Time}", DateTimeOffset.Now);
                     await Task.Delay(300000, stoppingToken);
                 }
                 catch (Exception ex)
@@ -72,7 +72,7 @@ namespace OE.Job.Settlement
                     if (_jobSuccessResult.Enabled)
                         _jobSuccessResult.Record(0);
 
-                    _logger.LogError($"Error: {ex.Message}");
+                    _logger.LogError(ex, "Error");
                     await Task.Delay(300000, stoppingToken);
                 }
             }

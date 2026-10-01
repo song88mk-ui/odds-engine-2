@@ -104,7 +104,7 @@ namespace OE.Job.Cleanup.Repository
                 .OrderBy(o => o.FiStDa).ToList();
             var totalCount = sortedFixtures.Count;
 
-            _logger.LogInformation("Got {count} fixture record(s) for deletion ({skipped} retained due to bet placements)",
+            _logger.LogInformation("Got {Count} fixture record(s) for deletion ({Skipped} retained due to bet placements)",
                     totalCount, fixtures.Count - totalCount);
 
             for (var offset = 0; offset < sortedFixtures.Count; offset += batchSize)
@@ -114,7 +114,7 @@ namespace OE.Job.Cleanup.Repository
                 // stop when the maintenance window closes; the worker re-dispatches in the next window
                 if (!IsWindowOpen(startHour, endHour, DateTime.UtcNow))
                 {
-                    _logger.LogInformation("UTC window closed, stopping with {remaining} fixture(s) left for the next run",
+                    _logger.LogInformation("UTC window closed, stopping with {Remaining} fixture(s) left for the next run",
                             sortedFixtures.Count - offset);
                     break;
                 }
@@ -122,7 +122,7 @@ namespace OE.Job.Cleanup.Repository
                 var batch = sortedFixtures.Skip(offset).Take(batchSize).ToList();
                 var fixtureIds = batch.Select(b => b.FiId).ToArray();
 
-                _logger.LogDebug("removing markets for {count} fixture(s)", batch.Count);
+                _logger.LogDebug("removing markets for {Count} fixture(s)", batch.Count);
                 var marketCollectionFilter = Builders<Market>.Filter.In(c => c.FiId, fixtureIds);
                 var marketResult = await _marketCollection.DeleteManyAsync(marketCollectionFilter, cancellationToken);
 
@@ -139,7 +139,7 @@ namespace OE.Job.Cleanup.Repository
                 if (_jobRunFixturesDeleted.Enabled)
                     _jobRunFixturesDeleted.Add(fixtureResult.DeletedCount);
 
-                _logger.LogInformation("Removed batch: Fixtures={fixtures} Markets={markets} Selections={selections} Remaining={remaining}",
+                _logger.LogInformation("Removed batch: Fixtures={Fixtures} Markets={Markets} Selections={Selections} Remaining={Remaining}",
                         fixtureResult.DeletedCount, marketResult.DeletedCount, selectionResult.DeletedCount,
                         Math.Max(0, sortedFixtures.Count - offset - batch.Count));
 
@@ -174,7 +174,7 @@ namespace OE.Job.Cleanup.Repository
             var sweepInterval = TimeSpan.FromHours(_configuration.GetValue<double>("Custom:OrphanSweepIntervalHours", 24));
             if (!IsSweepDue(_lastOrphanSweepUtc, DateTime.UtcNow, sweepInterval))
             {
-                _logger.LogDebug("Orphan sweep already ran at {last}, next one is due after {interval}",
+                _logger.LogDebug("Orphan sweep already ran at {Last}, next one is due after {Interval}",
                         _lastOrphanSweepUtc, sweepInterval);
                 return;
             }
@@ -190,7 +190,7 @@ namespace OE.Job.Cleanup.Repository
             await CollectFixtureIds(_marketCollection, Builders<Market>.Filter.Empty, candidates, cancellationToken);
             await CollectFixtureIds(_selectionCollection, Builders<Selection>.Filter.Empty, candidates, cancellationToken);
 
-            _logger.LogInformation("Checking {count} referenced fixture id(s) for orphaned markets and selections",
+            _logger.LogInformation("Checking {Count} referenced fixture id(s) for orphaned markets and selections",
                     candidates.Count);
 
             long orphanTotal = 0;
@@ -231,7 +231,7 @@ namespace OE.Job.Cleanup.Repository
                     marketTotal += marketCandidates;
                     selectionTotal += selectionCandidates;
 
-                    _logger.LogInformation("Dry run, orphan batch kept: Fixtures={fixtures} Markets={markets} Selections={selections}",
+                    _logger.LogInformation("Dry run, orphan batch kept: Fixtures={Fixtures} Markets={Markets} Selections={Selections}",
                             orphans.Length, marketCandidates, selectionCandidates);
                 }
                 else
@@ -245,14 +245,14 @@ namespace OE.Job.Cleanup.Repository
                     if (_jobRunOrphansDeleted.Enabled)
                         _jobRunOrphansDeleted.Add(orphans.Length);
 
-                    _logger.LogInformation("Removed orphan batch: Fixtures={fixtures} Markets={markets} Selections={selections}",
+                    _logger.LogInformation("Removed orphan batch: Fixtures={Fixtures} Markets={Markets} Selections={Selections}",
                             orphans.Length, marketResult.DeletedCount, selectionResult.DeletedCount);
                 }
 
                 await Task.Delay(batchDelayMs, cancellationToken);
             }
 
-            _logger.LogInformation("Orphan sweep complete ({mode}): Fixtures={fixtures} Markets={markets} Selections={selections}",
+            _logger.LogInformation("Orphan sweep complete ({Mode}): Fixtures={Fixtures} Markets={Markets} Selections={Selections}",
                     dryRun ? "dry run" : "deleted", orphanTotal, marketTotal, selectionTotal);
         }
 
