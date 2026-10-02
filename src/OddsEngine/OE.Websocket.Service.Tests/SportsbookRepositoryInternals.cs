@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OE.Shared.Utilities;
 using OE.WebSocket.Service.Clients;
@@ -23,8 +24,8 @@ namespace OE.Websocket.Service.Tests
                 })
                 .Build();
 
-        internal static SportsbookRepository BuildRepository(IMemCache memCache, bool isOEEnabled = false) =>
-            new(BuildConfiguration(isOEEnabled), memCache, new Instrumentation(), NullLogger<SportsbookRepository>.Instance);
+        internal static SportsbookRepository BuildRepository(IMemCache memCache, bool isOEEnabled = false, ILogger<SportsbookRepository>? logger = null) =>
+            new(BuildConfiguration(isOEEnabled), memCache, new Instrumentation(), logger ?? NullLogger<SportsbookRepository>.Instance);
 
         internal static ClientContext BuildClient(string clientCode) =>
             new()
@@ -72,5 +73,19 @@ namespace OE.Websocket.Service.Tests
             method.GetParameters()
                 .Select((p, i) => arguments[i] == null || p.ParameterType.IsInstanceOfType(arguments[i]))
                 .All(match => match);
+    }
+
+    // Captures every log call made against SportsbookRepository so tests can assert what was
+    // logged (and how many times) instead of only what was published or swallowed.
+    internal sealed class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Entries.Add((logLevel, formatter(state, exception)));
     }
 }

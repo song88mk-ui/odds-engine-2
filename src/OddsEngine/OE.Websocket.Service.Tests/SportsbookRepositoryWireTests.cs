@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OE.Shared.Enums;
 using OE.Shared.Messages.OutgoingAdapterMessages;
 using OE.Shared.Models;
@@ -350,21 +351,59 @@ namespace OE.Websocket.Service.Tests
             Assert.False(hub.Payload<OutgoingOddsChange>().Pa.IsBeBu);
         }
 
-        // Defect pinned by test, not fixed here: the OE mappers dereference the per-selection ClientOdds without a null
-        // check, so a market with no client-odds configuration throws inside the mapper. The
-        // public wrapper swallows it, which means the whole fixture update is silently lost -
-        // not just that one market. Pinned so the behaviour cannot change unnoticed.
+        // GM-810: a market with no client-odds configuration (empty/unnamed ClCoMa) used to make
+        // GetClientOdds return an empty list, which the per-selection FirstOrDefault dereferenced
+        // unchecked - throwing inside the mapper. The public wrapper (ProcessOddsChangeForMainMarkets)
+        // caught that exception and logged it, silently dropping the WHOLE fixture update, not just
+        // the offending market. Fixed: the market is now published with source odds (the same
+        // fallback the OE-disabled pass-through mapper already uses when no per-client repricing
+        // applies) and the decision is logged once as an explicit warning, not discovered via a
+        // caught exception.
         [Fact]
-        public async Task MainMarketsOE_MarketWithNoClientOddsConfiguration_SilentlyDropsTheWholeUpdate()
+        public async Task MainMarketsOE_MarketWithNoClientOddsConfiguration_PublishesWithSourceOddsAndLogsOnce()
         {
             var hub = new RecordingHubConnection();
-            var repository = BuildRepository(new MemCache(), isOEEnabled: true);
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
             var message = Message(Market("16", 1, 1, clCo: "TSO", clCoMa: string.Empty, selections: new[] { Selection(1, 2m, 1), Selection(2, 2m, 2) }));
             message.ClCo = "TSO";
 
             await repository.ProcessOddsChangeForMainMarkets(ReadyClient("tso", "16"), message, hub);
 
-            Assert.Empty(hub.Sent);
+            // The rest of the fixture update still publishes - the missing config for one market no
+            // longer discards the whole payload.
+            var market = Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma);
+            Assert.Equal("2.00", market.Se[0].DeOd);
+            Assert.Equal("2.00", market.Se[1].DeOd);
+
+            // The decision was made explicitly and logged exactly once, not surfaced through a
+            // caught exception.
+            var warnings = logger.Entries.Where(e => e.Level == LogLevel.Warning).ToList();
+            Assert.Single(warnings);
+            Assert.Contains("no client-odds configuration", warnings[0].Message);
+            Assert.DoesNotContain(logger.Entries, e => e.Level >= LogLevel.Error);
+        }
+
+        // Same defect, same fix, on the all-markets path.
+        [Fact]
+        public async Task AllMarketsOE_MarketWithNoClientOddsConfiguration_PublishesWithSourceOddsAndLogsOnce()
+        {
+            var hub = new RecordingHubConnection();
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
+            var message = Message(Market("16", 1, 1, clCo: "TSO", clCoMa: string.Empty, selections: new[] { Selection(1, 2m, 1), Selection(2, 2m, 2) }));
+            message.ClCo = "TSO";
+
+            await repository.ProcessOddsChangeForAllMarkets(ReadyClient("tso", "16"), message, hub);
+
+            var market = Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma);
+            Assert.Equal("2.00", market.Se[0].DeOd);
+            Assert.Equal("2.00", market.Se[1].DeOd);
+
+            var warnings = logger.Entries.Where(e => e.Level == LogLevel.Warning).ToList();
+            Assert.Single(warnings);
+            Assert.Contains("no client-odds configuration", warnings[0].Message);
+            Assert.DoesNotContain(logger.Entries, e => e.Level >= LogLevel.Error);
         }
 
         // ---- All markets ----

@@ -72,17 +72,5 @@ namespace OE.Websocket.Service.Tests
             protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
                 => Task.FromResult(new HttpResponseMessage(_status) { Content = new StringContent(string.Empty) });
         }
-
-        private sealed class CapturingLogger<T> : ILogger<T>
-        {
-            public List<(LogLevel Level, string Message)> Entries { get; } = new();
-
-            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-            public bool IsEnabled(LogLevel logLevel) => true;
-
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-                => Entries.Add((logLevel, formatter(state, exception)));
-        }
     }
 }

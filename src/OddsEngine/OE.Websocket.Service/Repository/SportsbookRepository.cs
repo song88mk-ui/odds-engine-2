@@ -1161,6 +1161,30 @@ namespace OE.WebSocket.Service.Repository
             return result;
         }
 
+        // GM-810: GetClientOdds returns an empty list when the market's ClCoMa is empty or does
+        // not name this client (no per-client margin configuration exists for that market). That
+        // used to be dereferenced unchecked by the callers below, throwing a NullReferenceException
+        // that the public wrapper caught and swallowed - dropping the whole fixture update, not just
+        // the offending market. The OE-disabled pass-through mapper already publishes raw source
+        // odds for every client when no per-client repricing applies (see
+        // ProcessMatchOddsChangeForMainMarkets/ProcessMatchOddsChangeForAllMarkets), so that is the
+        // fallback used here too: publish the market with source odds instead of dropping it.
+        private static List<ClientOdds> BuildSourceOddsFallback(List<SelectionMessage> selections, string clientCode)
+        {
+            var isBinary = selections.Count > 2 ? false : true;
+
+            return selections.Select(selection => new ClientOdds
+            {
+                ClientCode = clientCode,
+                DecimalOdds = selection.Od,
+                MalaysianOdds = GetMalayOdds(selection.Od, isBinary),
+                HongkongOdds = GetHongkongOdds(selection.Od, isBinary),
+                IndonesianOdds = GetIndoOdds(selection.Od, isBinary),
+                SelectionTemplateId = selection.SeTeId,
+                SelectionId = selection.SeId
+            }).ToList();
+        }
+
         private static decimal GetMasterOddsWithAddedMargin(decimal odds)
         {
             if (Math.Round(odds, 2) <= 1.01m)
@@ -1509,11 +1533,18 @@ namespace OE.WebSocket.Service.Repository
                     margin = (Math.Round(activeSelections.Sum(s => 100 / s.Od)) - 100) / 100;
 
                     clientOdds = GetClientOdds(message.SpId, activeSelections.Count, margin, market.Se, market.ClCoMa, client.ClientCode.ToUpper(), market.MaTeId, marketTemplateGroup.Where(c => c.SportId == message.SpId).ToList());
+
+                    if (clientOdds.Count == 0)
+                    {
+                        _logger.LogWarningEx($"FixtureId:{message.PrFiId} MarketId:{market.MaId} MaTeId:{market.MaTeId} has no client-odds configuration for client {client.ClientCode.ToUpper()} (ClCoMa='{market.ClCoMa}'); publishing source odds instead of client-adjusted odds.");
+                        clientOdds = BuildSourceOddsFallback(market.Se, client.ClientCode.ToUpper());
+                    }
                 }
 
                 foreach (var selection in market.Se)
                 {
-                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == client.ClientCode.ToUpper() && c.SelectionId == selection.SeId);
+                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == client.ClientCode.ToUpper() && c.SelectionId == selection.SeId)
+                        ?? BuildSourceOddsFallback(new List<SelectionMessage> { selection }, client.ClientCode.ToUpper())[0];
 
                     selections.Add(new OutgoingSelection
                     {
@@ -1801,11 +1832,18 @@ namespace OE.WebSocket.Service.Repository
                     margin = (Math.Round(activeSelections.Sum(s => 100 / s.Od)) - 100) / 100;
 
                     clientOdds = GetClientOdds(message.SpId, activeSelections.Count, margin, market.Se, market.ClCoMa, client.ClientCode.ToUpper(), market.MaTeId, marketTemplateGroup.Where(c => c.SportId == message.SpId).ToList());
+
+                    if (clientOdds.Count == 0)
+                    {
+                        _logger.LogWarningEx($"FixtureId:{message.PrFiId} MarketId:{market.MaId} MaTeId:{market.MaTeId} has no client-odds configuration for client {client.ClientCode.ToUpper()} (ClCoMa='{market.ClCoMa}'); publishing source odds instead of client-adjusted odds.");
+                        clientOdds = BuildSourceOddsFallback(market.Se, client.ClientCode.ToUpper());
+                    }
                 }
 
                 foreach (var selection in market.Se)
                 {
-                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == client.ClientCode.ToUpper() && c.SelectionId == selection.SeId);
+                    var odds = clientOdds.FirstOrDefault(c => c.ClientCode == client.ClientCode.ToUpper() && c.SelectionId == selection.SeId)
+                        ?? BuildSourceOddsFallback(new List<SelectionMessage> { selection }, client.ClientCode.ToUpper())[0];
 
                     selections.Add(new OutgoingSelection
                     {
