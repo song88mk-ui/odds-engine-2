@@ -489,7 +489,7 @@ namespace OE.Websocket.Service
                         if (!response.IsSuccessStatusCode)
                         {
                             if (wasAvailable)
-                                _logger.LogWarning("presence poll returned {statusCode}, failing open until it recovers", (int)response.StatusCode);
+                                _logger.LogWarning("presence poll returned {StatusCode}, failing open until it recovers", (int)response.StatusCode);
 
                             wasAvailable = false;
                             _clientPresence.MarkUnavailable();

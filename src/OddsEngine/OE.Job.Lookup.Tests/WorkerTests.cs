@@ -8,6 +8,7 @@ using OE.Shared.Utilities;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Framing;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -117,7 +118,12 @@ namespace OE.Job.Lookup.Tests
 
             broker.Raise(Delivery(MessageType.ON_MARKET_CHANGE, new OnMarketChangeMessage { PrFiId = "F1" }));
 
-            // No assertion beyond "didn't throw" — this Worker has no error-publish path.
+            // The dispatch loop must survive a repository exception: a later message on the same
+            // subscription should still reach the repository rather than the handler having come
+            // unsubscribed or the worker having faulted.
+            broker.Raise(Delivery(MessageType.ON_MARKET_CHANGE, new OnMarketChangeMessage { PrFiId = "F2" }));
+
+            Assert.Equal(new[] { "F1", "F2" }, repository.ProcessedMessages.Select(m => m.PrFiId));
         }
         private sealed class FakeSportsbookRepository : ISportsbookRepository
         {

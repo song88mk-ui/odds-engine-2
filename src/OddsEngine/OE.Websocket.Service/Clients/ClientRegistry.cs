@@ -130,7 +130,7 @@ namespace OE.WebSocket.Service.Clients
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogError("client discovery: v1/clients returned {statusCode} ({reasonPhrase})", (int)response.StatusCode, response.ReasonPhrase);
+                    _logger.LogError("client discovery: v1/clients returned {StatusCode} ({ReasonPhrase})", (int)response.StatusCode, response.ReasonPhrase);
                     return null;
                 }
 

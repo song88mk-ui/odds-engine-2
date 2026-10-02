@@ -313,15 +313,6 @@ namespace OE.Sportsbook.Service.Repositories
 
                 if (!marketIds.Contains(marketId))
                 {
-                    var topMarketMessage = new
-                    {
-                        SportId = message.SpId,
-                        FixtureId = fixtureId,
-                        MarketId = marketId,
-                        MarketStatusId = (int)MarketStatus.Cancelled,
-                        MarketStatusName = MarketStatus.Cancelled.ToString(),
-                    };
-
                     marketIds.Add(marketId);
 
                     messageBroker.Publish(onBetCancellationPayload, MessageType.ON_MARKET_CANCEL, $"r.client.topmarket.settlement", Guid.NewGuid().ToString());
@@ -615,7 +606,7 @@ namespace OE.Sportsbook.Service.Repositories
             Stopwatch sw = Stopwatch.StartNew();
             try
             {
-                var result = collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
+                collection.BulkWrite(data, new BulkWriteOptions { IsOrdered = false, BypassDocumentValidation = false });
             }
             catch (Exception ex)
             {

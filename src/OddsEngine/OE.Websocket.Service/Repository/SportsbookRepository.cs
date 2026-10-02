@@ -640,7 +640,7 @@ namespace OE.WebSocket.Service.Repository
             if (result != null && result.StatusCode == StatusCode.Success && result.Result != null)
                 return true;
 
-            _logger.LogWarning("{operation} skipped for {clientCode}: Platform API returned {statusCode} {message}",
+            _logger.LogWarning("{Operation} skipped for {ClientCode}: Platform API returned {StatusCode} {Message}",
                     operation, client.ClientCode, result?.StatusCode, result?.Message);
 
             return false;
@@ -730,7 +730,7 @@ namespace OE.WebSocket.Service.Repository
                             : new Uri($"v1/sportsbook/fixturedetails?fixtureId={FiId}", UriKind.Relative);
                         client.HttpClient.DefaultRequestHeaders.TryGetValues("x-api-key", out var apiKey);
 
-                        _logger.LogError("GetFixtureDetails {key} {fixtureId} {FiIdreqUrl} {reqHeader} {reasonPhrase}", apiKey?.FirstOrDefault(), FiId.ToString(), requestUri.ToString(), headers, response.ReasonPhrase);
+                        _logger.LogError("GetFixtureDetails {Key} {FixtureId} {FiIdreqUrl} {ReqHeader} {ReasonPhrase}", apiKey?.FirstOrDefault(), FiId.ToString(), requestUri.ToString(), headers, response.ReasonPhrase);
 
                         return new BaseResponseDTO<TWResponseDTO>
                         {
