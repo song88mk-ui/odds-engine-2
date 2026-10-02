@@ -10,8 +10,9 @@
 >    possible change.**
 > 5. **Production is READ-ONLY** — never run queries, deploy, change schema, or invalidate caches
 >    unless explicitly instructed.
-> 6. **If architecture changed, update `docs/` + CLAUDE.md/AGENTS.md and summarize changes, risks,
->    and validation.**
+> 6. **Document every change, not only architectural ones.** Update `docs/` + CLAUDE.md/AGENTS.md
+>    for bug fixes, security fixes and resolved debt too, and summarize changes, risks, and
+>    validation.
 >
 > A `UserPromptSubmit` hook in [.claude/settings.json](.claude/settings.json) re-injects this reminder
 > on every prompt. Full workflow + principles are in the section below.
@@ -95,6 +96,10 @@ KeepAlive (heartbeat, 5s).
   - **Exceptions: pass the exception as the first argument**, `_logger.LogError(ex, "... {Payload}",
     payload)` (or `LogErrorEx("...", ex)`). Never put `ex.Message` / `ex.StackTrace` in the message
     text and never pass the exception as a template argument. No empty `catch` blocks.
+  - **Never log a secret or credential value in plaintext** (API keys, tokens, connection strings,
+    signing keys). A sibling repo (platform-final, GM-880, 2026-09-30) found `_logger.LogError`
+    printing an OG private API key on every failed bet placement, visible in PRD Loki; mask a
+    secret (keep only the last few characters, blank the rest) before it reaches a log line.
   - **PascalCase placeholders** (`{Message}`, `{Payload}`).
   - **Keep operational log lines** (start / connecting / connected / progress). Don't remove or merge
     them to satisfy SonarQube S6664.
@@ -166,8 +171,9 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
     `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests` — run `dotnet test`
     against the relevant project(s) when present; `OE.Job.LiveStream` and `OE.UOF.Client` have none.
     `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not).
-12. **Update documentation** if architectural knowledge changed (the `update-docs` command; keep CLAUDE.md /
-    AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
+12. **Update documentation for every change**, not only when architectural knowledge changed. A
+    bug fix, security fix, or resolved debt item belongs in `docs/` too (the `update-docs` command;
+    keep CLAUDE.md / AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
     change whenever the change affects anything the README documents** (projects/frameworks,
     prerequisites, build/run/test instructions, configuration, endpoints) — the README must never
     describe a repo state that no longer exists.

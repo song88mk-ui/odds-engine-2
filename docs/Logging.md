@@ -76,6 +76,12 @@ catch (Exception ex)
   lifecycle is followed in production. Don't remove or merge them to satisfy SonarQube's "too many
   logging calls" rule (S6664); accept that finding instead.
 - Prefer message templates over `$"..."` interpolation in new code (see §3).
+- **Never pass a secret or credential value as a template argument** (API keys, tokens, connection
+  strings, signing keys), mask it first (for example keep only the last few characters, blank the
+  rest) rather than logging the raw value. A sibling repo (platform-final, GM-880, 2026-09-30) had
+  `_logger.LogError` printing an OG private API key on every failed bet placement, visible to
+  anyone with Grafana/Loki read access on PRD; fixed there with a reusable `Mask()` string
+  extension (`Platform.Shared/Extensions/StringExtensions.cs`).
 
 This standard was applied across the services in DEVOPS-370.
 

@@ -54,7 +54,9 @@ See [docs/knowledge/FrequentlyModifiedAreas.md](docs/knowledge/FrequentlyModifie
 - `_IsBetStopGlobally` not thread-safe; Websocket threads ignore cancellation.
 - Exception logging: `_logger.LogError(ex, "...")` with the exception first, never `ex.Message` /
   `ex.StackTrace` in the message; PascalCase placeholders; keep operational start/connect log lines
-  (don't drop them for SonarQube S6664). See [docs/Logging.md §3a](docs/Logging.md).
+  (don't drop them for SonarQube S6664). Never pass a secret/credential value as a template
+  argument either, mask it first; a sibling repo (platform-final, GM-880) had a private API key
+  logged this way, visible in PRD Loki. See [docs/Logging.md §3a](docs/Logging.md).
 
 ## Subagent guidance
 - For broad "where is X / how does Y flow" questions, dispatch read-only Explore agents (the codebase
