@@ -164,13 +164,23 @@ fixed there, since GM-808 changed no production code; later tickets fixed two of
      market (`platform-web` `BasePage.cs:677` `UpdateMarketsAndSelections`), so a market
      suspended upstream would stay active at stale odds. Publishing the market as suspended is a
      third option.
-   - **Latent defect.** The per-selection guard at `:1547` and `:1846` builds its fallback from a
-     one-item list, so `isBinary` is always `true` and the Malaysian, Hong Kong and Indonesian
-     odds would be wrong for a market with more than two selections. It is unreachable today:
-     `GetClientOdds` emits one entry per selection for each matched client.
-   Not yet tested: `ClCoMa` naming only another client, `ClCoMa` containing the client code as a
-   substring (`TSOX` for `TSO`), a market with three or more selections, and a fixture mixing a
-   configured and an unconfigured market.
+   - **Defect, pinned not fixed.** The per-selection guard at `:1547` and `:1846` builds its
+     fallback from a one-item list, so `isBinary` is always `true` and a three-way market gets the
+     wrong Malaysian, Hong Kong and Indonesian odds. PR #66 calls the guard unreachable, but it is
+     reachable for the pseudo-client `OE`: `GetClientOdds` prices every client named in `ClCoMa`,
+     none of those entries carry `OE`, so the list is not empty and no warning is logged, yet the
+     per-selection lookup finds nothing. Whether a live client is registered as `OE` is unknown.
+     Pinned by `MainMarketsOE_OEClientThreeWayMarket_PerSelectionFallbackTreatsItAsBinary`.
+
+   Follow-up tests cover `ClCoMa` naming only another client, the `TSOX`-for-`TSO` substring case,
+   binary and three-way fallback formats, a fixture mixing a configured and an unconfigured market
+   (both mappers), a market with no selections, the `OE` per-selection path (both mappers),
+   per-selection matching with distinct prices (both mappers), and `BuildSourceOddsFallback`
+   directly. Stryker on the lines PR #66 changed (`SportsbookRepository.cs` `1164-1187`,
+   `1535-1548`, `1834-1847`) went from 7 killed, 12 survived and 5 no-coverage to 22 killed,
+   0 survived and 2 no-coverage. The two left are the `c.SportId == message.SpId` player-props
+   filter on the unchanged `GetClientOdds` call lines (`:1535`, `:1834`), which no test reaches
+   because no test caches player-props templates. The whole file went from 56.98% to 59.95%.
 2. **GM-811** (fixed, both halves). The asian-odds branch in `GetClientOdds` was guarded by an empty
    `_MaTeIds`, so its mutants could never be covered. It is now removed, along with the
    `Custom:AsianClientCodes` key that only that branch read, and

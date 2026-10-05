@@ -280,5 +280,59 @@ namespace OE.Websocket.Service.Tests
 
             Assert.Equal(1.92m, Assert.Single(result).DecimalOdds);
         }
+
+        // ---- BuildSourceOddsFallback (GM-810) ----
+
+        // The mappers look a price up by ClientCode and SelectionId, so the fallback must carry
+        // both, plus the template id, for every selection it is given. Through the mappers a wrong
+        // ClientCode or SelectionId is masked by the per-selection fallback, so it is pinned here.
+        [Fact]
+        public void BuildSourceOddsFallback_CarriesTheLookupKeysForEverySelection()
+        {
+            var selections = new List<SelectionMessage> { Selection(11, 2.50m, seTeId: "1"), Selection(12, 1.60m, isActive: false, seTeId: "2") };
+
+            var result = InvokeStatic<List<ClientOdds>>("BuildSourceOddsFallback", selections, "TSO");
+
+            Assert.Equal(2, result.Count);
+            Assert.All(result, odds => Assert.Equal("TSO", odds.ClientCode));
+            Assert.Equal(new long[] { 11, 12 }, result.Select(o => o.SelectionId).ToArray());
+            Assert.Equal(new[] { "1", "2" }, result.Select(o => o.SelectionTemplateId).ToArray());
+        }
+
+        // Source odds pass through unchanged, inactive selections included: unlike GetClientOdds
+        // there is no margin to apply, so IsAc makes no difference.
+        [Fact]
+        public void BuildSourceOddsFallback_PublishesTheSourcePriceInEveryFormat()
+        {
+            var selections = new List<SelectionMessage> { Selection(11, 2.50m), Selection(12, 1.60m, isActive: false) };
+
+            var result = InvokeStatic<List<ClientOdds>>("BuildSourceOddsFallback", selections, "TSO");
+
+            Assert.Equal(new[] { 2.50m, 1.60m }, result.Select(o => o.DecimalOdds).ToArray());
+            Assert.Equal(new[] { -0.66m, 0.60m }, result.Select(o => o.MalaysianOdds).ToArray());
+            Assert.Equal(new[] { 1.50m, 0.60m }, result.Select(o => o.HongkongOdds).ToArray());
+            Assert.Equal(new[] { 1.50m, -1.66m }, result.Select(o => o.IndonesianOdds).ToArray());
+        }
+
+        [Fact]
+        public void BuildSourceOddsFallback_ThreeSelections_IsNotBinary()
+        {
+            var selections = new List<SelectionMessage> { Selection(1, 2.50m), Selection(2, 3.00m), Selection(3, 4.00m) };
+
+            var result = InvokeStatic<List<ClientOdds>>("BuildSourceOddsFallback", selections, "TSO");
+
+            Assert.All(result, o =>
+            {
+                Assert.Equal(o.DecimalOdds, o.MalaysianOdds);
+                Assert.Equal(o.DecimalOdds, o.HongkongOdds);
+                Assert.Equal(o.DecimalOdds, o.IndonesianOdds);
+            });
+        }
+
+        [Fact]
+        public void BuildSourceOddsFallback_NoSelections_ReturnsNothing()
+        {
+            Assert.Empty(InvokeStatic<List<ClientOdds>>("BuildSourceOddsFallback", new List<SelectionMessage>(), "TSO"));
+        }
     }
 }

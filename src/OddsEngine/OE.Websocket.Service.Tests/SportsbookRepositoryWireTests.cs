@@ -311,6 +311,29 @@ namespace OE.Websocket.Service.Tests
             Assert.Equal("1.82", hub.Payload<OutgoingOddsChange>().Pa.Ma[0].Se[0].DeOd);
         }
 
+        // Each selection must get its own repriced odds, not a sibling's. With a 1.50/3.00 book
+        // (zero own margin) and a 10% client margin, 1.50 becomes 1.40 and 3.00 becomes 2.61;
+        // identical prices on both selections would hide a lookup by the wrong SelectionId.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task OEMappers_MatchEachSelectionToItsOwnClientOdds(bool allMarkets)
+        {
+            var hub = new RecordingHubConnection();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true);
+            var message = Message(Market("16", 1, 1, clCo: "TSO", clCoMa: "TSO:0.10", selections: new[] { Selection(1, 1.5m, 1), Selection(2, 3m, 2) }));
+            message.ClCo = "TSO";
+
+            if (allMarkets)
+                await repository.ProcessOddsChangeForAllMarkets(ReadyClient("tso", "16"), message, hub);
+            else
+                await repository.ProcessOddsChangeForMainMarkets(ReadyClient("tso", "16"), message, hub);
+
+            var selections = Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma).Se;
+            Assert.Equal(new[] { "1", "2" }, selections.Select(s => s.SeId).ToArray());
+            Assert.Equal(new[] { "1.40", "2.61" }, selections.Select(s => s.DeOd).ToArray());
+        }
+
         // The bet-builder flag is a per-sport, per-fixture-status lookup against the client's
         // cached templates.
         [Fact]
@@ -404,6 +427,182 @@ namespace OE.Websocket.Service.Tests
             Assert.Single(warnings);
             Assert.Contains("no client-odds configuration", warnings[0].Message);
             Assert.DoesNotContain(logger.Entries, e => e.Level >= LogLevel.Error);
+        }
+
+        // GetClientOdds also returns nothing when ClCoMa is set but does not price this client.
+        // "TSOX" is the substring case: ClCoMa.Contains("TSO") passes the first guard, then the
+        // exact match on the client code filters every entry out.
+        [Theory]
+        [InlineData("S88:0.10")]
+        [InlineData("TSOX:0.10")]
+        public async Task MainMarketsOE_ClCoMaDoesNotPriceTheClient_PublishesWithSourceOdds(string clCoMa)
+        {
+            var hub = new RecordingHubConnection();
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
+            var message = Message(Market("16", 1, 1, clCo: "TSO", clCoMa: clCoMa, selections: new[] { Selection(1, 2m, 1), Selection(2, 2m, 2) }));
+            message.ClCo = "TSO";
+
+            await repository.ProcessOddsChangeForMainMarkets(ReadyClient("tso", "16"), message, hub);
+
+            var market = Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma);
+            Assert.Equal(new[] { "2.00", "2.00" }, market.Se.Select(s => s.DeOd).ToArray());
+            Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning);
+        }
+
+        // The fallback converts the source price into every odds format, using the same
+        // two-selection rule as GetClientOdds: two selections is binary, three is not. A non-binary
+        // market keeps the decimal price in every format; a binary 2.50 is -0.66 Malay, 1.50 HK and
+        // 1.50 Indo.
+        [Theory]
+        [InlineData(2, "2.50", "-0.66", "1.50", "1.50")]
+        [InlineData(3, "2.50", "2.50", "2.50", "2.50")]
+        public async Task MainMarketsOE_SourceOddsFallback_ConvertsEveryOddsFormat(int selectionCount, string deOd, string maOd, string hoOd, string inOd)
+        {
+            var hub = new RecordingHubConnection();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true);
+            var selections = Enumerable.Range(1, selectionCount).Select(i => Selection(i, 2.5m, i)).ToArray();
+            var message = Message(Market("16", 1, 1, clCo: "TSO", clCoMa: string.Empty, selections: selections));
+            message.ClCo = "TSO";
+
+            await repository.ProcessOddsChangeForMainMarkets(ReadyClient("tso", "16"), message, hub);
+
+            var market = Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma);
+            Assert.Equal(selectionCount, market.Se.Count);
+            Assert.All(market.Se, s =>
+            {
+                Assert.Equal(deOd, s.DeOd);
+                Assert.Equal(maOd, s.MaOd);
+                Assert.Equal(hoOd, s.HoOd);
+                Assert.Equal(inOd, s.InOd);
+            });
+        }
+
+        // The fallback is scoped to the market that has no configuration: the configured market in
+        // the same fixture keeps its client margin (2.00 to 1.82 at 10%), and only the unconfigured
+        // market is published at source odds. The warning names the fixture, the market and the
+        // client so it can be traced back to the misconfigured row.
+        [Fact]
+        public async Task MainMarketsOE_OneUnconfiguredMarket_KeepsTheMarginOnTheOthers()
+        {
+            var hub = new RecordingHubConnection();
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
+            var message = Message(
+                Market("16", 1, 1, clCo: "TSO", clCoMa: "TSO:0.10", selections: new[] { Selection(1, 2m, 1), Selection(2, 2m, 2) }),
+                Market("18", 2, 2, clCo: "TSO", clCoMa: string.Empty, selections: new[] { Selection(3, 2m, 1), Selection(4, 2m, 2) }));
+            message.ClCo = "TSO";
+
+            await repository.ProcessOddsChangeForMainMarkets(ReadyClient("tso", "16", "18"), message, hub);
+
+            var markets = hub.Payload<OutgoingOddsChange>().Pa.Ma;
+            Assert.Equal(new[] { "1.82", "1.82" }, markets.Single(m => m.MaTeId == "16").Se.Select(s => s.DeOd).ToArray());
+            Assert.Equal(new[] { "2.00", "2.00" }, markets.Single(m => m.MaTeId == "18").Se.Select(s => s.DeOd).ToArray());
+
+            var warning = Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning).Message;
+            Assert.Contains("FixtureId:bg-9001", warning);
+            Assert.Contains("MarketId:2 ", warning);
+            Assert.Contains("MaTeId:18 ", warning);
+            Assert.Contains("for client TSO ", warning);
+        }
+
+        [Fact]
+        public async Task AllMarketsOE_OneUnconfiguredMarket_KeepsTheMarginOnTheOthers()
+        {
+            var hub = new RecordingHubConnection();
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
+            var message = Message(
+                Market("16", 1, 1, clCo: "TSO", clCoMa: "TSO:0.10", selections: new[] { Selection(1, 2m, 1), Selection(2, 2m, 2) }),
+                Market("18", 2, 2, clCo: "TSO", clCoMa: string.Empty, selections: new[] { Selection(3, 2m, 1), Selection(4, 2m, 2) }));
+            message.ClCo = "TSO";
+
+            await repository.ProcessOddsChangeForAllMarkets(ReadyClient("tso", "16", "18"), message, hub);
+
+            var markets = hub.Payload<OutgoingOddsChange>().Pa.Ma;
+            Assert.Equal(new[] { "1.82", "1.82" }, markets.Single(m => m.MaTeId == "16").Se.Select(s => s.DeOd).ToArray());
+            Assert.Equal(new[] { "2.00", "2.00" }, markets.Single(m => m.MaTeId == "18").Se.Select(s => s.DeOd).ToArray());
+
+            var warning = Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning).Message;
+            Assert.Contains("MarketId:2 ", warning);
+        }
+
+        // A market with no selections never reaches GetClientOdds, so there is nothing to fall
+        // back from and no warning.
+        [Fact]
+        public async Task MainMarketsOE_MarketWithNoSelections_PublishesWithoutAWarning()
+        {
+            var hub = new RecordingHubConnection();
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
+            var message = Message(Market("16", 1, 1, clCo: "TSO", clCoMa: string.Empty));
+            message.ClCo = "TSO";
+
+            await repository.ProcessOddsChangeForMainMarkets(ReadyClient("tso", "16"), message, hub);
+
+            Assert.Empty(Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma).Se);
+            Assert.DoesNotContain(logger.Entries, e => e.Level >= LogLevel.Warning);
+        }
+
+        // The per-selection guard (SportsbookRepository.cs:1547 and :1846) is reachable, contrary to
+        // the PR #66 comment that calls it defensive only. For the pseudo-client "OE", GetClientOdds
+        // prices every client named in ClCoMa (here TSO) and none of the entries carry "OE", so the
+        // list is not empty but the per-selection lookup finds nothing. Before PR #66 this threw.
+        // No warning is logged on this path: the market-level check saw a non-empty list.
+        [Fact]
+        public async Task MainMarketsOE_OEClient_FallsBackPerSelectionToSourceOdds()
+        {
+            var hub = new RecordingHubConnection();
+            var logger = new CapturingLogger<SportsbookRepository>();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true, logger: logger);
+            var message = Message(Market("16", 1, 1, clCo: "OE", clCoMa: "TSO:0.10", selections: new[] { Selection(1, 2.5m, 1), Selection(2, 2.5m, 2) }));
+            message.ClCo = "OE";
+
+            await repository.ProcessOddsChangeForMainMarkets(ReadyClient("oe", "16"), message, hub);
+
+            var market = Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma);
+            Assert.All(market.Se, s =>
+            {
+                Assert.Equal("2.50", s.DeOd);
+                Assert.Equal("-0.66", s.MaOd);
+            });
+            Assert.DoesNotContain(logger.Entries, e => e.Level >= LogLevel.Warning);
+        }
+
+        [Fact]
+        public async Task AllMarketsOE_OEClient_FallsBackPerSelectionToSourceOdds()
+        {
+            var hub = new RecordingHubConnection();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true);
+            var message = Message(Market("16", 1, 1, clCo: "OE", clCoMa: "TSO:0.10", selections: new[] { Selection(1, 2.5m, 1), Selection(2, 2.5m, 2) }));
+            message.ClCo = "OE";
+
+            await repository.ProcessOddsChangeForAllMarkets(ReadyClient("oe", "16"), message, hub);
+
+            Assert.All(Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma).Se, s => Assert.Equal("2.50", s.DeOd));
+        }
+
+        // Defect pinned by test, not fixed here: the per-selection fallback builds from a one-item
+        // list, so it always treats the market as binary. A three-way 2.50 is published as -0.66
+        // Malay, 1.50 HK and 1.50 Indo, where the market-level fallback (and GetClientOdds) would
+        // publish 2.50 in every format. Pinned so the behaviour cannot change unnoticed.
+        [Fact]
+        public async Task MainMarketsOE_OEClientThreeWayMarket_PerSelectionFallbackTreatsItAsBinary()
+        {
+            var hub = new RecordingHubConnection();
+            var repository = BuildRepository(new MemCache(), isOEEnabled: true);
+            var message = Message(Market("16", 1, 1, clCo: "OE", clCoMa: "TSO:0.10", selections: new[] { Selection(1, 2.5m, 1), Selection(2, 2.5m, 2), Selection(3, 2.5m, 3) }));
+            message.ClCo = "OE";
+
+            await repository.ProcessOddsChangeForMainMarkets(ReadyClient("oe", "16"), message, hub);
+
+            Assert.All(Assert.Single(hub.Payload<OutgoingOddsChange>().Pa.Ma).Se, s =>
+            {
+                Assert.Equal("2.50", s.DeOd);
+                Assert.Equal("-0.66", s.MaOd);
+                Assert.Equal("1.50", s.HoOd);
+                Assert.Equal("1.50", s.InOd);
+            });
         }
 
         // ---- All markets ----
