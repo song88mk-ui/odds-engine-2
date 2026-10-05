@@ -124,6 +124,38 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
 - **Suggested investigation:** confirm platform-web reads the new names and treats empty as "keep
   current"; coordinate the joint deploy. See [TechnicalDebt.md](./TechnicalDebt.md) H7.
 
+### R10 🟠 OE client pricing is split across two flags in two repos — enabling one alone breaks betting
+- **Evidence:** per-client margins (`ClCoMa`) are applied in two places, each behind its own switch.
+  - **OEv2 (display):** `OE.Websocket.Service` reprices odds with `GetClientOdds` only when
+    `Custom:IsOEEnabled` is true (`Repository/SportsbookRepository.cs:85-88`, `:107-110`). Repricing
+    lowers the price, for example 2.00 becomes 1.82 at a 10% margin. argocd sets
+    `Custom__IsOEEnabled: "false"` in `apps/oddsengine/websocket-service/{dev,stg,prd}.yaml:44`, and
+    has since each environment was created (verified 2026-10-05).
+  - **platform-final (bet acceptance):** `Platform.Sportsbook.API/Repository/SportsbookRepository.cs`
+    re-reads the selection from Mongo at bet placement and compares the bet's odds with the raw `Od`
+    (`GetBetSelectionStatus`, `:7059-7094`). Its own `ClCoMa` repricing runs only when `IsOEEnable`
+    is true, and `IsOEEnable` always returns `false` (`:11758-11767`, comment "disable Margin since
+    we are now using bet genius"). The bet is stored at the server's odds, not the client's.
+  - platform-web sends the displayed decimal odds plus the bettor's `OddsChangeType` (`None`,
+    `Higher`, `Any`) with the bet (`platform-web` `Components/BetSection/BetSection.razor.cs:298-317`).
+- **Impact:** today both switches are off, so display and acceptance agree on the raw `Od`. If OEv2's
+  `IsOEEnabled` is turned on while platform-final's `IsOEEnable` stays `false`:
+  - with `OddsChangeType.None`, every repriced selection fails the exact-match check and the bet is
+    rejected with `Odds_Or_Lines_Have_Changed`;
+  - with `Higher` or `Any`, the bet is accepted at the higher raw `Od`, so the client margin is shown
+    but never charged.
+  The reverse (platform-final on, OEv2 off) is also inconsistent: the UI would show raw odds while
+  the server compares against repriced ones (assumption: not traced past the `GetClientOdds` call at
+  platform-final `:1367`). Neither repo fails at build or startup, so the mismatch shows up only
+  as rejected bets or lost margin. **Confidence:** High (both code paths read), Medium (platform-final
+  line numbers from a local checkout not fetched on 2026-10-05).
+- **Also note:** the platform-final checks inside the `IsOEEnable` branch are dead too, including the
+  `ClCo` client-offer filter and forcing pre-match markets inactive once a fixture starts.
+- **Suggested investigation:** treat re-enabling OE pricing as one coordinated change across OEv2,
+  platform-final and argocd, not a config flip. Decide which side owns the margin: if OEv2 does,
+  platform-final must apply the same `ClCoMa` maths before comparing. Confirm with trading whether
+  per-client margins are still wanted now that Genius Sports prices are used.
+
 ## Architecture "violations" (deviations from the system's own conventions)
 > Not classic layering violations (the architecture is clean); these are internal inconsistencies.
 

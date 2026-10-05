@@ -156,7 +156,8 @@ fixed there, since GM-808 changed no production code; later tickets fixed two of
    and compares the bet against the raw `Od` (`GetBetSelectionStatus`, `:7059`), because its own
    `ClCoMa` repricing sits behind `IsOEEnable`, which always returns `false` (`:11758`). Market
    status, selection `IsAc` and bet stop are checked there too, so a stale UI cannot place a bet
-   on a market that Mongo already shows as suspended.
+   on a market that Mongo already shows as suspended. Turning OE pricing back on is a cross-repo
+   change, see [ArchitectureRisks.md](./ArchitectureRisks.md) R10.
    Two things are still open, and both only matter if OE pricing is switched back on:
    - **The fallback choice is not confirmed by trading.** Source odds show the client a price with
      no client margin, which is the price platform-final accepts today anyway. Skipping the market
