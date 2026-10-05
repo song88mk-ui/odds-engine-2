@@ -136,13 +136,41 @@ Still uncovered in `OE.Websocket.Service/Repository/SportsbookRepository.cs`:
 `Worker.cs` was not touched by GM-808 and still carries 161 uncovered and 85 surviving mutants,
 mostly in the `MessageReceivedEvent` dispatch switch (`Worker.cs:620`).
 
-Three defects surfaced while writing these tests. They are pinned by test but deliberately not
-fixed there, since GM-808 changed no production code:
+Three defects surfaced while writing these tests. They were pinned by test but deliberately not
+fixed there, since GM-808 changed no production code; later tickets fixed two of them:
 
-1. **GM-810.** `SportsbookRepository.cs:1534` and `:1826` dereference the per-selection `ClientOdds` returned by
-   `FirstOrDefault` with no null check. A market with an empty `ClCoMa` throws inside the mapper and
-   the caller's `catch` swallows it, so the whole fixture update is dropped rather than that one
-   market. Pinned by `MainMarketsOE_MarketWithNoClientOddsConfiguration_SilentlyDropsTheWholeUpdate`.
+1. **GM-810** (fixed, PR #66). Both OE mappers dereferenced the per-selection `ClientOdds` returned by
+   `FirstOrDefault` with no null check. `GetClientOdds` returns an empty list when the market's
+   `ClCoMa` is empty or does not name the client, so the mapper threw, the caller's `catch`
+   swallowed it, and the whole fixture update was dropped rather than that one market. Now, when
+   `GetClientOdds` returns empty, `SportsbookRepository.cs:1537` (main markets) and `:1836` (all
+   markets) log one warning per market and publish that market with **source odds**, no client
+   margin, via `BuildSourceOddsFallback` (`:1172`). The rest of the fixture publishes normally.
+   Pinned by `MainMarketsOE_MarketWithNoClientOddsConfiguration_PublishesWithSourceOddsAndLogsOnce`
+   and `AllMarketsOE_MarketWithNoClientOddsConfiguration_PublishesWithSourceOddsAndLogsOnce`.
+   **None of this runs in a deployed environment today.** The OE mappers only run when
+   `Custom:IsOEEnabled` is true, and `argocd/apps/oddsengine/websocket-service/{dev,stg,prd}.yaml:44`
+   all set `Custom__IsOEEnabled: "false"`, as they have since each environment was created. The
+   client margin is not enforced at bet placement either: platform-final's
+   `Platform.Sportsbook.API/Repository/SportsbookRepository.cs` re-reads the selection from Mongo
+   and compares the bet against the raw `Od` (`GetBetSelectionStatus`, `:7059`), because its own
+   `ClCoMa` repricing sits behind `IsOEEnable`, which always returns `false` (`:11758`). Market
+   status, selection `IsAc` and bet stop are checked there too, so a stale UI cannot place a bet
+   on a market that Mongo already shows as suspended.
+   Two things are still open, and both only matter if OE pricing is switched back on:
+   - **The fallback choice is not confirmed by trading.** Source odds show the client a price with
+     no client margin, which is the price platform-final accepts today anyway. Skipping the market
+     instead would freeze it on screen, because platform-web merges odds-change payloads per
+     market (`platform-web` `BasePage.cs:677` `UpdateMarketsAndSelections`), so a market
+     suspended upstream would stay active at stale odds. Publishing the market as suspended is a
+     third option.
+   - **Latent defect.** The per-selection guard at `:1547` and `:1846` builds its fallback from a
+     one-item list, so `isBinary` is always `true` and the Malaysian, Hong Kong and Indonesian
+     odds would be wrong for a market with more than two selections. It is unreachable today:
+     `GetClientOdds` emits one entry per selection for each matched client.
+   Not yet tested: `ClCoMa` naming only another client, `ClCoMa` containing the client code as a
+   substring (`TSOX` for `TSO`), a market with three or more selections, and a fixture mixing a
+   configured and an unconfigured market.
 2. **GM-811** (fixed, both halves). The asian-odds branch in `GetClientOdds` was guarded by an empty
    `_MaTeIds`, so its mutants could never be covered. It is now removed, along with the
    `Custom:AsianClientCodes` key that only that branch read, and
@@ -158,7 +186,7 @@ fixed there, since GM-808 changed no production code:
    and 11205863, which is real 3x3 Basketball in the same id block).
    `ProcessTopFixtures_VirtualSport_SkipsEntirely` and `ProcessTopLeagues_VirtualSport_SkipsEntirely`
    cover two of the six call sites; the remaining four are reachable but still untested.
-3. **GM-812.** `SportsbookRepository.cs:1329`, `:1339`, `:1429` and `:1439` append to a non-concurrent
+3. **GM-812** (still open). `SportsbookRepository.cs:1335`, `:1345`, `:1435` and `:1445` append to a non-concurrent
    `List<string>` from inside `Parallel.ForEach`.
 
 ## Why there are no `*MutationCheck` tests any more
