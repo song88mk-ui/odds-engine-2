@@ -36,14 +36,9 @@ bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 ## Tech stack (verified from `src/OddsEngine/**/*.csproj`, 2026-09-10)
 | Concern | What |
 |---|---|
-| Runtime | `net10.0` for every service and job |
 | Shared kernel | `OE.Shared` targets **`netstandard2.1`** — new shared code must stay inside that API surface |
-| Host model | `Microsoft.NET.Sdk.Worker` (Websocket, UOF.Client, Job.Lookup, Job.Settlement, Translation.Job) and `Microsoft.NET.Sdk` + `OutputType=Exe` (Adapter, Sportsbook, Translation.Service, Job.Cleanup, Job.KeepAlive, Job.LiveStream) |
-| Mongo | `MongoDB.Driver` 3.11.1 |
 | Broker | `RabbitMQ.Client` 5.2.0 — raw client behind `IMessageBroker`; **no Wolverine/MassTransit** |
 | SQL | `Microsoft.EntityFrameworkCore(.SqlServer)` 3.1.32 |
-| Logging | `Serilog` 4.3.0 + `Serilog.Formatting.Compact` + `Serilog.Sinks.Console` |
-| Push | `Microsoft.AspNetCore.SignalR.Client` + `.Protocols.MessagePack` |
 | Cache | `System.Runtime.Caching` (`MemoryCache.Default`) — no Redis |
 | Tests | `xunit` **2.5.3** (not v3) + `coverlet.collector`; no Testcontainers |
 | Language | `<Nullable>enable</Nullable>` everywhere except Job.Cleanup, Job.KeepAlive, Job.LiveStream and Job.Lookup, no `LangVersion` pin; `.editorconfig` mandates **block-scoped** namespaces (`csharp_style_namespace_declarations = block_scoped`) — do not convert files to file-scoped |
