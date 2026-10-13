@@ -19,6 +19,8 @@ hook in `.claude/settings.json` re-injects these rules on every prompt.
 10. **Never print, log or commit a secret.** Mask it if it must appear in a log line.
 11. **A new project or service ships with tests** in the repo's existing test framework.
 12. **Commit, push or open a PR only when explicitly asked.** "Implement it" authorizes local edits only.
+13. **Report validation with every change:** build, unit tests, integration tests, manual checks and remaining risks. If something could not be validated, say what and why, name the tests to run before deployment, and mark the work Implementation Complete – Validation Pending, never Completed.
+14. **If a workflow step does not apply, say so** instead of skipping it silently.
 <!-- song88:standing-rules:end -->
 
 Guidance for Claude when working in this repository. Derived from the codebase + the `docs/`
@@ -174,7 +176,7 @@ Match it — don't introduce new patterns.
 | Test inventory, mutation scores, coverage gaps | [docs/Testing.md](docs/Testing.md) |
 
 ## Development workflow
-Follow these steps for every task, in order. Do not skip steps; if a step is N/A, say so.
+Follow these steps for every task, in order. Do not skip steps (standing rule 14).
 
 1. **Understand the requirement** — restate it in one sentence.
 2. **Search the repository** for existing implementations (the `find-service` and `find-pattern` commands; 6
