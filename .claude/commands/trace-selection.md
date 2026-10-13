@@ -3,7 +3,7 @@ description: Trace a selection / its odds through OEv2 (odds → formats → set
 argument-hint: [SeId or SeTeId]
 ---
 
-Trace selection `$ARGUMENTS`. Report hops with file:line; mark Verified/Likely/Unknown.
+Trace selection `$ARGUMENTS`. Report hops with file:line; mark verified / assumption / unknown.
 
 1. Persist: `Selection` doc fields — `Od` (master decimal odds), probabilities
    (`Pr/WoPr/LoPr/VoPr/HaWoPr/HaLoPr`), `IsAc`, `SeStId`, `DeHeFa`, boosted (`ClBoOd/ClBoSeNa`).

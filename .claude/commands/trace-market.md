@@ -3,7 +3,7 @@ description: Trace a market through OEv2 (market change → Mongo → odds-chang
 argument-hint: [MaId or MaTeId]
 ---
 
-Trace market `$ARGUMENTS`. Report hops with file:line; mark Verified/Likely/Unknown.
+Trace market `$ARGUMENTS`. Report hops with file:line; mark verified / assumption / unknown.
 
 1. Source: `OnMarketChangeMessage` (`Ma[]` MarketMessage → `Se[]` SelectionMessage) from
    `OE.Adapter.Service` → `r.oe.adapter.onmarketchange.<NN>`.

@@ -23,7 +23,7 @@ translation-investigation · performance-analysis · regression-analysis · bug-
 production-investigation · code-review · repository-analysis.
 
 ## Checklists (`.claude/checklists/`)
-**standard-workflow (MANDATORY — Phase 12)** · before-coding · before-pull-request ·
+**standard-workflow** (every task) · before-coding · before-pull-request ·
 architecture-review · regression-review · production-investigation · deployment-review ·
 documentation-review.
 
@@ -37,15 +37,15 @@ new-service · new-message-type · mongo-collection-change · pr-description.
 ## Prompts (`.claude/prompts/`)
 onboard · change-proposal · production-safe.
 
-## Mandatory workflow (Phase 12)
-Every task follows the 13-step **Standard Workflow** + **Permanent Engineering Principles** defined in
-[../CLAUDE.md](../CLAUDE.md) / [../AGENTS.md](../AGENTS.md), with the checklist at
+## Workflow
+Every task follows the 13-step **Development workflow** and the **Engineering principles** in
+[../CLAUDE.md](../CLAUDE.md), under the standing rules at its top, with the checklist at
 [checklists/standard-workflow.md](checklists/standard-workflow.md).
 
 ## Principles baked into every asset
-- Repo + `/docs` are the source of truth; **evidence over inference** (Verified/Likely/Unknown).
+- Repo + `/docs` are the source of truth; evidence over inference (label every claim verified / assumption / unknown).
 - Preserve the architecture; **no new patterns without approval**; smallest viable change;
-  **wait for approval before architectural changes**.
+  **wait for approval before any code change**.
 - **Production is read-only** by default.
 - Shared contracts (`OE.Shared` DTOs, Mongo schema, enums, routing keys, SignalR models) are
   **cross-repo** — identify dependencies, don't invent sibling behavior.

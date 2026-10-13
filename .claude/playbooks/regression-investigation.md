@@ -18,7 +18,7 @@ Pairs with the `regression-analysis` skill + `regression-review` checklist + `/c
 
 ## 4. Confirm causation
 - Trace the flow before/after; tie the behavior delta to a specific change (file:line + commit). Mark
-  Verified/Likely/Unknown.
+  verified / assumption / unknown.
 
 ## 5. Scope & report
 - `/impact-analysis` for blast radius; smallest corrective scope (await approval if architectural).

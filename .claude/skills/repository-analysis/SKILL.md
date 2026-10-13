@@ -12,7 +12,7 @@ extending/refreshing that knowledge.
 1. **Orient** from [docs/README.md](../../../docs/README.md) (the phase index) — don't re-derive what's
    documented.
 2. For a new area: read the actual code (Program/Worker/Repository), cite file:line, tag
-   Verified/Likely/Unknown.
+   verified / assumption / unknown.
 3. For cross-repo: scope to the integration seam; classify [Verified] / [Verified-sibling:X] /
    [Unknown]; **never invent sibling behavior**
    ([docs/CrossRepositoryDependencies.md](../../../docs/CrossRepositoryDependencies.md)).

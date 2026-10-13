@@ -15,7 +15,7 @@ Mongo/SQL, invalidate caches, deploy, or run admin actions. Diagnose and report 
 4. Correlate with known risks ([docs/ArchitectureRisks.md](../../docs/ArchitectureRisks.md)) and debt
    ([docs/TechnicalDebt.md](../../docs/TechnicalDebt.md)) — e.g. bet-stop race (H3), silent `w=0`
    writes (P3), unindexed settlement (P1), hub-outage non-replay.
-5. Distinguish Verified / Likely / Unknown. Note what you could NOT check.
+5. Distinguish verified / assumption / unknown. Note what you could NOT check.
 
 Output: hypothesis ranked by likelihood, supporting evidence, and the read-only checks to confirm —
 plus any escalation that would require a (human-approved) write action.

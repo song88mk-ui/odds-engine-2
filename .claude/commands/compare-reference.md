@@ -8,7 +8,7 @@ Compare `$ARGUMENTS` against the **`Reference`** sibling (the pre-AI baseline sn
 
 1. Locate the corresponding file(s) in `../Reference` and in the current repo.
 2. Diff behavior (not just text): logic changes, contract changes, removed/added handling.
-3. Classify: intended change vs **possible regression**; tag Verified/Likely/Unknown.
+3. Classify: intended change vs **possible regression**; tag verified / assumption / unknown.
 4. For behavioral deltas, trace the impact (use `/impact-analysis`).
 5. Prefer the current implementation unless the comparison reveals a regression.
 

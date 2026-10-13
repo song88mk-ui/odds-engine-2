@@ -11,5 +11,5 @@ Use when touching anything that could reach a live environment.
 > prod). Gather evidence only from read-only sources: Tempo traces, metrics, logs, `r.error.*`, queue
 > depth. Identify service + shard (00–10)/client instance. Correlate with
 > [docs/ArchitectureRisks.md](../../docs/ArchitectureRisks.md) and
-> [docs/knowledge/Troubleshooting.md](../../docs/knowledge/Troubleshooting.md). Mark Verified/Likely/
-> Unknown and state what you could not check.
+> [docs/knowledge/Troubleshooting.md](../../docs/knowledge/Troubleshooting.md). Mark verified /
+> assumption / unknown and state what you could not check.

@@ -3,7 +3,7 @@ description: Trace a fixture end-to-end through the OEv2 pipeline (ingest → Mo
 argument-hint: [providerFixtureId or FiId]
 ---
 
-Trace fixture `$ARGUMENTS` end-to-end. Report each hop with file:line evidence; mark Verified/Likely/Unknown.
+Trace fixture `$ARGUMENTS` end-to-end. Report each hop with file:line evidence; mark verified / assumption / unknown.
 
 1. **Ingest:** how the fixture enters — `OE.Adapter.Service` consumes `r.bg.receiver.#|r.uof.#`,
    normalizes to `OnFixtureChangeMessage`, and routes to `r.oe.adapter.on_fixture_change.<NN>` where

@@ -17,7 +17,7 @@ Non-production defect. For prod, use [production-read-only-investigation.md](./p
 
 ## 4. Gather evidence
 - OTel traces (end-to-end), metrics, Compact-JSON logs, `r.error.*`. Compare vs `../Reference` if a
-  regression (`/compare-reference`). Mark Verified/Likely/Unknown.
+  regression (`/compare-reference`). Mark verified / assumption / unknown.
 
 ## 5. Confirm root cause → scope fix
 - Smallest change. `/impact-analysis` for blast radius. **Await approval if architectural.**

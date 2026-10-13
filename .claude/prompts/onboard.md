@@ -10,7 +10,7 @@ Use this to get productive fast.
 > ([docs/README.md](../../docs/README.md) is the index). Treat the repo + `/docs` as the source of
 > truth. Internalize the non-negotiables: sharding via `GetInstanceName`; committed appsettings ≠ prod;
 > `OE.Shared`/Mongo/routing-key/SignalR are cross-repo contracts; abbreviated field names; `w=0` writes;
-> MessagePack name-keying. Tag every claim Verified/Likely/Unknown. Don't introduce new patterns;
+> MessagePack name-keying. Tag every claim verified / assumption / unknown. Don't introduce new patterns;
 > production is read-only.
 >
 > Then tell me: what's the task, and I'll trace it end-to-end before proposing anything.

@@ -3,7 +3,7 @@ description: Trace a Platform REST API interaction at the OEv2 seam
 argument-hint: [endpoint or feature, e.g. markettemplateplayerprops]
 ---
 
-Trace Platform API interaction `$ARGUMENTS`. file:line evidence; Verified/Likely/Unknown.
+Trace Platform API interaction `$ARGUMENTS`. file:line evidence; verified / assumption / unknown.
 
 - **Does OEv2 call it?** Known outbound calls: `OE.UOF.Client` → `GET
   v1/sportsbook/client/markettemplateplayerprops` (`x-api-key`, cached 1yr); `OE.Websocket.Service`

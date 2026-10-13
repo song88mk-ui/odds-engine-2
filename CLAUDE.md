@@ -98,8 +98,9 @@ Get these wrong and you break prod.
    Editing message DTOs, the Mongo schema, enums, or routing keys is a **cross-repo breaking change**.
    ([docs/Contracts.md](docs/Contracts.md), [docs/CrossRepositoryDependencies.md](docs/CrossRepositoryDependencies.md))
 4. **SignalR uses MessagePack `ContractlessStandardResolver`** (name-keyed) — renaming a property on
-   any `Outgoing*`/`EngineMessages` model is a breaking wire change; deploy OEv2 + platform-web
-   together. ([docs/WebSocket.md](docs/WebSocket.md))
+   any `Outgoing*`/`EngineMessages` model is a breaking wire change; deploy OEv2, the platform-final
+   `/platform` hub (`Platform.Websocket.API2`, which re-types payloads in `IPlatformEvent.cs`) and
+   platform-web together. ([docs/WebSocket.md](docs/WebSocket.md))
    The `SoOr` stamped on pushed fixtures is the client's league order, cached per client
    (`{clientCode}:fso:...`) from Platform API `fixturesortorder`; it reloads on
    `OnOddstableLeagueSortOrderChange` (GM-851, needs the routing key in the argocd

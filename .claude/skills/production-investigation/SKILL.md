@@ -22,4 +22,4 @@ human approval.
 
 ## Output
 Ranked hypotheses + supporting read-only evidence + the confirming checks + (if a write is needed) an
-explicit, human-approval-gated remediation proposal. Mark Verified/Likely/Unknown.
+explicit, human-approval-gated remediation proposal. Mark verified / assumption / unknown.
