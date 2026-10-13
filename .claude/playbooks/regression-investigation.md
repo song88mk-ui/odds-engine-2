@@ -1,13 +1,13 @@
 # Playbook — Regression Investigation (OEv2)
 
-Pairs with the `regression-analysis` skill + `regression-review` checklist + `/compare-reference`.
+Pairs with the `regression-analysis` skill + `regression-review` checklist.
 
 ## 1. Establish "before" and "after"
 - What worked before; what changed. Suspected window (commit / `GM-####` feature).
 
 ## 2. Diff against a baseline
-- **`../Reference`** (pre-AI snapshot, read-only) via `/compare-reference`, and/or `git log -p`/
-  `git blame` on the area. Use hotspot intel
+- Git history: `git log -p -- <path>` / `git blame` on the area, `git diff <good-commit>..origin/main -- <path>`
+  against a known-good commit, `git log -S<symbol>` to date a change. Use hotspot intel
   ([docs/knowledge/FrequentlyModifiedAreas.md](../../docs/knowledge/FrequentlyModifiedAreas.md);
   `SportsbookRepository.cs` changes most). Ignore `oddsengine` (obsolete v1).
 

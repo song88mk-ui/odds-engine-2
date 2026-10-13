@@ -1,54 +1,38 @@
-# .claude/ — odds-engine-2 Claude Assets
+# .claude/ — odds-engine-2
 
-Repository-specific assets derived from the codebase + the `/docs` knowledge base (Phases 1–11).
-Start with [../CLAUDE.md](../CLAUDE.md) (always-loaded) and [../AGENTS.md](../AGENTS.md).
+Repo-specific commands, skills and task guides, plus `settings.json` (the standing-rules prompt hook).
+Read [../CLAUDE.md](../CLAUDE.md) and [../AGENTS.md](../AGENTS.md) first.
 
-## Commands (`.claude/commands/` — slash commands)
-| Command | Use |
-|---|---|
-| `/trace-fixture` `/trace-market` `/trace-selection` | trace a catalogue entity end-to-end |
-| `/trace-websocket` `/trace-platform-api` | trace a real-time event / REST interaction |
-| `/trace-feature` `/trace-request` | trace a capability / a message lifecycle |
-| `/find-pattern` `/find-service` `/find-component` | locate the canonical pattern / owner / UI consumer |
-| `/impact-analysis` | blast radius of a change (incl. cross-repo contracts) |
-| `/review-feature` `/security-review` `/performance-review` | structured reviews |
-| `/investigate-production` | READ-ONLY prod diagnosis |
-| `/compare-reference` | regression check vs the `Reference` baseline |
-| `/update-docs` | sync docs + assets after an architectural change |
+## commands/
+/trace-fixture · /trace-market · /trace-selection · /trace-websocket · /trace-platform-api ·
+/trace-feature · /trace-request · /find-pattern · /find-service · /find-component ·
+/impact-analysis · /review-feature · /security-review · /performance-review ·
+/investigate-production (read-only) · /update-docs
 
-## Skills (`.claude/skills/<name>/SKILL.md`)
-feature-development · architecture-review · blazor-development (→ platform-web) ·
-platform-api-investigation · websocket-investigation · mongodb-investigation · sql-investigation ·
-translation-investigation · performance-analysis · regression-analysis · bug-investigation ·
-production-investigation · code-review · repository-analysis.
+## skills/
+feature-development · architecture-review · platform-api-investigation · websocket-investigation ·
+mongodb-investigation · sql-investigation · translation-investigation · performance-analysis ·
+regression-analysis · bug-investigation · production-investigation · code-review ·
+repository-analysis · jira-updates · blazor-development (redirects to platform-web)
 
-## Checklists (`.claude/checklists/`)
-**standard-workflow** (every task) · before-coding · before-pull-request ·
-architecture-review · regression-review · production-investigation · deployment-review ·
-documentation-review.
+## playbooks/
+implement-feature · investigate-bug · trace-websocket · trace-api · production-readonly ·
+performance-investigation · regression-investigation
 
-## Playbooks (`.claude/playbooks/`)
-implement-feature · investigate-bug · trace-websocket · trace-api ·
-production-read-only-investigation · performance-investigation · regression-investigation.
+## checklists/
+standard-workflow (every task) · before-coding · before-pull-request · architecture-review ·
+regression-review · production-investigation · deployment-review · documentation-review
 
-## Templates (`.claude/templates/`)
-new-service · new-message-type · mongo-collection-change · pr-description.
+## templates/
+new-service · new-message-type · mongo-collection-change
 
-## Prompts (`.claude/prompts/`)
-onboard · change-proposal · production-safe.
+## prompts/
+onboard · change-proposal · production-safe
 
-## Workflow
-Every task follows the 13-step **Development workflow** and the **Engineering principles** in
-[../CLAUDE.md](../CLAUDE.md), under the standing rules at its top, with the checklist at
-[checklists/standard-workflow.md](checklists/standard-workflow.md).
+## Rules and synced files
 
-## Principles baked into every asset
-- Repo + `/docs` are the source of truth; evidence over inference (label every claim verified / assumption / unknown).
-- Preserve the architecture; **no new patterns without approval**; smallest viable change;
-  **wait for approval before any code change**.
-- **Production is read-only** by default.
-- Shared contracts (`OE.Shared` DTOs, Mongo schema, enums, routing keys, SignalR models) are
-  **cross-repo** — identify dependencies, don't invent sibling behavior.
-- Keep docs + these assets in sync with architectural changes.
+Workflow and rules: [../CLAUDE.md](../CLAUDE.md) (standing rules, § Development workflow, § Engineering principles).
 
-> These assets reference the `/docs` knowledge base rather than duplicating it — update both together.
+The `jira-updates` skill and [`.github/pull_request_template.md`](../.github/pull_request_template.md) are
+generated from `song88-claude` by `sync_standing_rules.py`. Do not edit them here; change them in
+`song88-claude`.

@@ -6,7 +6,6 @@ description: Detect behavioral regressions by comparing against git history. Use
 # Regression Analysis (OEv2)
 
 ## Sources of truth for "before"
-- The pre-AI `../Reference` snapshot is not checked out in this workspace; use git history instead.
 - **git history**: hotspots in [docs/knowledge/FrequentlyModifiedAreas.md](../../../docs/knowledge/FrequentlyModifiedAreas.md)
   (esp. `SportsbookRepository.cs`). `git log -p <file>` / `git blame`.
 - ⚠️ `oddsengine` sibling is **obsolete v1** — not a reference unless told.

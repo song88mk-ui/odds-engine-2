@@ -1,6 +1,6 @@
 # Playbook — Investigate a Bug (OEv2)
 
-Non-production defect. For prod, use [production-read-only-investigation.md](./production-read-only-investigation.md).
+Non-production defect. For prod, use [production-readonly.md](./production-readonly.md).
 
 ## 1. Pin the symptom
 - Exact behavior, inputs, env. Which service + shard (00–10) / client instance?
@@ -16,8 +16,8 @@ Non-production defect. For prod, use [production-read-only-investigation.md](./p
   method. Decode abbreviated fields.
 
 ## 4. Gather evidence
-- OTel traces (end-to-end), metrics, Compact-JSON logs, `r.error.*`. Compare vs `../Reference` if a
-  regression (`/compare-reference`). Mark verified / assumption / unknown.
+- OTel traces (end-to-end), metrics, Compact-JSON logs, `r.error.*`. If a regression, compare
+  against git history (`git log -p -- <path>`, `git log -S<symbol>`). Mark verified / assumption / unknown.
 
 ## 5. Confirm root cause → scope fix
 - Smallest change. `/impact-analysis` for blast radius. **Await approval if architectural.**
