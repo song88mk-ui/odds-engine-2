@@ -1,21 +1,25 @@
 # CLAUDE.md — odds-engine-2 (OEv2)
 
-> ## ⚠️ FIRST INSTRUCTION (applies to every prompt)
-> Before responding to **any** request:
-> 1. **Consult this file (CLAUDE.md) and [AGENTS.md](AGENTS.md)** and follow the mandatory 13-step
->    Standard Workflow below.
-> 2. **Trace claims in the actual code and cite `file:line` — do not answer from memory.**
-> 3. **Label every claim `verified` / `assumption` / `unknown`; never guess.**
-> 4. **Explain the plan and wait for approval before any architectural change; make the smallest
->    possible change.**
-> 5. **Production is READ-ONLY** — never run queries, deploy, change schema, or invalidate caches
->    unless explicitly instructed.
-> 6. **Document every change, not only architectural ones.** Update `docs/` + CLAUDE.md/AGENTS.md
->    for bug fixes, security fixes and resolved debt too, and summarize changes, risks, and
->    validation.
->
-> A `UserPromptSubmit` hook in [.claude/settings.json](.claude/settings.json) re-injects this reminder
-> on every prompt. Full workflow + principles are in the section below.
+<!-- song88:standing-rules:begin -->
+## Standing rules (every prompt, before anything else)
+
+Shared by every song88 repo. The canonical text is `../song88-claude/standing-rules/STANDING-RULES.md`:
+edit it there and run `../song88-claude/standing-rules/sync_standing_rules.py`, never edit this block by hand. A `UserPromptSubmit`
+hook in `.claude/settings.json` re-injects these rules on every prompt.
+
+1. **Read this repo's CLAUDE.md and AGENTS.md first.**
+2. **Fetch latest before investigating.** Run `git fetch origin` and compare with origin/main for this repo and every sibling repo you read, before citing file contents or repo or deployment state as fact. A local checkout can be hundreds of commits behind. When you cannot or should not pull, read files with `git show origin/main:<path>`, and say so explicitly if you did not check.
+3. **Trace in the code, never from memory.** Search the repo and its docs, trace the feature end to end, and cite `file:line`.
+4. **Label every claim verified, assumption or unknown.** Never guess.
+5. **Explain the plan and wait for approval before any code change.** Then make the smallest change that does the job.
+6. **Production is read-only.** Do not run queries, deploy, change schema or invalidate caches unless explicitly instructed.
+7. **Update docs and README in the same change** whenever the change affects what they describe.
+8. **Every SQL script must be idempotent.** Re-running it is a no-op with the same end state.
+9. **Do not modify a sibling repo as a side effect of work here.** Siblings are read-only references unless the user asks for a change in that repo.
+10. **Never print, log or commit a secret.** Mask it if it must appear in a log line.
+11. **A new project or service ships with tests** in the repo's existing test framework.
+12. **Commit, push or open a PR only when explicitly asked.** "Implement it" authorizes local edits only.
+<!-- song88:standing-rules:end -->
 
 Guidance for Claude when working in this repository. Derived from the codebase + the `docs/`
 knowledge base (Phases 1–10). **Read the relevant `docs/` file before acting** — this file is the
@@ -33,7 +37,9 @@ bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 - Full map: [docs/README.md](docs/README.md) → [docs/Architecture.md](docs/Architecture.md),
   [docs/ProjectOverview.md](docs/ProjectOverview.md).
 
-## Tech stack (verified from `src/OddsEngine/**/*.csproj`, 2026-09-10)
+## Tech stack
+Verified from `src/OddsEngine/**/*.csproj`, 2026-09-10.
+
 | Concern | What |
 |---|---|
 | Shared kernel | `OE.Shared` targets **`netstandard2.1`** — new shared code must stay inside that API surface |
@@ -46,7 +52,25 @@ bridge + settlement messages and (b) an external white-label Unified Odds Feed.
 Note: EF Core 3.1.32 is an out-of-support package running on a `net10.0` target. Recorded as an
 observation, not a change request — upgrading it is a cross-repo decision.
 
-## The data pipeline (memorize this)
+## Build / test
+- Build: `dotnet build src/OddsEngine/OddsEngine.sln` (note: `OE.Job.KeepAlive` is NOT in the .sln but
+  CI builds it, `.github/workflows/ci.yml:57`).
+- Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project). Ten test
+  projects exist, all in the solution — `OE.Shared.Test`, `OE.Adapter.Service.Tests`,
+  `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`, `OE.Translation.Job.Tests`,
+  `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`, `OE.Job.Lookup.Tests`,
+  `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests`. `OE.Job.LiveStream` and `OE.UOF.Client` have
+  none. `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not.
+- Mutation testing: `dotnet stryker --project <Project>.csproj` from the matching test-project
+  folder (global tool, config in `src/OddsEngine/stryker-config.json`, no CI gate). Scores and
+  gaps: [docs/Testing.md](docs/Testing.md). A green suite is not evidence a bug would be caught.
+- Local run: `dotnet run` from a service folder; needs local RabbitMQ + MongoDB (+ SQL for
+  Sportsbook/UOF). Uses each service's committed settings file plus a git-ignored `Development` overlay.
+- `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
+  (nullable-reference assignment warning) — don't be surprised it's silent on that class of bug.
+- CI builds each changed service to ECR; argocd deploys. ([docs/Hosting.md](docs/Hosting.md))
+
+## The 30-second architecture
 ```
 bet-genius / (oddsfeed?) ─► OE.Adapter.Service ─► r.oe.adapter.<type>.<NN>
    ├─► OE.Sportsbook.Service(00–10) ─► MongoDB + r.oe.sb.engine.* + r.oe.bet.settlement
@@ -55,9 +79,11 @@ bet-genius / (oddsfeed?) ─► OE.Adapter.Service ─► r.oe.adapter.<type>.<N
 OE.Websocket.Service ◄─ r.oe.sb.engine.* / r.bet.* / r.wallet.* ─► /platform SignalR hub ─► platform-web
 ```
 Jobs: LiveStream (BetGenius video, 60s), Settlement (close stale, 5m), Cleanup (purge, 5m window),
-KeepAlive (heartbeat, 5s).
+KeepAlive (heartbeat, 5s), plus Lookup (above) and `OE.Translation.Job`.
 
-## Non-negotiable facts (get these wrong and you break prod)
+## Critical rules
+Get these wrong and you break prod.
+
 1. **Sharding:** every fixture's events route to a fixed Sportsbook instance via
    `Helper.GetInstanceName(providerFixtureId)` (last 2 digits → `00`–`09`); shard **`10` = global
    bet-stop**. This couples `OE.Adapter.Service` (router) + `OE.Sportsbook.Service` (binding) +
@@ -79,8 +105,35 @@ KeepAlive (heartbeat, 5s).
 5. **Abbreviated field names everywhere** (`FiId`, `MaStId`, `Od`, `PrFiId`, …) — use the glossary in
    [docs/SharedLibraries.md](docs/SharedLibraries.md). New persisted/wire fields must follow it.
 6. **MongoDB writes use `w=0`** (unacknowledged) — write failures are silent; check Mongo logs.
+7. **Gotchas** (full register: [docs/TechnicalDebt.md](docs/TechnicalDebt.md)):
+   `_IsBetStopGlobally` is not thread-safe (H3); Websocket spawns unmanaged threads +
+   `Environment.Exit(1)` (H2); UOF entitlement validation is disabled (H5).
+8. **Translations are back in the pipeline.**
+   **Dead — the old SQL path:** `OE.Sportsbook.Service`'s
+   `TranslationRepository`/`TranslationContext` are gone, and nothing writes the `sb:translation:*`
+   MemCache any more. One live remnant: `ProcessCacheInvalidationMessage` still deletes by that prefix on
+   `ON_DELETE_CACHE` (`src/OddsEngine/OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:340`
+   `ProcessCacheInvalidationMessage`), so that handler now purges a namespace nothing populates.
 
-## Conventions to follow (don't introduce new patterns)
+   **Live — the current path:** `OE.Translation.Service` owns a message-driven path moved in
+   from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment at
+   `src/OddsEngine/OE.Translation.Service/Repositories/MongoTranslationRepository.cs:682`). It:
+   - **persists to Mongo** — `*NaTr` fields on the `Fixture`/`Market`/`Selection` collections (the
+     `*Lookup` collections carry none); see `WriteFixtureTranslations` / `WriteMarketTranslations` /
+     `ProcessTranslationChange` in that same file;
+   - **publishes and pushes over SignalR** — translation-only `ON_ODDS_CHANGE` messages built in
+     `PublishTranslationOnlyOddsChanges`, mapped into `OutgoingOddsChange`'s
+     `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` at
+     `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1526-1925`;
+   - **scopes MaTe updates by `SrcTx`** — since GM-852 every producer sends the row's SOURCE_TEXT, so
+     a `MaTe:` delta, base or variant, updates only the open markets whose `MaNa` matches it, ignoring
+     case. The filter and grouping are pure methods (`GroupDeltas`, `AddMarketTemplateDelta`,
+     `BuildMaTeMarketFilter`) tested in `MongoTranslationRepositoryTests` by rendering the filter
+     (GM-874).
+
+## How this team writes code
+Match it — don't introduce new patterns.
+
 - Per-service skeleton: a `Program.cs` (Generic Host + DI), a `Worker.cs` (BackgroundService → dispatch
   on `BasicProperties.Type`), `Repository|Repositories/` (`IXxx`+`Xxx`, Singleton), `Telemetry/
   Instrumentation.cs`, `appsettings.json`, `Dockerfile`.
@@ -95,8 +148,7 @@ KeepAlive (heartbeat, 5s).
   - **Exceptions: pass the exception as the first argument**, `_logger.LogError(ex, "... {Payload}",
     payload)` (or `LogErrorEx("...", ex)`). Never put `ex.Message` / `ex.StackTrace` in the message
     text and never pass the exception as a template argument. No empty `catch` blocks.
-  - **Never log a secret or credential value in plaintext** (API keys, tokens, connection strings,
-    signing keys). A sibling repo (platform-final, GM-880, 2026-09-30) found `_logger.LogError`
+  - **Secrets in logs:** a sibling repo (platform-final, GM-880, 2026-09-30) found `_logger.LogError`
     printing an OG private API key on every failed bet placement, visible in PRD Loki; mask a
     secret (keep only the last few characters, blank the rest) before it reaches a log line.
   - **PascalCase placeholders** (`{Message}`, `{Payload}`).
@@ -108,7 +160,7 @@ KeepAlive (heartbeat, 5s).
 - Full pattern catalog: [docs/ImplementationPatterns.md](docs/ImplementationPatterns.md);
   naming: [docs/NamingConventions.md](docs/NamingConventions.md).
 
-## Where things live (quick map)
+## Where things live
 | You need | Go to |
 |---|---|
 | Decode an abbreviated field | [docs/SharedLibraries.md](docs/SharedLibraries.md) |
@@ -121,35 +173,8 @@ KeepAlive (heartbeat, 5s).
 | What changes most | [docs/knowledge/FrequentlyModifiedAreas.md](docs/knowledge/FrequentlyModifiedAreas.md) |
 | Test inventory, mutation scores, coverage gaps | [docs/Testing.md](docs/Testing.md) |
 
-## Build / run
-- Build: `dotnet build src/OddsEngine/OddsEngine.sln` (note: `OE.Job.KeepAlive` is NOT in the .sln but
-  CI builds it, `.github/workflows/ci.yml:57`).
-- Local run: `dotnet run` from a service folder; needs local RabbitMQ + MongoDB (+ SQL for
-  Sportsbook/UOF). Uses each service's committed settings file plus a git-ignored `Development` overlay.
-- `src/OddsEngine/.editorconfig` applies to the whole solution and suppresses `CS8601`
-  (nullable-reference assignment warning) — don't be surprised it's silent on that class of bug.
-- Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project).
-- Mutation testing: `dotnet stryker --project <Project>.csproj` from the matching test-project
-  folder (global tool, config in `src/OddsEngine/stryker-config.json`, no CI gate). Scores and
-  gaps: [docs/Testing.md](docs/Testing.md). A green suite is not evidence a bug would be caught.
-- CI builds each changed service to ECR; argocd deploys. ([docs/Hosting.md](docs/Hosting.md))
-
-## Roslyn MCP navigator (token-cheap code search)
-When the `cwm-roslyn-navigator` tools are available, prefer them over `grep` for symbol work:
-- `find_symbol` — locate a type/member; the right tool when 6 `SportsbookRepository` copies exist.
-- `find_references` / `find_callers` — run before changing any signature, DTO field, or enum
-  (see non-negotiable fact 3: `OE.Shared` edits are cross-repo breaking changes).
-- `find_implementations` — interface to concrete for the `IXxx` + `Xxx` singleton pairs.
-- `get_project_graph` — verify the "every service references only `OE.Shared`, no cycles" rule.
-- `get_diagnostics` — after edits, alongside `dotnet build`.
-
-No `.mcp.json` is committed; registration is per-developer
-(`claude mcp add --scope user cwm-roslyn-navigator -- cwm-roslyn-navigator --solution <path>`).
-Fall back to `grep`/`/find-*` commands when the server is not registered.
-
-## MANDATORY development workflow (Phase 12 — applies to EVERY task)
-
-Follow this Standard Workflow for every task, in order. Do not skip steps; if a step is N/A, say so.
+## Development workflow
+Follow these steps for every task, in order. Do not skip steps; if a step is N/A, say so.
 
 1. **Understand the requirement** — restate it in one sentence.
 2. **Search the repository** for existing implementations (the `find-service` and `find-pattern` commands; 6
@@ -160,71 +185,47 @@ Follow this Standard Workflow for every task, in order. Do not skip steps; if a 
 6. **Explain the proposed solution** before implementing.
 7. **Identify risks and assumptions** (cross-ref TechnicalDebt/ArchitectureRisks/Unknowns).
 8. **Ask clarifying questions** when the requirement or evidence is unclear.
-9. **Wait for approval before architectural changes** (new patterns, contract changes, new services,
-   sharding changes).
+9. **Wait for approval before any code change.** Contract changes, new patterns, new services and
+   sharding changes also need the cross-repo check in Critical rules 1, 3 and 4.
 10. **Implement the smallest possible change.**
-11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`; state how
-    behavior was checked. Ten test projects exist, all in the solution — `OE.Shared.Test`,
-    `OE.Adapter.Service.Tests`, `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`,
-    `OE.Translation.Job.Tests`, `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`,
-    `OE.Job.Lookup.Tests`, `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests` — run `dotnet test`
-    against the relevant project(s) when present; `OE.Job.LiveStream` and `OE.UOF.Client` have none.
-    `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not).
-12. **Update documentation for every change**, not only when architectural knowledge changed. A
-    bug fix, security fix, or resolved debt item belongs in `docs/` too (the `update-docs` command;
-    keep CLAUDE.md / AGENTS.md / commands / skills / playbooks in sync). **Also update `README.md` in the same
-    change whenever the change affects anything the README documents** (projects/frameworks,
-    prerequisites, build/run/test instructions, configuration, endpoints) — the README must never
-    describe a repo state that no longer exists.
+11. **Validate compilation and behavior** (`dotnet build src/OddsEngine/OddsEngine.sln`, then
+    `dotnet test` on the relevant project(s) from Build / test; state how behavior was checked).
+12. **Update documentation** in `docs/` for every change, bug fixes, security fixes and resolved
+    debt included (the `update-docs` command; keep CLAUDE.md / AGENTS.md / commands / skills /
+    playbooks in sync), and `README.md` whenever the change affects what it documents
+    (projects/frameworks, prerequisites, build/run/test instructions, configuration, endpoints).
 13. **Summarize changes, risks, and validation results.**
 
 Playbook: [.claude/checklists/standard-workflow.md](.claude/checklists/standard-workflow.md).
 
-## Permanent Engineering Principles (non-negotiable)
+## Engineering principles
 - **The repository is the source of truth.**
-- **Preserve existing architecture.**
-- **Never introduce new patterns/libraries without approval.**
-- **Never guess when evidence is unavailable.**
-- **Clearly distinguish verified facts, assumptions, and unknowns** (tag everything).
-- **Production is READ-ONLY by default** — never publish, deploy, change schemas, invalidate caches,
-  or run admin actions unless explicitly instructed.
-- **Every SQL script must be idempotent** (data fixes, seeds, DDL, hand-run/flyway migrations):
-  guard INSERTs with `NOT EXISTS`/`MERGE`, schema changes with `IF NOT EXISTS`/`OBJECT_ID` checks,
-  so re-running is a no-op with the same end state.
+- **Preserve existing architecture; never introduce new patterns/libraries without approval.**
 - **For external repositories, identify dependencies — never invent their behavior**
   ([docs/CrossRepositoryDependencies.md](docs/CrossRepositoryDependencies.md)).
-- **Keep documentation, CLAUDE.md, AGENTS.md, commands, skills, and playbooks synchronized** with
-  architectural changes.
 
-## Gotchas (top of the list)
-- `_IsBetStopGlobally` is not thread-safe (H3).
-- Websocket spawns unmanaged threads + `Environment.Exit(1)` (H2).
-- UOF entitlement validation is disabled (H5).
-- See [docs/TechnicalDebt.md](docs/TechnicalDebt.md) for the full register.
+## Scope & build reminders
+- Subject is **odds-engine-2** (headless backend); UI work belongs to `platform-web`.
+- **Match the right copy** before editing: 6 `SportsbookRepository` classes exist across services.
+- `OE.Shared` must stay within `netstandard2.1`; services target `net10.0`.
 
-### ⚠️ Translations are back in the pipeline
-**Dead — the old SQL path:** `OE.Sportsbook.Service`'s
-`TranslationRepository`/`TranslationContext` are gone, and nothing writes the `sb:translation:*`
-MemCache any more. One live remnant: `ProcessCacheInvalidationMessage` still deletes by that prefix on
-`ON_DELETE_CACHE` (`src/OddsEngine/OE.Sportsbook.Service/Repositories/SportsbookRepository.cs:340`
-`ProcessCacheInvalidationMessage`), so that handler now purges a namespace nothing populates.
-
-**Live — the current path:** `OE.Translation.Service` owns a message-driven path moved in
-from `OE.Sportsbook.Service` (see the "moved from OE.Sportsbook.Service" comment at
-`src/OddsEngine/OE.Translation.Service/Repositories/MongoTranslationRepository.cs:682`). It:
-- **persists to Mongo** — `*NaTr` fields on the `Fixture`/`Market`/`Selection` collections (the
-  `*Lookup` collections carry none); see `WriteFixtureTranslations` / `WriteMarketTranslations` /
-  `ProcessTranslationChange` in that same file;
-- **publishes and pushes over SignalR** — translation-only `ON_ODDS_CHANGE` messages built in
-  `PublishTranslationOnlyOddsChanges`, mapped into `OutgoingOddsChange`'s
-  `SpTr`/`SegTr`/`LeTr`/`HoTr`/`AwTr`/`MaTeTr`/`SeNaTr` at
-  `src/OddsEngine/OE.Websocket.Service/Repository/SportsbookRepository.cs:1526-1925`;
-- **scopes MaTe updates by `SrcTx`** — since GM-852 every producer sends the row's SOURCE_TEXT, so
-  a `MaTe:` delta, base or variant, updates only the open markets whose `MaNa` matches it, ignoring
-  case. The filter and grouping are pure methods (`GroupDeltas`, `AddMarketTemplateDelta`,
-  `BuildMaTeMarketFilter`) tested in `MongoTranslationRepositoryTests` by rendering the filter
-  (GM-874).
-
-## Claude assets
+## Assets in this repo
 Commands, skills, checklists, playbooks, templates, prompts live in `.claude/` — see
-[.claude/README.md](.claude/README.md). Also see [AGENTS.md](AGENTS.md).
+[.claude/README.md](.claude/README.md).
+
+**Roslyn MCP navigator** (token-cheap code search). When the `cwm-roslyn-navigator` tools are
+available, prefer them over `grep` for symbol work:
+- `find_symbol` — locate a type/member; the right tool when 6 `SportsbookRepository` copies exist.
+- `find_references` / `find_callers` — run before changing any signature, DTO field, or enum
+  (see Critical rule 3: `OE.Shared` edits are cross-repo breaking changes).
+- `find_implementations` — interface to concrete for the `IXxx` + `Xxx` singleton pairs.
+- `get_project_graph` — verify the "every service references only `OE.Shared`, no cycles" rule.
+- `get_diagnostics` — after edits, alongside `dotnet build`.
+
+No `.mcp.json` is committed; registration is per-developer
+(`claude mcp add --scope user cwm-roslyn-navigator -- cwm-roslyn-navigator --solution <path>`).
+Fall back to `grep`/`/find-*` commands when the server is not registered.
+
+## See also
+[AGENTS.md](AGENTS.md) · [docs/README.md](docs/README.md) · [docs/Architecture.md](docs/Architecture.md) ·
+[docs/TechnicalDebt.md](docs/TechnicalDebt.md)
