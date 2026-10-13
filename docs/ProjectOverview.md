@@ -140,7 +140,8 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Consumes:** `r.oe.sb.engine.onoddschange`, `...onbetstopfixture`, `...onbetstopglobal`,
   `r.bet.betstatus.s88`, `r.bet.cashoutchange.s88`, `r.wallet.s88`,
   `r.oe.sb.engine.onvisitfavorites.s88`, `...onvisitboostedfixtures.s88`,
-  `...onmarketsortorderchange.s88` (client `S88`).
+  `...onmarketsortorderchange.s88` (client `S88`), `...onoddstableleaguesortorderchange.<clientcode>`
+  (GM-851).
 - **Invokes hub methods:** `PublishOddsChangeMainMarkets/AllMarkets`, `PublishBetStatus`,
   `PublishCashOutChange`, `PublishWalletChange`, `PublishPayableChange`,
   `PublishBetStopGlobal/Fixture` (`Repository/SportsbookRepository.cs:586-590`).

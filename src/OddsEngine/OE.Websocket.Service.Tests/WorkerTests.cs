@@ -91,6 +91,62 @@ namespace OE.Websocket.Service.Tests
             Assert.InRange(repository.MaxInFlight, 1, Worker.LoadClientConcurrency);
         }
 
+        // GM-851: Back Office saves a client's Oddstable league order and CacheSync relays
+        // OnOddstableLeagueSortOrderChange. The order stamped on pushed fixtures (SoOr) is loaded once
+        // at startup, so without this the websocket service kept the old order until it restarted.
+        [Fact]
+        public async Task OddstableLeagueSortOrderChange_ReloadsTheFixtureSortOrderOfTheNamedClient()
+        {
+            var repository = new FakeSportsbookRepository();
+            var registry = new FakeClientRegistry();
+            var worker = BuildWorker(new FakeMessageBroker(), repository, registry);
+
+            await worker.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => registry.Clients.All(c => c.IsReady), TimeSpan.FromSeconds(5));
+            var loadsAtStartup = repository.FixtureSortOrderLoads.Count;
+
+            Deliver(worker, "OnOddstableLeagueSortOrderChange", "r.oe.sb.engine.onoddstableleaguesortorderchange.c000");
+
+            await WaitUntilAsync(() => repository.FixtureSortOrderLoads.Count > loadsAtStartup, TimeSpan.FromSeconds(5));
+            await worker.StopAsync(CancellationToken.None);
+
+            Assert.Equal(loadsAtStartup + 1, repository.FixtureSortOrderLoads.Count);
+            Assert.Equal("c000", repository.FixtureSortOrderLoads.Last());
+        }
+
+        [Fact]
+        public async Task OddstableLeagueSortOrderChange_ForAClientThisInstanceDoesNotServe_IsSkipped()
+        {
+            var repository = new FakeSportsbookRepository();
+            var registry = new FakeClientRegistry();
+            var worker = BuildWorker(new FakeMessageBroker(), repository, registry);
+
+            await worker.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(() => registry.Clients.All(c => c.IsReady), TimeSpan.FromSeconds(5));
+            var loadsAtStartup = repository.FixtureSortOrderLoads.Count;
+
+            registry.ResolvesClients = false;
+            Deliver(worker, "OnOddstableLeagueSortOrderChange", "r.oe.sb.engine.onoddstableleaguesortorderchange.zzz");
+            await Task.Delay(300);
+            await worker.StopAsync(CancellationToken.None);
+
+            Assert.Equal(loadsAtStartup, repository.FixtureSortOrderLoads.Count);
+        }
+
+        // Feeds one message straight into the consumer callback; the broker connection only starts once
+        // the hub is reachable, which these tests deliberately never allow.
+        private static void Deliver(Worker worker, string messageType, string routingKey)
+        {
+            var args = new BasicDeliverEventArgs(
+                "consumer", 1, false, "e.central", routingKey,
+                new RabbitMQ.Client.Framing.BasicProperties { Type = messageType },
+                System.Text.Encoding.UTF8.GetBytes("true"));
+
+            typeof(Worker)
+                .GetMethod("MessageReceivedEvent", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(worker, new object?[] { null, args });
+        }
+
         private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
         {
             var deadline = DateTime.UtcNow + timeout;
@@ -138,9 +194,12 @@ namespace OE.Websocket.Service.Tests
                     .ToList();
             }
 
+            // false makes the registry answer "this instance does not serve that client".
+            public bool ResolvesClients { get; set; } = true;
+
             public IReadOnlyList<ClientContext> Clients => _clients;
-            public ClientContext ResolveByRoutingKey(string routingKey) => _clients[0];
-            public ClientContext ResolveByClientId(string clientId) => _clients[0];
+            public ClientContext ResolveByRoutingKey(string routingKey) => ResolvesClients ? _clients[0] : null!;
+            public ClientContext ResolveByClientId(string clientId) => ResolvesClients ? _clients[0] : null!;
             public Task<IReadOnlyList<ClientContext>> RefreshAsync() => Task.FromResult<IReadOnlyList<ClientContext>>(_clients);
         }
 
@@ -206,7 +265,14 @@ namespace OE.Websocket.Service.Tests
             public Task ProcessPayableChange(ClientContext client, IncomingPayableChange message, HubConnection hubConnection) => Task.CompletedTask;
             public Task ProcessWebPropsChange(ClientContext client, HubConnection hubConnection) => Task.CompletedTask;
             public Task ProcessMarketSortOrder(ClientContext client) => Task.CompletedTask;
-            public Task ProcessFixtureSortOrder(ClientContext client) => Task.CompletedTask;
+            // Client codes in the order ProcessFixtureSortOrder was called for them.
+            public System.Collections.Concurrent.ConcurrentQueue<string> FixtureSortOrderLoads { get; } = new();
+
+            public Task ProcessFixtureSortOrder(ClientContext client)
+            {
+                FixtureSortOrderLoads.Enqueue(client.ClientCode);
+                return Task.CompletedTask;
+            }
             public Task ProcessBetBuilderMarketTemplates(ClientContext client) => Task.CompletedTask;
             public Task ProcessMarketTemplatePlayerProps(ClientContext client) => Task.CompletedTask;
         }

@@ -528,6 +528,11 @@ namespace OE.WebSocket.Service.Repository
                 if (!HasResult(result, client, nameof(ProcessFixtureSortOrder)))
                     return;
 
+                // This also runs when Back Office changes the order (GM-851), so it replaces the client's
+                // entries: a league the answer no longer lists must fall back to the default instead of
+                // keeping the number it had. Nothing awaits between the delete and the writes below.
+                _memCache.DeleteCacheByPrefix($"{client.ClientCode}:fso:");
+
                 foreach (var item in result.Result.Fixtures)
                     _memCache.AddOrUpdateCache($"{client.ClientCode}:fso:{item.SportId}:{item.SegmentId}:{item.LeagueId}", new FixtureSortOrder { SortOrder = item.SortOrder }, DateTimeOffset.UtcNow.AddYears(1));
             }

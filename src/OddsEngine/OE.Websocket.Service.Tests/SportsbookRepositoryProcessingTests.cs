@@ -397,6 +397,82 @@ namespace OE.Websocket.Service.Tests
             Assert.False(memCache.Contains($"{clientCode}:lmso:1"));
         }
 
+        // ---- ProcessFixtureSortOrder (GM-851) ----
+        // The order it caches is stamped on every fixture pushed to that client (SoOr), and a league
+        // that first appears through a push is placed by it. Back Office changes now reload it.
+
+        private static string FixtureSortOrderJson(params (int Sport, int Segment, int League, int Order)[] rows) =>
+            "{\"StatusCode\":100,\"Result\":{\"Fixtures\":[" +
+            string.Join(",", rows.Select(r => $"{{\"SportId\":{r.Sport},\"SegmentId\":{r.Segment},\"LeagueId\":{r.League},\"SortOrder\":{r.Order}}}")) +
+            "]}}";
+
+        [Fact]
+        public async Task ProcessFixtureSortOrder_CachesEachLeagueUnderItsFsoKey()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var client = BuildClient(clientCode, _ => Json(HttpStatusCode.OK, FixtureSortOrderJson((10, 3, 5, 3), (10, 4, 6, 4))), out _);
+
+            await BuildRepository(memCache).ProcessFixtureSortOrder(client);
+
+            Assert.Equal(3, memCache.GetCache<FixtureSortOrder>($"{clientCode}:fso:10:3:5")!.SortOrder);
+            Assert.Equal(4, memCache.GetCache<FixtureSortOrder>($"{clientCode}:fso:10:4:6")!.SortOrder);
+        }
+
+        [Fact]
+        public async Task ProcessFixtureSortOrder_ASecondLoadReplacesTheClientsOrder()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var answer = FixtureSortOrderJson((10, 3, 5, 3), (10, 4, 6, 4));
+            var client = BuildClient(clientCode, _ => Json(HttpStatusCode.OK, answer), out _);
+            var repository = BuildRepository(memCache);
+
+            await repository.ProcessFixtureSortOrder(client);
+
+            // Back Office reorders league 5 and removes league 6 from the configuration.
+            answer = FixtureSortOrderJson((10, 3, 5, 9));
+            await repository.ProcessFixtureSortOrder(client);
+
+            Assert.Equal(9, memCache.GetCache<FixtureSortOrder>($"{clientCode}:fso:10:3:5")!.SortOrder);
+            Assert.False(memCache.Contains($"{clientCode}:fso:10:4:6"));
+        }
+
+        [Fact]
+        public async Task ProcessFixtureSortOrder_ReloadingOneClient_LeavesAnotherClientsOrderAlone()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var otherCode = NewClientCode();
+            var client = BuildClient(clientCode, _ => Json(HttpStatusCode.OK, FixtureSortOrderJson((10, 3, 5, 3))), out _);
+            var other = BuildClient(otherCode, _ => Json(HttpStatusCode.OK, FixtureSortOrderJson((10, 3, 5, 7))), out _);
+            var repository = BuildRepository(memCache);
+
+            await repository.ProcessFixtureSortOrder(other);
+            await repository.ProcessFixtureSortOrder(client);
+            await repository.ProcessFixtureSortOrder(client);
+
+            Assert.Equal(7, memCache.GetCache<FixtureSortOrder>($"{otherCode}:fso:10:3:5")!.SortOrder);
+        }
+
+        [Fact]
+        public async Task ProcessFixtureSortOrder_FailedReload_KeepsTheOrderItAlreadyHas()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var fail = false;
+            var client = BuildClient(clientCode, _ => fail
+                ? new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent(string.Empty) }
+                : Json(HttpStatusCode.OK, FixtureSortOrderJson((10, 3, 5, 3))), out _);
+            var repository = BuildRepository(memCache);
+
+            await repository.ProcessFixtureSortOrder(client);
+            fail = true;
+            await repository.ProcessFixtureSortOrder(client);
+
+            Assert.Equal(3, memCache.GetCache<FixtureSortOrder>($"{clientCode}:fso:10:3:5")!.SortOrder);
+        }
+
         // ---- Hub-push methods: smoke tests only ----
         //
         // These methods (ProcessBetStopGlobal, ProcessBetStatus, ProcessCashOutChange,

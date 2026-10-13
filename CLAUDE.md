@@ -72,6 +72,10 @@ KeepAlive (heartbeat, 5s).
 4. **SignalR uses MessagePack `ContractlessStandardResolver`** (name-keyed) — renaming a property on
    any `Outgoing*`/`EngineMessages` model is a breaking wire change; deploy OEv2 + platform-web
    together. ([docs/WebSocket.md](docs/WebSocket.md))
+   The `SoOr` stamped on pushed fixtures is the client's league order, cached per client
+   (`{clientCode}:fso:...`) from Platform API `fixturesortorder`; it reloads on
+   `OnOddstableLeagueSortOrderChange` (GM-851, needs the routing key in the argocd
+   `MessageBroker__RoutingKey`) and at startup, not on `OnSportSortOrderChange`.
 5. **Abbreviated field names everywhere** (`FiId`, `MaStId`, `Od`, `PrFiId`, …) — use the glossary in
    [docs/SharedLibraries.md](docs/SharedLibraries.md). New persisted/wire fields must follow it.
 6. **MongoDB writes use `w=0`** (unacknowledged) — write failures are silent; check Mongo logs.

@@ -51,6 +51,9 @@ See [docs/knowledge/FrequentlyModifiedAreas.md](docs/knowledge/FrequentlyModifie
 - `MemCache` `int` TTL is in **hours** (sub-hour truncates to 0).
 - MongoDB `w=0` → silent write failures.
 - SignalR MessagePack is name-keyed → property rename = breaking.
+- Websocket `SoOr` (league order on pushed fixtures) is cached per client from Platform API
+  `fixturesortorder`; reloaded at startup and on `OnOddstableLeagueSortOrderChange` (GM-851), not on
+  `OnSportSortOrderChange`. See docs/WebSocket.md.
 - `_IsBetStopGlobally` not thread-safe; Websocket threads ignore cancellation.
 - Exception logging: `_logger.LogError(ex, "...")` with the exception first, never `ex.Message` /
   `ex.StackTrace` in the message; PascalCase placeholders; keep operational start/connect log lines

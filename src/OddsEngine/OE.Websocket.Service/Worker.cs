@@ -73,6 +73,7 @@ namespace OE.Websocket.Service
         private readonly BlockingCollection<ClientScoped<IncomingVisitBoostedFixtures>> _messagesBoostedFixtures = new BlockingCollection<ClientScoped<IncomingVisitBoostedFixtures>>();
         private readonly BlockingCollection<ClientScoped<IncomingPayableChange>> _messagesPayable = new BlockingCollection<ClientScoped<IncomingPayableChange>>();
         private readonly BlockingCollection<ClientScoped<bool>> _messagesMarketSortOrder = new BlockingCollection<ClientScoped<bool>>();
+        private readonly BlockingCollection<ClientScoped<bool>> _messagesFixtureSortOrder = new BlockingCollection<ClientScoped<bool>>();
         private readonly BlockingCollection<ClientScoped<bool>> _messagesWebPropsChange = new BlockingCollection<ClientScoped<bool>>();
 
         // Fan-out for messages every client receives. Clients are processed in
@@ -215,6 +216,14 @@ namespace OE.Websocket.Service
             {
                 var item = _messagesMarketSortOrder.Take();
                 await _sportsbookRepository.ProcessMarketSortOrder(item.Client);
+            }
+        }
+        private async void ThreadFixtureSortOrder()
+        {
+            while (true)
+            {
+                var item = _messagesFixtureSortOrder.Take();
+                await _sportsbookRepository.ProcessFixtureSortOrder(item.Client);
             }
         }
         private async void ThreadWebPropsChange()
@@ -409,6 +418,7 @@ namespace OE.Websocket.Service
             var threadBoostedFixtures = CreateDispatchThread(ThreadBoostedFixtures, "ws-boosted-fixtures");
             var threadPayable = CreateDispatchThread(ThreadPayable, "ws-payable");
             var threadMarketSortOrderChange = CreateDispatchThread(ThreadMarketSortOrder, "ws-market-sort-order");
+            var threadFixtureSortOrderChange = CreateDispatchThread(ThreadFixtureSortOrder, "ws-fixture-sort-order");
             var threadWebPropsChange = CreateDispatchThread(ThreadWebPropsChange, "ws-webprops-change");
 
             threadTopFixtures.Start();
@@ -424,6 +434,7 @@ namespace OE.Websocket.Service
             threadBoostedFixtures.Start();
             threadPayable.Start();
             threadMarketSortOrderChange.Start();
+            threadFixtureSortOrderChange.Start();
             threadWebPropsChange.Start();
 
             // The hub is a separate deployment that may be down or restarting while this pod
@@ -739,6 +750,20 @@ namespace OE.Websocket.Service
                             }
 
                             _messagesMarketSortOrder.Add(new ClientScoped<bool>(sortOrderClient, true));
+                            break;
+
+                        case "OnOddstableLeagueSortOrderChange":
+                            // GM-851: Back Office saved a client's Oddstable league order. The order stamped
+                            // on pushed fixtures (SoOr) comes from a startup load, so reload it for that client.
+                            var oddstableClient = ResolveClient(e.RoutingKey);
+
+                            if (oddstableClient == null)
+                            {
+                                _logger.LogDebug(SkippingUnservedClientLogTemplate, msgType, e.RoutingKey);
+                                break;
+                            }
+
+                            _messagesFixtureSortOrder.Add(new ClientScoped<bool>(oddstableClient, true));
                             break;
 
                         case "OnWebPropsChange":

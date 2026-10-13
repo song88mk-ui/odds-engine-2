@@ -39,6 +39,18 @@ OE.Websocket.Service ──(SignalR client)──►  /platform hub  ◄──(S
   with bounded parallelism (`Worker.LoadClientConcurrency`, 16 clients at a time). A client joins the
   odds fan-out (`IsReady`) only once its main-market templates loaded; clients whose load failed are
   retried on the 5-minute client refresh. Bet stops and user-specific messages are not gated.
+- **League order stamped on pushed fixtures (GM-851):** every pushed fixture carries `SoOr`, the client's
+  league order from the `{clientCode}:fso:{sport}:{segment}:{league}` cache (default 1000 for a league
+  with no entry), and platform-web places a league that first appears through a push by it.
+  `SportsbookRepository.ProcessFixtureSortOrder` fills the cache from Platform API
+  `GET v1/sportsbook/fixturesortorder`, which since GM-851 returns the Oddstable order. It runs at
+  startup and when `OnOddstableLeagueSortOrderChange` arrives for the client (routing key
+  `r.oe.sb.engine.onoddstableleaguesortorderchange.<clientcode>`, relayed by platform-final's CacheSync
+  after it purged Sportsbook.API): `Worker` queues the client on its own dispatch thread
+  (`ws-fixture-sort-order`). A reload replaces the client's `fso` entries, so a league the answer no
+  longer lists falls back to 1000, and a failed reload keeps the entries it has. The queue only receives
+  the message if the routing key is in `MessageBroker__RoutingKey` (argocd). `OnSportSortOrderChange`
+  is still not handled, so a Sport Tree order change reaches pushed `SoOr` only after a restart.
 - **Client resolution per message (`Worker.ResolveClient`, `ClientRegistry`):** most client-scoped
   message types resolve the target client by SBC client code (`ClientRegistry.ResolveByRoutingKey`,
   the routing key's last dot-segment against `_byCode`). A few message types instead carry the
