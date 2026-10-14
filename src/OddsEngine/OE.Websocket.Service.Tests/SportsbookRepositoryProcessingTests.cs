@@ -317,6 +317,78 @@ namespace OE.Websocket.Service.Tests
             Assert.Equal(new[] { "U2" }, memCache.GetCache<Favorites>($"{clientCode}:fli:1:42")!.UserIds);
         }
 
+        // GM-812: GetGroups/GetGroupsForMainMarkets enumerate the cached UserIds list on other
+        // threads with no lock. Changing that list in place makes a concurrent foreach throw
+        // "Collection was modified", so an add or remove must store a new list instead.
+        [Fact]
+        public async Task ProcessFavorites_ExistingKey_DoesNotMutateCachedList()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var original = new List<string> { "U1" };
+            memCache.AddOrUpdateCache($"{clientCode}:fli:1:42", new Favorites { UserIds = original }, DateTimeOffset.UtcNow.AddDays(1));
+            var repository = BuildRepository(memCache);
+            var client = BuildClient(clientCode, _ => throw new InvalidOperationException("no HTTP expected"), out _);
+
+            await repository.ProcessFavorites(client, new IncomingVisitFavorites
+            {
+                UserId = "U2",
+                Favorites = new List<UserFavorites> { new() { HierarchyId = 2, SportId = 1, Id = "42" } }
+            });
+
+            Assert.Equal(new[] { "U1" }, original);
+            Assert.Equal(new[] { "U1", "U2" }, memCache.GetCache<Favorites>($"{clientCode}:fli:1:42")!.UserIds);
+        }
+
+        [Fact]
+        public async Task ProcessRemoveFavorites_ExistingUser_DoesNotMutateCachedList()
+        {
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var original = new List<string> { "U1", "U2" };
+            memCache.AddOrUpdateCache($"{clientCode}:fli:1:42", new Favorites { UserIds = original }, DateTimeOffset.UtcNow.AddDays(1));
+            var repository = BuildRepository(memCache);
+            var client = BuildClient(clientCode, _ => throw new InvalidOperationException("no HTTP expected"), out _);
+
+            await repository.ProcessRemoveFavorites(client, new IncomingVisitFavorites
+            {
+                UserId = "U1",
+                Favorites = new List<UserFavorites> { new() { HierarchyId = 2, SportId = 1, Id = "42" } }
+            });
+
+            Assert.Equal(new[] { "U1", "U2" }, original);
+            Assert.Equal(new[] { "U2" }, memCache.GetCache<Favorites>($"{clientCode}:fli:1:42")!.UserIds);
+        }
+
+        // GM-812: ProcessFavorites and ProcessRemoveFavorites run on separate dispatch threads
+        // (ws-favorites, ws-remove-favorites). Without the lock, two read-copy-write calls on the
+        // same key can each start from the same list and the later store drops the other's change.
+        // Like the GetGroups race tests, this detects the race by probability, not a forced interleaving.
+        [Fact]
+        public async Task ProcessFavoritesAndRemove_Concurrent_LosesNoUpdate()
+        {
+            const int UserCount = 2_000;
+            var memCache = new MemCache();
+            var clientCode = NewClientCode();
+            var toRemove = Enumerable.Range(0, UserCount).Select(i => $"old-{i}").ToList();
+            var toAdd = Enumerable.Range(0, UserCount).Select(i => $"new-{i}").ToList();
+            memCache.AddOrUpdateCache($"{clientCode}:fli:1:42", new Favorites { UserIds = new List<string>(toRemove) }, DateTimeOffset.UtcNow.AddDays(1));
+            var repository = BuildRepository(memCache);
+            var client = BuildClient(clientCode, _ => throw new InvalidOperationException("no HTTP expected"), out _);
+            var favorites = new List<UserFavorites> { new() { HierarchyId = 2, SportId = 1, Id = "42" } };
+
+            var adds = Parallel.ForEachAsync(toAdd, async (userId, _) =>
+                await repository.ProcessFavorites(client, new IncomingVisitFavorites { UserId = userId, Favorites = favorites }));
+            var removes = Parallel.ForEachAsync(toRemove, async (userId, _) =>
+                await repository.ProcessRemoveFavorites(client, new IncomingVisitFavorites { UserId = userId, Favorites = favorites }));
+            await Task.WhenAll(adds, removes);
+
+            var cached = memCache.GetCache<Favorites>($"{clientCode}:fli:1:42")!.UserIds;
+            Assert.Equal(UserCount, cached.Count);
+            Assert.True(toAdd.ToHashSet().SetEquals(cached),
+                "Favorites did not end as exactly the added users; a concurrent read-copy-write lost an update.");
+        }
+
         [Fact]
         public async Task ProcessRemoveFavorites_NoExistingCache_NoOp()
         {

@@ -37,6 +37,11 @@ namespace OE.WebSocket.Service.Repository
         private readonly ActivitySource _activitySource;
         private readonly Counter<long> _publishedToWebSocketCounter;
 
+        // GM-812: ProcessFavorites and ProcessRemoveFavorites run on separate dispatch threads and
+        // both read-copy-write the same cached Favorites. A cached UserIds list is never changed
+        // after it is stored, so GetGroups/GetGroupsForMainMarkets can enumerate it without a lock.
+        private readonly object _favoritesLock = new();
+
         private readonly List<int> _fixtureStatus = new List<int> { (int)FixtureStatus.Prematch, (int)FixtureStatus.Live };
 
         private readonly List<int> _marketStatusToRemove = new List<int> { (int)MarketStatus.Inactive, (int)MarketStatus.Cancelled, (int)MarketStatus.Settled, (int)MarketStatus.HandedOver };
@@ -380,27 +385,36 @@ namespace OE.WebSocket.Service.Repository
                     else
                         key = $"{client.ClientCode}:ffi:{favorite.SportId}:{favorite.Id}";
 
-                    var cache = _memCache.GetCache<Favorites>(key);
-
-                    if (cache == null)
+                    lock (_favoritesLock)
                     {
-                        var toAdd = new Favorites
+                        var cache = _memCache.GetCache<Favorites>(key);
+
+                        if (cache == null)
                         {
-                            UserIds = new List<string>
+                            var toAdd = new Favorites
                             {
-                                message.UserId
-                            }
-                        };
+                                UserIds = new List<string>
+                                {
+                                    message.UserId
+                                }
+                            };
 
-                        _memCache.AddOrUpdateCache(key, toAdd, DateTimeOffset.UtcNow.AddDays(1));
-                    }
-                    else
-                    {
-                        if (!cache.UserIds.Contains(message.UserId))
+                            _memCache.AddOrUpdateCache(key, toAdd, DateTimeOffset.UtcNow.AddDays(1));
+                        }
+                        else
                         {
-                            cache.UserIds.Add(message.UserId);
+                            if (!cache.UserIds.Contains(message.UserId))
+                            {
+                                var toUpdate = new Favorites
+                                {
+                                    UserIds = new List<string>(cache.UserIds)
+                                    {
+                                        message.UserId
+                                    }
+                                };
 
-                            _memCache.AddOrUpdateCache(key, cache, DateTimeOffset.UtcNow.AddDays(1));
+                                _memCache.AddOrUpdateCache(key, toUpdate, DateTimeOffset.UtcNow.AddDays(1));
+                            }
                         }
                     }
                 }
@@ -426,15 +440,19 @@ namespace OE.WebSocket.Service.Repository
                     else
                         key = $"{client.ClientCode}:ffi:{favorite.SportId}:{favorite.Id}";
 
-                    var cache = _memCache.GetCache<Favorites>(key);
-
-                    if (cache != null)
+                    lock (_favoritesLock)
                     {
-                        if (cache.UserIds.Contains(message.UserId))
-                        {
-                            cache.UserIds.Remove(message.UserId);
+                        var cache = _memCache.GetCache<Favorites>(key);
 
-                            _memCache.AddOrUpdateCache(key, cache, DateTimeOffset.UtcNow.AddDays(1));
+                        if (cache != null)
+                        {
+                            if (cache.UserIds.Contains(message.UserId))
+                            {
+                                var userIds = new List<string>(cache.UserIds);
+                                userIds.Remove(message.UserId);
+
+                                _memCache.AddOrUpdateCache(key, new Favorites { UserIds = userIds }, DateTimeOffset.UtcNow.AddDays(1));
+                            }
                         }
                     }
                 }
@@ -1337,20 +1355,20 @@ namespace OE.WebSocket.Service.Repository
 
             if (leagueFavorites != null)
             {
-                Parallel.ForEach(leagueFavorites.UserIds, userId =>
+                foreach (var userId in leagueFavorites.UserIds)
                 {
                     result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
-                });
+                }
             }
 
             var fixtureFavorites = _memCache.GetCache<Favorites>($"{clientCode}:ffi:{message.SpId}:{message.FiId}");
 
             if (fixtureFavorites != null)
             {
-                Parallel.ForEach(fixtureFavorites.UserIds, userId =>
+                foreach (var userId in fixtureFavorites.UserIds)
                 {
                     result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
-                });
+                }
             }
 
             return result;
@@ -1437,20 +1455,20 @@ namespace OE.WebSocket.Service.Repository
 
             if (leagueFavorites != null)
             {
-                Parallel.ForEach(leagueFavorites.UserIds, userId =>
+                foreach (var userId in leagueFavorites.UserIds)
                 {
                     result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
-                });
+                }
             }
 
             var fixtureFavorites = _memCache.GetCache<Favorites>($"{clientCode}:ffi:{message.SpId}:{message.FiId}");
 
             if (fixtureFavorites != null)
             {
-                Parallel.ForEach(fixtureFavorites.UserIds, userId =>
+                foreach (var userId in fixtureFavorites.UserIds)
                 {
                     result.Add($"onfavorites:{clientCode}:{userId.ToLower()}");
-                });
+                }
             }
 
             var boostedFixtures = _memCache.GetCache<List<long>>($"{clientCode}:bf");

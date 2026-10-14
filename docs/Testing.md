@@ -14,9 +14,9 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 
 | Test project | Tests | Covers |
 |---|---|---|
-| `OE.Shared.Test` | 183 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
-| `OE.Websocket.Service.Tests` | 136 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
-| `OE.Translation.Service.Tests` | 84 | Translation persistence and the translation-only odds-change path |
+| `OE.Shared.Test` | 186 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
+| `OE.Websocket.Service.Tests` | 165 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
+| `OE.Translation.Service.Tests` | 93 | Translation persistence and the translation-only odds-change path |
 | `OE.Adapter.Service.Tests` | 54 | Adapter routing, trading repository, translation cache |
 | `OE.Sportsbook.Service.Tests` | 40 | Catalogue writes, translation gate, worker dispatch |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
@@ -25,8 +25,8 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 572 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
-2026-09-21 from a full `dotnet test` run; the previous table had drifted.
+All 613 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
+2026-10-14 from a full `dotnet test` run; the previous table had drifted.
 
 ```bash
 # everything
@@ -137,7 +137,7 @@ Still uncovered in `OE.Websocket.Service/Repository/SportsbookRepository.cs`:
 mostly in the `MessageReceivedEvent` dispatch switch (`Worker.cs:620`).
 
 Three defects surfaced while writing these tests. They were pinned by test but deliberately not
-fixed there, since GM-808 changed no production code; later tickets fixed two of them:
+fixed there, since GM-808 changed no production code; later tickets fixed all three:
 
 1. **GM-810** (fixed, PR #66). Both OE mappers dereferenced the per-selection `ClientOdds` returned by
    `FirstOrDefault` with no null check. `GetClientOdds` returns an empty list when the market's
@@ -197,8 +197,40 @@ fixed there, since GM-808 changed no production code; later tickets fixed two of
    and 11205863, which is real 3x3 Basketball in the same id block).
    `ProcessTopFixtures_VirtualSport_SkipsEntirely` and `ProcessTopLeagues_VirtualSport_SkipsEntirely`
    cover two of the six call sites; the remaining four are reachable but still untested.
-3. **GM-812** (still open). `SportsbookRepository.cs:1335`, `:1345`, `:1435` and `:1445` append to a non-concurrent
-   `List<string>` from inside `Parallel.ForEach`.
+3. **GM-812** (fixed, PR #65). `GetGroupsForMainMarkets` and `GetGroups` appended the league and
+   fixture favorites groups to a non-concurrent `List<string>` from inside `Parallel.ForEach`, which
+   could drop a user's `onfavorites:{cc}:{userId}` group or throw during the list's resize. The four
+   loops (`SportsbookRepository.cs:1358`, `:1368`, `:1458`, `:1468`) are now plain `foreach`.
+   `MainMarkets_LargeLeagueAndFixtureFavoritesLists_AddEveryUserWithNoDataRace` and
+   `BetStop_LargeLeagueAndFixtureFavoritesLists_AddEveryUserWithNoDataRace` build 20,000 league and
+   20,000 fixture favorites and assert exactly one group per user. With the fix reverted, both
+   failed on 3 of 3 runs. They detect the race by probability, not by a forced interleaving.
+   Stryker on the whole file (2026-10-05, branch head, 59.77%; line numbers as of that run): on
+   the changed lines (`1335-1348`, `1435-1448`) the 4 `== null` checks, the 4 `result.Add` statement removals and the
+   4 group-string mutants are all killed. The 8 block removals are "Removed by block already
+   covered filter". Nothing survived. Stryker has no mutator that turns `foreach` back into
+   `Parallel.ForEach`, so the score cannot show the race is guarded; only the revert check above
+   does. It also does not mutate `userId.ToLower()`, so no test is shown to depend on the
+   lowercasing. One mutant survives next to the change, on an unchanged line: `:1427`
+   `topFixtures.FiIds.Any` to `All` in `GetGroups`, because no test caches a top-fixtures list
+   with more than one id.
+
+   A plain `foreach` over a `List<T>` throws `Collection was modified` if another thread changes
+   the list mid-loop, and the favorites lists were changed in place: `ProcessFavorites` and
+   `ProcessRemoveFavorites` called `.Add`/`.Remove` on the cached `UserIds` from the
+   `ws-favorites` and `ws-remove-favorites` threads, while `GetGroups` (RabbitMQ consumer thread)
+   and `GetGroupsForMainMarkets` (`ws-main-markets-odds`) enumerated the same list, since
+   `MemCache.GetCache` returns the cached object itself. A throw there drops the whole
+   `PublishBetStopFixture` or main-markets push for that client. Both writers now store a new
+   `Favorites` with a copied list, so a cached list never changes after it is stored and the
+   readers need no lock. Both writers also take `_favoritesLock` (`SportsbookRepository.cs:43`)
+   around the read-copy-write, which also fixes an older lost update between the two writer
+   threads. `ProcessFavorites_ExistingKey_DoesNotMutateCachedList` and
+   `ProcessRemoveFavorites_ExistingUser_DoesNotMutateCachedList` pin the copy deterministically;
+   `ProcessFavoritesAndRemove_Concurrent_LosesNoUpdate` races 2,000 adds against 2,000 removes on
+   one key. Against the old in-place code all three failed on 3 of 3 runs; with the copy but no
+   lock, the concurrent test failed on 3 of 3 runs. The concurrent test detects the race by
+   probability, like the two above.
 
 ## Why there are no `*MutationCheck` tests any more
 

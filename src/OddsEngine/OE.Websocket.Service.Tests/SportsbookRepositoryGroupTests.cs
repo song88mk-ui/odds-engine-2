@@ -249,6 +249,38 @@ namespace OE.Websocket.Service.Tests
             Assert.Contains($"onfavorites:{code}:user-b", groups);
         }
 
+        // GM-812: the league/fixture favorites groups used to be built by Parallel.ForEach bodies
+        // calling .Add on a plain, non-thread-safe List<string>. Concurrent .Add calls can silently
+        // drop entries or throw during the list's internal array resize. A small list (as above)
+        // never has enough concurrent workers hitting a resize at once to expose that, so this uses
+        // a list large enough that Parallel.ForEach actually spreads the work across threads. If the
+        // race is present this either throws or comes back short of FavoriteCount entries; a correct,
+        // synchronized (or sequential) implementation always returns every one, exactly once.
+        [Fact]
+        public void MainMarkets_LargeLeagueAndFixtureFavoritesLists_AddEveryUserWithNoDataRace()
+        {
+            const int FavoriteCount = 20_000;
+            var code = NewClientCode();
+            var memCache = new MemCache();
+            var leagueUserIds = Enumerable.Range(0, FavoriteCount).Select(i => $"league-user-{i}").ToList();
+            var fixtureUserIds = Enumerable.Range(0, FavoriteCount).Select(i => $"fixture-user-{i}").ToList();
+            memCache.AddOrUpdateCache($"{code}:fli:{SportId}:{LeagueId}", new Favorites { UserIds = leagueUserIds }, 1);
+            memCache.AddOrUpdateCache($"{code}:ffi:{SportId}:{FixtureId}", new Favorites { UserIds = fixtureUserIds }, 1);
+
+            var groups = Invoke<List<string>>(BuildRepository(memCache), "GetGroupsForMainMarkets",
+                BuildClient(code), Message((int)FixtureStatus.Prematch, startDate: DateTime.UtcNow.AddDays(1)));
+
+            var favoriteGroups = groups.Where(g => g.StartsWith($"onfavorites:{code}:")).ToList();
+            var expectedGroups = leagueUserIds.Concat(fixtureUserIds)
+                .Select(userId => $"onfavorites:{code}:{userId}")
+                .ToHashSet();
+
+            // Exactly one group per user: nothing lost, nothing duplicated by a racing resize.
+            Assert.Equal(FavoriteCount * 2, favoriteGroups.Count);
+            Assert.True(expectedGroups.SetEquals(favoriteGroups),
+                "Favorites groups did not match exactly one-per-user; a concurrent List<T>.Add data race dropped or duplicated entries.");
+        }
+
         // ---- GetGroupsForAllMarkets ----
 
         [Fact]
@@ -370,6 +402,32 @@ namespace OE.Websocket.Service.Tests
             Assert.Contains($"onfavorites:{code}:user-a", groups);
             Assert.Contains($"onfavorites:{code}:user-b", groups);
             Assert.Contains($"endpoint:{code}:boostedfixtures", groups);
+        }
+
+        // GM-812: same data race as MainMarkets_LargeLeagueAndFixtureFavoritesLists, but for the
+        // GetGroups (bet-stop) favorites Parallel.ForEach bodies.
+        [Fact]
+        public void BetStop_LargeLeagueAndFixtureFavoritesLists_AddEveryUserWithNoDataRace()
+        {
+            const int FavoriteCount = 20_000;
+            var code = NewClientCode();
+            var memCache = new MemCache();
+            var leagueUserIds = Enumerable.Range(0, FavoriteCount).Select(i => $"league-user-{i}").ToList();
+            var fixtureUserIds = Enumerable.Range(0, FavoriteCount).Select(i => $"fixture-user-{i}").ToList();
+            memCache.AddOrUpdateCache($"{code}:fli:{SportId}:{LeagueId}", new Favorites { UserIds = leagueUserIds }, 1);
+            memCache.AddOrUpdateCache($"{code}:ffi:{SportId}:{FixtureId}", new Favorites { UserIds = fixtureUserIds }, 1);
+
+            var groups = Invoke<List<string>>(BuildRepository(memCache), "GetGroups",
+                BuildClient(code), BetStop((int)FixtureStatus.Live));
+
+            var favoriteGroups = groups.Where(g => g.StartsWith($"onfavorites:{code}:")).ToList();
+            var expectedGroups = leagueUserIds.Concat(fixtureUserIds)
+                .Select(userId => $"onfavorites:{code}:{userId}")
+                .ToHashSet();
+
+            Assert.Equal(FavoriteCount * 2, favoriteGroups.Count);
+            Assert.True(expectedGroups.SetEquals(favoriteGroups),
+                "Favorites groups did not match exactly one-per-user; a concurrent List<T>.Add data race dropped or duplicated entries.");
         }
 
         // ---- The per-fixture numbers that ride on the payload ----
