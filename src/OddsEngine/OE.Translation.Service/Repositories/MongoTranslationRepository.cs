@@ -226,14 +226,16 @@ namespace OE.Translation.Service.Repositories
             if (writes.Count == 0)
                 return;
 
-            var result = collection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+            var acknowledged = WithAcknowledgedWrites(collection);
+
+            var result = acknowledged.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
 
             if (result.MatchedCount >= writes.Count)
                 return;
 
             Task.Delay(TR_WRITE_RETRY_DELAY).GetAwaiter().GetResult();
 
-            result = collection.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
+            result = acknowledged.BulkWrite(writes, new BulkWriteOptions { IsOrdered = false });
 
             if (result.MatchedCount < writes.Count)
             {
@@ -277,8 +279,10 @@ namespace OE.Translation.Service.Repositories
         // create a malformed document.
         private bool UpdateOneWithRetry<TDoc>(IMongoCollection<TDoc> collection, FilterDefinition<TDoc> filter, UpdateDefinition<TDoc> update, string entityDescription)
         {
+            var acknowledged = WithAcknowledgedWrites(collection);
+
             var matched = RetryUntilMatched(
-                attempt: () => collection.UpdateOne(filter, update, new UpdateOptions { IsUpsert = false }).MatchedCount > 0,
+                attempt: () => acknowledged.UpdateOne(filter, update, new UpdateOptions { IsUpsert = false }).MatchedCount > 0,
                 delay: d => Task.Delay(d).GetAwaiter().GetResult(),
                 TR_WRITE_RETRY_ATTEMPTS,
                 TR_WRITE_RETRY_DELAY);
@@ -292,6 +296,16 @@ namespace OE.Translation.Service.Repositories
 
             return matched;
         }
+
+        // The stamp writers decide from MatchedCount (retry when OE.Sportsbook.Service has not created
+        // the document yet), and the driver throws on MatchedCount for an unacknowledged result. The
+        // sportsbook connection string is shared with services that rely on w=0 fire-and-forget
+        // writes and this client inherits whatever it says, so ask for acknowledgement explicitly for
+        // these two writers instead of depending on the environment's secret (GM-960: dev threw
+        // "Only acknowledged writes support the MatchedCount property" on every stamp). W1 waits for
+        // the primary only; a missed stamp heals on the next message, so majority is not needed.
+        internal static IMongoCollection<TDoc> WithAcknowledgedWrites<TDoc>(IMongoCollection<TDoc> collection)
+            => collection.WithWriteConcern(WriteConcern.W1);
 
         // Pure retry loop, decoupled from Mongo so it's unit-testable without a live collection
         // (this class otherwise constructs its own MongoClient in the ctor — not DI-friendly).

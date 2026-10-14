@@ -8,6 +8,12 @@ MongoDB is odds-engine-2's **operational system of record** for the sportsbook c
   (`mongodb://10.49.100.55:27017/sportsbook?retryWrites=true&w=0` in stg/prd; in-cluster in dev).
 - **`w=0`** (unacknowledged writes) and `retryWrites=true` in the connection string — fire-and-forget
   write concern; throughput-oriented, **no write acknowledgement** (a notable durability trade-off).
+- **Exception: the Translation.Service live stamp** (`UpdateOneWithRetry`, `BulkWriteWithSingleRetry`)
+  requests `WriteConcern.W1` through `WithAcknowledgedWrites` (GM-960). It decides from `MatchedCount`, and the
+  driver throws on that for an unacknowledged result. Dev's string is unacknowledged (the exception proves it);
+  staging's translation-service logs lines that are only reachable with acknowledged results, so the
+  statement above does not hold for every environment [Verified from staging logs; prd Unknown]. Every
+  other write still follows the connection string.
 - **OEv2 is the sole writer.** platform-final and backoffice-final read it (secondary preference).
 - **Dual client wiring** [Verified]: `Program.cs` registers singleton `IMongoClient`/`IMongoDatabase`
   used only by `MongoIndexBootstrapper` at startup; `SportsbookRepository.PrepareDatabaseConnection`

@@ -800,5 +800,29 @@ namespace OE.Translation.Service.Tests
         }
 
         #endregion
+
+        #region WithAcknowledgedWrites
+
+        // GM-960: the sportsbook connection string is unacknowledged (w=0) in some environments, and an
+        // unacknowledged result throws on MatchedCount, which UpdateOneWithRetry and
+        // BulkWriteWithSingleRetry read. Both go through this helper. MongoClient does not connect
+        // until first use, so this needs no server.
+
+        [Fact]
+        public void WithAcknowledgedWrites_OverridesAnUnacknowledgedConnectionString()
+        {
+            using var client = new MongoClient("mongodb://localhost:27017/sportsbook?retryWrites=true&w=0");
+            var collection = client.GetDatabase("Sportsbook").GetCollection<Fixture>("Fixture");
+            Assert.False(collection.Settings.WriteConcern.IsAcknowledged); // what the shared secret hands every service
+
+            var acknowledged = MongoTranslationRepository.WithAcknowledgedWrites(collection);
+
+            Assert.True(acknowledged.Settings.WriteConcern.IsAcknowledged);
+            Assert.Equal(WriteConcern.W1, acknowledged.Settings.WriteConcern);
+            Assert.Equal(collection.CollectionNamespace.FullName, acknowledged.CollectionNamespace.FullName);
+            Assert.False(collection.Settings.WriteConcern.IsAcknowledged); // the shared collection itself is not changed
+        }
+
+        #endregion
     }
 }

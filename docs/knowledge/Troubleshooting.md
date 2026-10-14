@@ -76,6 +76,13 @@ Cross-refs to canonical docs. Use with [FrequentlyModifiedAreas.md](./Frequently
 - Connection uses **`w=0`** (unacknowledged) + `BulkWrite(IsOrdered=false)` → failures are silent.
   Check Mongo server logs, not just app logs. ([../PersistencePatterns.md](../PersistencePatterns.md))
 
+**`OETranslation Error` with `Only acknowledged writes support the MatchedCount property`**
+- The Translation.Service stamp path reads `MatchedCount`, and the driver throws on it when the write is
+  unacknowledged (`w=0`). Dev logged this for every message with a translated fixture field, and the same
+  text lands in `q.error` under `r.error.oe.translation`. Fixed by `WithAcknowledgedWrites` (GM-960); an
+  older image needs an acknowledged sportsbook connection string instead.
+  ([../TechnicalDebt.md](../TechnicalDebt.md) M14)
+
 **Service crash-loops on startup**
 - Sportsbook runs `MongoIndexBootstrapper` before `RunAsync` — **Mongo must be reachable** or it
   throws. This is intentional fail-fast. ([../StartupFlow.md](../StartupFlow.md))
