@@ -54,7 +54,7 @@ MongoDB documents and wire messages use terse **2–6 char abbreviations**: `<En
 ## RabbitMQ routing keys
 - Lowercase, dot-delimited, hierarchical: `r.<system>.<area>.<event>[.<shard|client>]`
   (`r.oe.sb.engine.onoddschange`, `r.oe.adapter.onmarketchange.07`, `r.bet.betstatus.s88`).
-- Error sinks: `r.error.*` / `r.oe.adapter.error`. External feed: `uof.*` (vhost `ext`).
+- Error sinks: `r.error.<domain>.<service>` (`r.error.oe.adapter`, `r.error.oe.translation`, `r.error.oe.translation.job`, `r.error.engine.uof.client`); never under a prefix another service binds with `#` (GM-960). External feed: `uof.*` (vhost `ext`).
 - Exchange: `e.central`. Queues: `q.<purpose>` (`q.sb.engine`, `q.oe.job.lookup`). Consumer tags:
   the service name + GUID.
 

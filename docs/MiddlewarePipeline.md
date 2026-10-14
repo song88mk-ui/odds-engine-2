@@ -41,7 +41,7 @@ RabbitMQ delivery (BasicDeliverEventArgs)
   │   • auto mode (HandleMessage): success → BasicAck;
   │                                throw   → BasicNack(requeue:true)
   │   • manual mode (ConnectWithManualAck): handler controls Ack/Nack
-  │   • per-service try/catch also: log + Activity error + publish to r.error.* / r.oe.adapter.error
+  │   • per-service try/catch also: log + Activity error + publish to r.error.<domain>.<service> (Adapter: r.error.oe.adapter)
   └─ increment processed.messages / forwarded.messages metric     ← "metrics middleware"
 ```
 

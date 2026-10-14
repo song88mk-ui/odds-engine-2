@@ -102,7 +102,7 @@ Cross-refs to canonical docs. Use with [FrequentlyModifiedAreas.md](./Frequently
 
 **Messages pile up / redelivered repeatedly**
 - A handler throwing → `BasicNack(requeue:true)` loops the poison message. Check error logs +
-  `r.error.*`/`r.oe.adapter.error`. Idempotent upserts make safe retries safe, but a deterministic
+  `r.error.*` (the Adapter publishes `r.error.oe.adapter`). Idempotent upserts make safe retries safe, but a deterministic
   failure won't clear.
 
 ## Config / secrets

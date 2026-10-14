@@ -51,7 +51,7 @@ Classification: **[Verified]** in odds-engine-2 · **[Verified-sibling:X]** conf
 | **White-label feed** | external RabbitMQ vhost `ext`: `uof.onoddschange.*`, `uof.onmarketsettlement.*`, `uof.onbetstop*`, `uof.onheartbeat`, … | external clients (e.g. `TSO`) | [Verified] publish; consumers external [Unknown] |
 | **Fixture close** | `r.bg.receiver.onfixturecchange` (Settlement) | [Unknown] (note the `cchange` typo) | [Verified] publish; consumer [Unknown] |
 | **Liveness** | `r.oe.uof.heartbeat` | OE.UOF.Client (+ monitoring?) | [Verified] |
-| **Error sink** | `r.error.*` / `r.oe.adapter.error` | [Unknown] | [Verified] publish |
+| **Error sink** | `r.error.<domain>.<service>` (`r.error.oe.adapter`, `r.error.oe.translation`, `r.error.oe.translation.job`, `r.error.engine.uof.client`) | [Unknown] | [Verified] publish |
 
 ## 4. backoffice-final ↔ odds-engine-2 (the config/admin seam) — [Verified-sibling:backoffice-final]
 

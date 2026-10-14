@@ -219,7 +219,7 @@ namespace OE.Sportsbook.Service.Tests
             Assert.Empty(repository.Invocations);
         }
 
-        // Contrast with OE.Adapter.Service.Worker: no r.oe.adapter.error publish here — a handler
+        // Contrast with OE.Adapter.Service.Worker: no r.error.oe.adapter publish here — a handler
         // failure is logged and swallowed, full stop.
         [Fact]
         public async Task MessageReceived_HandlerThrows_IsSwallowedWithoutPublishing()

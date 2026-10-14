@@ -206,7 +206,15 @@ namespace OE.Translation.Service
                     if (_processedMessagesCounter.Enabled)
                         _processedMessagesCounter.Add(1, new KeyValuePair<string, object?>("message.type", "error"));
 
-                    _messageBroker.Publish(payload, messageType, $"r.oe.translation.error", correlationId);
+                    var errorMessage = new
+                    {
+                        CorrelationId = correlationId,
+                        Message = ex.Message,
+                        StackTrace = ex.StackTrace,
+                        Payload = payload
+                    };
+
+                    _messageBroker.Publish(errorMessage, $"{messageType}Error", "r.error.oe.translation", correlationId);
 
                     activity?.SetTag("payload", payload);
                     activity?.SetStatus(ActivityStatusCode.Error, ex.Message);

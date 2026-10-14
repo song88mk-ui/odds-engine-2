@@ -19,7 +19,7 @@ namespace OE.Translation.Service.Tests
     // Startup order: preload the translation cache (retried; blocks consuming), then two optional
     // non-fatal migration steps (SeedActiveSnapshot / BackfillActiveSnapshot — Backfill defaults ON
     // unless explicitly disabled), then connect and dispatch. A handler exception publishes to
-    // r.oe.translation.error, mirroring OE.Adapter.Service's Worker.
+    // r.error.oe.translation, mirroring OE.Adapter.Service's Worker.
     public class WorkerTests
     {
         private static BasicDeliverEventArgs Delivery(string messageType, object payload, string correlationId = "cid", string routingKey = "r.oe.translation.test")
@@ -248,9 +248,15 @@ namespace OE.Translation.Service.Tests
             broker.Raise(Delivery(MessageType.ON_FIXTURE_CHANGE, new OnFixtureChangeMessage { PrFiId = "F1" }, correlationId: "cid-err"));
 
             var published = Assert.Single(broker.Published);
-            Assert.Equal("r.oe.translation.error", published.RoutingKey);
-            Assert.Equal(MessageType.ON_FIXTURE_CHANGE, published.MessageType);
+            Assert.Equal("r.error.oe.translation", published.RoutingKey);
+            Assert.Equal($"{MessageType.ON_FIXTURE_CHANGE}Error", published.MessageType);
             Assert.Equal("cid-err", published.CorrelationId);
+
+            using var envelope = JsonDocument.Parse(JsonSerializer.Serialize(published.Payload));
+            Assert.Equal("cid-err", envelope.RootElement.GetProperty("CorrelationId").GetString());
+            Assert.Equal("handler failed", envelope.RootElement.GetProperty("Message").GetString());
+            Assert.False(string.IsNullOrEmpty(envelope.RootElement.GetProperty("StackTrace").GetString()));
+            Assert.Contains("F1", envelope.RootElement.GetProperty("Payload").GetString());
         }
         private sealed class FakeTranslationCache : ITranslationCache
         {

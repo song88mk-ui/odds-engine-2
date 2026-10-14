@@ -28,7 +28,7 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   `ON_BET_STOP_FIXTURE`.
 - **Publishes:** `r.oe.adapter.<type>.<NN>` where `<NN>` = `Helper.GetInstanceName(ProviderFixtureId)`
   (`Repositories/TradingRepository.cs:58,121`); global bet-stop → `...on_bet_stop_global.10`
-  (`:75`); errors → `r.oe.adapter.error` (`Worker.cs:158`).
+  (`:75`); errors → `r.error.oe.adapter` (`Worker.cs:210`).
 - **Reads (SQL `Translation`):** at startup only — `TranslationCache.Preload()` loads the whole
   `TranslationCache2` table into an in-process cache (`Repositories/TranslationCache.cs:67-73`).
   Skipped with a warning when `ConnectionStrings:Translation` is blank (`Worker.cs:96-109`), so the
@@ -120,7 +120,7 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   **external** RabbitMQ broker for a specific client (`ClientCode=TSO`). Applies per-client
   margin (+2%) and Asian odds conversions (Malaysian/Hong Kong/Indonesian). "UOF" = Unified
   Odds Feed **[Likely]**.
-- **Consumes (internal broker):** `r.oe.adapter.#.#`, `r.oe.uof.heartbeat`, `r.of.recovery.#.tso`.
+- **Consumes (internal broker):** `r.oe.adapter.*.*`, `r.oe.uof.heartbeat`, `r.of.recovery.#.tso`.
 - **Publishes (external broker, vhost `ext`):** `uof.onfixture.change.*`, `uof.onoddschange.*`,
   `uof.onbetstop.*`, `uof.onbetstopglobal`, `uof.onmarketsettlement.*`,
   `uof.onmarketcancellation.*`, `uof.onheartbeat`; errors → `r.error.engine.uof.client`.

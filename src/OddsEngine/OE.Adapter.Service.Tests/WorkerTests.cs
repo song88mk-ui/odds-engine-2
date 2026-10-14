@@ -17,7 +17,7 @@ using System.Text.Json;
 namespace OE.Adapter.Service.Tests
 {
     // Worker dispatches on BasicProperties.Type to the matching ITradingRepository method; a
-    // failure in any handler must be caught, published to r.oe.adapter.error, and never crash the
+    // failure in any handler must be caught, published to r.error.oe.adapter, and never crash the
     // consumer loop. Translation preload is skipped when no connection string is configured
     // (deployments ship it empty until argocd injects the real one) and otherwise gates consuming.
     public class WorkerTests
@@ -218,9 +218,19 @@ namespace OE.Adapter.Service.Tests
             broker.Raise(Delivery(MessageType.ON_FIXTURE_CHANGE, new OnFixtureChangeMessage { PrFiId = "F1" }, correlationId: "cid-err"));
 
             var published = Assert.Single(broker.Published);
-            Assert.Equal("r.oe.adapter.error", published.RoutingKey);
-            Assert.Equal(MessageType.ON_FIXTURE_CHANGE, published.MessageType);
+            Assert.Equal("r.error.oe.adapter", published.RoutingKey);
+            Assert.Equal($"{MessageType.ON_FIXTURE_CHANGE}Error", published.MessageType);
             Assert.Equal("cid-err", published.CorrelationId);
+
+            // GM-960: OE.UOF.Client binds r.oe.adapter.#.# and '#' matches zero words, so an error key
+            // under the r.oe.adapter. prefix would be consumed as a normal adapter message.
+            Assert.False(published.RoutingKey.StartsWith("r.oe.adapter.", StringComparison.Ordinal));
+
+            using var envelope = JsonDocument.Parse(JsonSerializer.Serialize(published.Payload));
+            Assert.Equal("cid-err", envelope.RootElement.GetProperty("CorrelationId").GetString());
+            Assert.Equal("handler failed", envelope.RootElement.GetProperty("Message").GetString());
+            Assert.False(string.IsNullOrEmpty(envelope.RootElement.GetProperty("StackTrace").GetString()));
+            Assert.Contains("F1", envelope.RootElement.GetProperty("Payload").GetString());
         }
         private sealed class FakeTranslationCache : ITranslationCache
         {

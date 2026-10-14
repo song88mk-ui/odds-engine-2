@@ -131,7 +131,7 @@ namespace OE.Translation.Job.Tests.Workers
             broker.Raise(Delivery("OnBetPlacement", PlacementJson((1, "16", "1")), correlationId: "cid-err"));
 
             var published = Assert.Single(broker.Published);
-            Assert.Equal("r.oe.translation.job.error", published.RoutingKey);
+            Assert.Equal("r.error.oe.translation.job", published.RoutingKey);
             Assert.Equal("cid-err", published.CorrelationId);
             Assert.Equal(1, broker.AcknowledgeCalls); // best-effort: never requeued
         }

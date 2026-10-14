@@ -19,7 +19,7 @@ namespace OE.Translation.Job.Workers
     public class BetPlacementWorker : BackgroundService
     {
         private const string ON_BET_PLACEMENT = "OnBetPlacement";
-        private const string ERROR_ROUTING_KEY = "r.oe.translation.job.error";
+        private const string ERROR_ROUTING_KEY = "r.error.oe.translation.job";
 
         private static readonly JsonSerializerOptions JsonOptions = new()
         {

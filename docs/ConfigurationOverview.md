@@ -21,7 +21,7 @@
 |---|---|---|---|---|---|
 | Adapter.Service | `q.oe.adapter*` / `r.uof.#` (`r.bg.receiver.#|r.uof.#` in argocd) | — | — | — | — |
 | Sportsbook.Service | `q.sb.engine` / `r.oe.adapter.#.11` (dev stub; prod `.00–.10`) | `Sportsbook` @ 10.49.100.55 | `Translation` @ AWS RDS | `DbContextTimeout=180` | — |
-| UOF.Client | `q.uof.engine.client.TSO` / `r.oe.adapter.#.#|r.oe.uof.heartbeat|r.of.recovery.#.tso` + **external** vhost `ext` | — | `Trading` | `ClientId`, `ClientCode=TSO`, `AsianClient` | PlatformAPI + `x-api-key` |
+| UOF.Client | `q.uof.engine.client.TSO` / `r.oe.adapter.*.*|r.oe.uof.heartbeat|r.of.recovery.#.tso` + **external** vhost `ext` | — | `Trading` | `ClientId`, `ClientCode=TSO`, `AsianClient` | PlatformAPI + `x-api-key` |
 | Websocket.Service | `q.sb.engine.websocket.S88` / 9 piped keys (oddschange, betstop*, betstatus, cashout, wallet, favorites, boosted, sortorder) | reads Sportsbook | — | `ClientCode=S88`, `UseMessagePack`, `IsOEEnabled`, `IsPriority/IsExclusive` | WebSocketAPI `/platform`, PlatformAPI |
 | Job.Lookup | `q.oe.job.lookup` / `r.oe.adapter.onmarketchange.#` | `Sportsbook` @ 10.49.100.55 | — | — | — |
 | Job.Settlement | publisher only | `Sportsbook` | — | `EditSportsbook=true`, `ApiKey`(unused) | — |
@@ -70,7 +70,7 @@ feature toggles, retention, BetGenius creds, etc.).
 | `r.oe.bet.settlement` | Sportsbook → platform-final Settlement.Service | bet settlement |
 | `r.bet.betstatus.s88`, `r.bet.cashoutchange.s88`, `r.wallet.s88` | platform → Websocket | user/account events for push |
 | `r.oe.uof.heartbeat` | KeepAlive → UOF.Client | heartbeat |
-| `r.error.*` / `r.oe.adapter.error` | various | error sink |
+| `r.error.<domain>.<service>`: `r.error.oe.adapter`, `r.error.oe.translation`, `r.error.oe.translation.job`, `r.error.engine.uof.client` | various | error sink (one `r.error.#` binding catches all; GM-960) |
 | `uof.*` (vhost ext) | UOF.Client → external | white-label outbound feed |
 
 ## Environments — [Verified-argocd]

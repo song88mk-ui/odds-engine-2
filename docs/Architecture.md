@@ -28,7 +28,7 @@ workers (`*/Program.cs`, `*/Worker.cs`); the shared broker is
 |---|---|---|---|---|
 | **OE.Adapter.Service** | Normalizer + sticky-shard router | Continuous | `r.uof.#`, `r.bg.receiver.#` | `r.oe.adapter.<type>.<NN>` |
 | **OE.Sportsbook.Service** | Catalogue writer + odds-change publisher | Continuous (sharded 00–10) | `r.oe.adapter.#.<NN>` | MongoDB Sportsbook; `r.oe.sb.engine.on_odds_change`, `r.oe.bet.settlement` |
-| **OE.UOF.Client** | External/white-label feed egress | Continuous | `r.oe.adapter.#.#`, `r.oe.uof.heartbeat`, `r.of.recovery.#.tso` | **External** broker (vhost `ext`): `uof.onoddschange.*`, `uof.onmarketsettlement.*`, … |
+| **OE.UOF.Client** | External/white-label feed egress | Continuous | `r.oe.adapter.*.*`, `r.oe.uof.heartbeat`, `r.of.recovery.#.tso` | **External** broker (vhost `ext`): `uof.onoddschange.*`, `uof.onmarketsettlement.*`, … |
 | **OE.Websocket.Service** | Real-time SignalR push bridge | Continuous | `r.oe.sb.engine.*`, `r.bet.*`, `r.wallet.*` | SignalR `/platform` hub (client); MongoDB reads |
 | **OE.Job.Lookup** | Lookup-table maintainer | Continuous (event-driven) | `r.oe.adapter.onmarketchange.#` | MongoDB `*Lookup` collections |
 | **OE.Job.LiveStream** | Livestream URL sync | Job (60s loop) | — | BetGenius Video API (HTTP) → MongoDB `Fixture` |
