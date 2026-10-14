@@ -15,7 +15,7 @@ namespace OE.Sportsbook.Service.Tests
     // ON_ODDS_CHANGE builders (live market-change and fixture-triggered).
     public class SportsbookRepositoryTests
     {
-        private static SportsbookRepository CreateRepository()
+        internal static SportsbookRepository CreateRepository()
         {
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>

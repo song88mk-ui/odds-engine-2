@@ -18,7 +18,7 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 | `OE.Websocket.Service.Tests` | 165 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
 | `OE.Translation.Service.Tests` | 93 | Translation persistence and the translation-only odds-change path |
 | `OE.Adapter.Service.Tests` | 54 | Adapter routing, trading repository, translation cache |
-| `OE.Sportsbook.Service.Tests` | 40 | Catalogue writes, translation gate, worker dispatch |
+| `OE.Sportsbook.Service.Tests` | 41 | Catalogue writes, translation gate, worker dispatch, dormant `OnMarketCancel` tripwire (GM-959) |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
 | `OE.Job.Cleanup.Tests` | 21 | Orphan sweep: which fixture ids are swept, the delete filters, sweep interval, UTC window |
 | `OE.Job.Lookup.Tests` | 7 | Lookup worker |

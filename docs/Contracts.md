@@ -29,7 +29,7 @@ Defined in `OE.Shared/Messages/*` and `OE.Shared/Constants/MessageType.cs`. Full
 | `OnFixtureChangeMessage` | `OnFixtureChange` | bet-genius/UOF → Adapter → Sportsbook |
 | `OnMarketChangeMessage` | `OnMarketChange` | …→ Sportsbook, Lookup, UOF.Client |
 | `OnMarketSettlementMessage` | `OnMarketSettlement` | …→ Sportsbook |
-| `OnMarketCancellationMessage` | `OnMarketCancel` | …→ Sportsbook |
+| `OnMarketCancellationMessage` | `OnMarketCancel` | …→ Sportsbook, which drops it: no Worker case since DEVOPS-251. The `OnBetCancellation` it would publish on `r.oe.bet.settlement` sends `MarketId` as a string, and platform-final reads a long. Tripwire: `WorkerTests.MessageReceived_OnMarketCancel_IfDispatched_OnBetCancellationMarketIdMustBeNumeric` (GM-959) |
 | `OnBetStopFixtureMessage` / `OnBetStopGlobalMessage` | `OnBetStopFixture` / `OnBetStopGlobal` | …→ Sportsbook → Websocket |
 | `OnBetSettlementMessage` | `OnBetSettlement` | Sportsbook → platform Settlement |
 | `OnInternalOddsChangeMessage` | `OnOddsChange` | Sportsbook → Websocket |

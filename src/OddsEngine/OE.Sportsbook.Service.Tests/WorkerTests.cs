@@ -160,6 +160,40 @@ namespace OE.Sportsbook.Service.Tests
             Assert.Empty(repository.Invocations);
         }
 
+        // GM-959 tripwire. ON_MARKET_CANCEL is dormant (case removed in DEVOPS-251), so
+        // ProcessOnMarketCancellationMessage never runs. Its OnBetCancellation on
+        // r.oe.bet.settlement carries MarketId as a string, but platform-final Settlement reads
+        // it as OnUOFBetCancellation.MarketId (long) and throws JsonException. Green while the
+        // case is dormant; fails if the case returns without the payload fix; green again once
+        // both ship together. If Settlement is changed to accept a string MarketId instead,
+        // update this test. bet-genius docs: AR-17, AD-12.
+        [Fact]
+        public async Task MessageReceived_OnMarketCancel_IfDispatched_OnBetCancellationMarketIdMustBeNumeric()
+        {
+            var workerBroker = new FakeMessageBroker();
+            var repository = new FakeSportsbookRepository();
+            var worker = await StartAndWaitAsync(BuildWorker(workerBroker, repository));
+            var cancellation = new OnMarketCancellationMessage
+            {
+                FiId = 1,
+                Ma = { new MarketBetCancellationMessage { MaId = "2", VoRe = "void reason" } }
+            };
+
+            workerBroker.Raise(Delivery(MessageType.ON_MARKET_CANCEL, cancellation));
+            var dispatched = repository.Invocations.Contains(MessageType.ON_MARKET_CANCEL);
+
+            var broker = new FakeMessageBroker();
+            SportsbookRepositoryTests.CreateRepository().ProcessOnMarketCancellationMessage(broker, cancellation, "cid");
+            var published = Assert.Single(broker.Published, p => p.RoutingKey == "r.oe.bet.settlement");
+            // Serialized as MessageBroker.Publish<T> does: System.Text.Json, default options.
+            using var json = JsonDocument.Parse(JsonSerializer.Serialize(published.Payload));
+            var marketIdKind = json.RootElement.GetProperty("MarketId").ValueKind;
+
+            Assert.False(dispatched && marketIdKind != JsonValueKind.Number,
+                $"Worker now dispatches {MessageType.ON_MARKET_CANCEL}, but OnBetCancellation.MarketId is a JSON {marketIdKind}. "
+                + "platform-final Settlement and CashOutStake cannot read it. Fix the payload with the case (GM-959).");
+        }
+
         [Fact]
         public async Task MessageReceived_UnknownMessageType_IsIgnoredWithoutError()
         {
