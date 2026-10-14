@@ -437,5 +437,61 @@ namespace OE.Translation.Service.Tests
 
             Assert.Null(cache.GetTranslations("Te:99", "Old Name"));
         }
+
+        // GM-875 follow-up: clearing a row's last language used to remove the content-index entry
+        // for its SOURCE_TEXT unconditionally, dropping another row's entry for the same text.
+        [Fact]
+        public void Apply_ClearingLastLanguage_KeepsAnotherRowsContentIndexEntryForTheSameText()
+        {
+            var cache = Cache(nameof(Apply_ClearingLastLanguage_KeepsAnotherRowsContentIndexEntryForTheSameText),
+                Row("Te:1", zh: "甲", sourceText: "Shared Name"));
+
+            cache.Preload();
+
+            // Te:2 shares the text and, announced last, owns the content-index entry for it.
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:2", LaCo = "ZH", Tx = "乙", SrcTx = "Shared Name" }
+            });
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "" }
+            });
+
+            Assert.Equal("乙", cache.GetTranslations("Te:99", "Shared Name")!.Single().Tx);
+
+            // The owner clearing its last language still removes the entry.
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:2", LaCo = "ZH", Tx = "" }
+            });
+
+            Assert.Null(cache.GetTranslations("Te:99", "Shared Name"));
+        }
+
+        // A rename that also clears the last language: the row never wrote an entry under the new
+        // text, so another row's entry for it must survive; the old-text entry still goes.
+        [Fact]
+        public void Apply_SourceTextRenameClearingLastLanguage_KeepsAnotherRowsEntryForTheNewText()
+        {
+            var cache = Cache(nameof(Apply_SourceTextRenameClearingLastLanguage_KeepsAnotherRowsEntryForTheNewText),
+                Row("Te:1", zh: "旧", sourceText: "Old Name"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:2", LaCo = "ZH", Tx = "新", SrcTx = "New Name" }
+            });
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "", SrcTx = "New Name" }
+            });
+
+            Assert.Equal("新", cache.GetTranslations("Te:99", "New Name")!.Single().Tx);
+            Assert.Null(cache.GetTranslations("Te:99", "Old Name"));
+        }
     }
 }

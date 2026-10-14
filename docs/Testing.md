@@ -16,8 +16,8 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 |---|---|---|
 | `OE.Shared.Test` | 186 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
 | `OE.Websocket.Service.Tests` | 165 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
-| `OE.Translation.Service.Tests` | 99 | Translation persistence and the translation-only odds-change path |
-| `OE.Adapter.Service.Tests` | 59 | Adapter routing, trading repository, translation cache |
+| `OE.Translation.Service.Tests` | 102 | Translation persistence and the translation-only odds-change path |
+| `OE.Adapter.Service.Tests` | 61 | Adapter routing, trading repository, translation cache |
 | `OE.Sportsbook.Service.Tests` | 41 | Catalogue writes, translation gate, worker dispatch, dormant `OnMarketCancel` tripwire (GM-959) |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
 | `OE.Job.Cleanup.Tests` | 21 | Orphan sweep: which fixture ids are swept, the delete filters, sweep interval, UTC window |
@@ -25,7 +25,7 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 625 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
+All 630 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
 2026-10-14 from a full `dotnet test` run; the previous table had drifted (its total was also one
 below the sum of its rows).
 

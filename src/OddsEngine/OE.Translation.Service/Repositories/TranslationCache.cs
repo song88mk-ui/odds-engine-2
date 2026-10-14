@@ -243,8 +243,11 @@ namespace OE.Translation.Service.Repositories
                 {
                     if (_translations.TryGetValue(item.StId, out var refreshed))
                         _translationsByText[sourceText] = refreshed;
-                    else
-                        _translationsByText.TryRemove(sourceText, out _);
+                    // Last language cleared: drop the entry only while it is still this row's own
+                    // list (remove-if-same, GM-875 follow-up). Another row with the same text may
+                    // own it, and after a rename this row never wrote one under the new text.
+                    else if (previousList != null)
+                        _translationsByText.TryRemove(new KeyValuePair<string, List<TranslationMessage>>(sourceText, previousList));
                 }
             }
         }

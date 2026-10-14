@@ -24,7 +24,9 @@ everything is either **TTL-expiry only** or reloaded at startup. All [Verified] 
 >   `OE.Adapter.Service/Repositories/TradingRepository.cs:107`). A delta whose `SrcTx` differs from the
 >   row's known SOURCE_TEXT, ignoring case, is a **rename**: `Apply` drops the content-index entry under
 >   the old text, but only while that entry is still the renamed row's own list, so another row's entry
->   for the same text survives (GM-875). A case-only change is not a rename. Remaining gaps:
+>   for the same text survives (GM-875). A case-only change is not a rename. Clearing a row's last
+>   language removes the entry under its text with the same ownership check, so another row's entry
+>   survives that too (GM-875 follow-up). Remaining gaps:
 >   [TechnicalDebt.md](./TechnicalDebt.md) L11.
 
 ## Invalidation mechanisms in play
