@@ -193,6 +193,12 @@ namespace OE.Translation.Service.Repositories
                     continue;
                 }
 
+                // Read before the update (GM-875): AddOrUpdate is copy-on-write, so afterwards the
+                // row's list is a new instance and no longer the one the content index holds under
+                // the row's previous SOURCE_TEXT.
+                _translations.TryGetValue(item.StId, out var previousList);
+                _sourceTextByStringId.TryGetValue(item.StId, out var previousText);
+
                 _translations.AddOrUpdate(
                     item.StId,
                     _ => string.IsNullOrEmpty(item.Tx)
@@ -218,7 +224,18 @@ namespace OE.Translation.Service.Repositories
                 // immediately — without this, a new wording's translation was only findable by
                 // text after the next preload/restart. Null from older senders is fine.
                 if (!string.IsNullOrEmpty(item.SrcTx))
+                {
+                    // SOURCE_TEXT rename (GM-875): drop the content-index entry under the old text,
+                    // or it keeps a frozen pre-rename copy of this row's translations that
+                    // GetTranslations would serve to any entity still using the old wording. Only
+                    // remove it while it is still this row's own list (remove-if-same): another row
+                    // with the same text may have written it since. A case-only change is not a rename.
+                    if (previousList != null && !string.IsNullOrEmpty(previousText)
+                        && !string.Equals(previousText, item.SrcTx, StringComparison.OrdinalIgnoreCase))
+                        _translationsByText.TryRemove(new KeyValuePair<string, List<TranslationMessage>>(previousText, previousList));
+
                     _sourceTextByStringId[item.StId] = item.SrcTx;
+                }
 
                 // Keep the content index in sync for rows whose SOURCE_TEXT we know (preloaded
                 // rows) so a subsequent content-fallback lookup doesn't serve a stale list.

@@ -19,12 +19,19 @@ everything is either **TTL-expiry only** or reloaded at startup. All [Verified] 
 >   GM-852): only open markets whose `MaNa` matches it, ignoring case, are updated. A base `MaTe:{id}`
 >   row therefore no longer updates every wording of its template; a delta without `SrcTx` (older
 >   senders) still does. Tested in `MongoTranslationRepositoryTests` (GM-874).
+>   Both `OE.Translation.Service` and `OE.Adapter.Service` also apply each delta to their in-process
+>   `TranslationCache` (`OE.Translation.Service/Worker.cs:188`,
+>   `OE.Adapter.Service/Repositories/TradingRepository.cs:107`). A delta whose `SrcTx` differs from the
+>   row's known SOURCE_TEXT, ignoring case, is a **rename**: `Apply` drops the content-index entry under
+>   the old text, but only while that entry is still the renamed row's own list, so another row's entry
+>   for the same text survives (GM-875). A case-only change is not a rename. Remaining gaps:
+>   [TechnicalDebt.md](./TechnicalDebt.md) L11.
 
 ## Invalidation mechanisms in play
 | Cache | Invalidation | Trigger |
 |---|---|---|
 | `sb:translation:*` | **message-driven purge** — **now a no-op (cache never populated)** | `ON_DYNAMIC_TRANSLATION_CHANGE` / `OnDeleteCacheMessage` |
-| Adapter `TranslationCache` | **none** — full reload at process start only | restart (or `ON_TRANSLATION_CHANGE` handled out-of-band by `OE.Translation.Service`) |
+| Adapter `TranslationCache` | **no purge**; preloaded at process start, then updated in place by `ON_TRANSLATION_CHANGE` deltas (`TranslationCache.Apply`, dispatched at `Worker.cs:189-193`) | restart, or an `ON_TRANSLATION_CHANGE` delta (`OE.Translation.Service` applies the same deltas to its own copy) |
 | `bg:auth` | TTL = token `ExpiresIn`; **delete on API error** | expiry / error |
 | `bg:fixture:*` | TTL ~5h (incl. negative `Bet_Not_Found`) | expiry |
 | `mtpp` (player props) | TTL **1 year**; loaded once at startup | expiry only (effectively never) |

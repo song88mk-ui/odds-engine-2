@@ -415,5 +415,117 @@ namespace OE.Adapter.Service.Tests
             Assert.NotNull(translated);
             Assert.Equal("新", translated!.Single().Tx);
         }
+
+        // GM-875: a SOURCE_TEXT rename (a Backoffice edit on a language tab sends the new SrcTx for
+        // an existing STRING_ID) used to leave the content-index entry under the OLD text holding a
+        // frozen pre-rename copy of the row's translations. Any entity still using the old wording
+        // was served it, and later edits to the row never reached it.
+        [Fact]
+        public void Apply_SourceTextRename_StopsServingTheFrozenTranslationUnderTheOldText()
+        {
+            var cache = Cache(nameof(Apply_SourceTextRename_StopsServingTheFrozenTranslationUnderTheOldText),
+                Row("Te:1", zh: "旧", sourceText: "Old Name"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "新", SrcTx = "New Name" }
+            });
+
+            // A different, unseen key still using the old wording must not get the renamed row's
+            // pre-rename translation.
+            Assert.Null(cache.GetTranslations("Te:99", "Old Name"));
+        }
+
+        [Fact]
+        public void Apply_SourceTextRename_MakesTheNewTextContentAddressableWithEveryLanguage()
+        {
+            var cache = Cache(nameof(Apply_SourceTextRename_MakesTheNewTextContentAddressableWithEveryLanguage),
+                Row("Te:1", zh: "旧", es: "Viejo", sourceText: "Old Name"));
+
+            cache.Preload();
+
+            // Backoffice publishes one item per edited language, each carrying the new SrcTx.
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "新", SrcTx = "New Name" },
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ES", Tx = "Nuevo", SrcTx = "New Name" }
+            });
+
+            var translated = cache.GetTranslations("Te:99", "New Name");
+
+            Assert.NotNull(translated);
+            Assert.Equal("新", translated!.Single(t => t.LaCo == "ZH").Tx);
+            Assert.Equal("Nuevo", translated.Single(t => t.LaCo == "ES").Tx);
+            Assert.Null(cache.GetTranslations("Te:99", "Old Name"));
+        }
+
+        // The index entry is only removed while it is still this row's own list: another row with
+        // the same old text may have written it since, and its entry must survive the rename.
+        [Fact]
+        public void Apply_SourceTextRename_KeepsAnotherRowsContentIndexEntryForTheSameOldText()
+        {
+            var cache = Cache(nameof(Apply_SourceTextRename_KeepsAnotherRowsContentIndexEntryForTheSameOldText),
+                Row("Te:1", zh: "旧A", sourceText: "Old Name"));
+
+            cache.Preload();
+
+            // Te:2 shares the old text and, announced last, owns the content-index entry for it.
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:2", LaCo = "ZH", Tx = "旧B", SrcTx = "Old Name" }
+            });
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "新A", SrcTx = "New Name" }
+            });
+
+            Assert.Equal("旧B", cache.GetTranslations("Te:99", "Old Name")!.Single().Tx);
+            Assert.Equal("新A", cache.GetTranslations("Te:99", "New Name")!.Single().Tx);
+        }
+
+        // A case-only change is the same text, not a rename (see the 2026-07-14 incident above).
+        [Fact]
+        public void Apply_CaseOnlySourceTextChange_IsNotARename_KeepsTheContentIndexEntry()
+        {
+            var cache = Cache(nameof(Apply_CaseOnlySourceTextChange_IsNotARename_KeepsTheContentIndexEntry),
+                Row("Te:1", zh: "旧", sourceText: "Old Name"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "新", SrcTx = "OLD NAME" }
+            });
+
+            Assert.Equal("新", cache.GetTranslations("Te:99", "Old Name")!.Single().Tx);
+            Assert.Equal("新", cache.GetTranslations("Te:99", "OLD NAME")!.Single().Tx);
+        }
+
+        // An earlier delta replaces the row's list and refreshes the index entry with the new
+        // instance, so the rename must compare against the row's list as it was just before this
+        // change, not the one loaded at preload.
+        [Fact]
+        public void Apply_SourceTextRename_AfterAnEarlierDelta_StillRemovesTheOldTextEntry()
+        {
+            var cache = Cache(nameof(Apply_SourceTextRename_AfterAnEarlierDelta_StillRemovesTheOldTextEntry),
+                Row("Te:1", zh: "旧", sourceText: "Old Name"));
+
+            cache.Preload();
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "旧2" }
+            });
+
+            cache.Apply(new List<TranslationChangeItem>
+            {
+                new TranslationChangeItem { StId = "Te:1", LaCo = "ZH", Tx = "新", SrcTx = "New Name" }
+            });
+
+            Assert.Null(cache.GetTranslations("Te:99", "Old Name"));
+        }
     }
 }

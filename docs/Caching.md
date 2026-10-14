@@ -56,7 +56,8 @@ The BetGenius pattern:
 into an in-process dictionary **once at startup**, and `TradingRepository` then stamps `*Tr` onto every
 outgoing message from memory — zero SQL on the hot path.
 - **Trade-off:** a translation added after startup is not picked up until the next restart *or* until an
-  `ON_TRANSLATION_CHANGE` message drives `OE.Translation.Service`'s delta path.
+  `ON_TRANSLATION_CHANGE` delta is applied to the cache (`TranslationCache.Apply`; `OE.Adapter.Service`
+  and `OE.Translation.Service` each apply it to their own copy).
 - If `ConnectionStrings:Translation` is blank the preload is **skipped with a warning** and the service
   starts anyway (`Worker.cs:96-109`) — it simply publishes no `*Tr`.
 
