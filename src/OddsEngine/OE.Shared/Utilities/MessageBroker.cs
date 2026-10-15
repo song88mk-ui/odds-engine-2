@@ -64,6 +64,15 @@ namespace OE.Shared.Utilities
             _logger = logger;
         }
 
+        /// <summary>
+        /// True while the consumer started by <see cref="Connect"/> / <see cref="ConnectWithManualAck"/> is
+        /// registered on the broker. RabbitMQ.Client sets it to false when the broker cancels the consumer
+        /// (ConsumerCancelled) or the channel closes (ModelShutdown), and back to true when automatic
+        /// recovery re-registers it. A broker cancel or a channel-only close is never recovered, so a
+        /// liveness probe on this value restarts a service whose consumer is gone.
+        /// </summary>
+        public bool IsConsuming => _consumer?.IsRunning == true;
+
         public void Acknowledge(BasicDeliverEventArgs e)
         {
             _consumer.Model.BasicAck(e.DeliveryTag, false);
@@ -196,6 +205,7 @@ namespace OE.Shared.Utilities
                     _model.BasicQos(0, _prefetchCount, false);
                     _consumer = new EventingBasicConsumer(_model);
                     _consumer.Received += HandleMessage;
+                    LogConsumerStops(_consumer);
 
                     _model.BasicConsume(_queue, false, $"{_consumerName}.{Guid.NewGuid()}", _consumer);
                 }
@@ -302,10 +312,29 @@ namespace OE.Shared.Utilities
                     _model.BasicQos(0, _prefetchCount, false);
                     _consumer = new EventingBasicConsumer(_model);
                     _consumer.Received += HandleMessageWithManualAck;
+                    LogConsumerStops(_consumer);
 
                     _model.BasicConsume(_queue, false, $"{_consumerName}.{Guid.NewGuid()}", _consumer);
                 }
             }
+        }
+
+        // Make a stopped consumer visible in the logs (IsConsuming turns false at the same moment).
+        // Our own Dispose() is not logged.
+        private void LogConsumerStops(EventingBasicConsumer consumer)
+        {
+            consumer.ConsumerCancelled += (_, e) =>
+            {
+                if (consumer.Model?.IsOpen == true) // channel still open: the broker cancelled the consumer
+                    _logger.LogWarning("RabbitMQ consumer {ConsumerTag} on queue {Queue} cancelled by the broker",
+                            e.ConsumerTag, _queue);
+            };
+            consumer.Shutdown += (_, e) =>
+            {
+                if (e.Initiator != ShutdownInitiator.Application)
+                    _logger.LogWarning("RabbitMQ consumer channel on queue {Queue} shut down: {ReplyCode} {ReplyText}",
+                            _queue, e.ReplyCode, e.ReplyText);
+            };
         }
 
         private void HandleMessageWithManualAck(object sender, BasicDeliverEventArgs e)
