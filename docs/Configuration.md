@@ -61,6 +61,9 @@ Plain boolean/numeric config keys act as feature flags (no FeatureManagement lib
 | `Custom:UseMessagePack` | Websocket | SignalR MessagePack vs JSON |
 | `Custom:AsianClient` | UOF.Client | enable Asian odds formats (Websocket `Custom:AsianClientCodes` removed in GM-811) |
 | `MessageBroker:IsExclusive` / `IsPriority` | broker users | exclusive autodelete queue / `x-max-priority=10` |
+| `MessageBroker:PrefetchCount` | broker users | consumer QoS, default 1000. Job.Lookup sets 10 in its `appsettings.json` (DEVOPS-443): keep `prefetch x worst-case handler time` under the broker ack timeout (30 min on STG) |
+| `Custom:ConsumerCheckSeconds` / `ConsumerDeadChecks` | Job.Lookup | consumer watchdog: check `IsConsuming` every 30 s and fail the host after 2 consecutive misses, so the pod restarts |
+| `Custom:StatusLogSeconds` / `SlowMessageMilliseconds` | Job.Lookup | status log line every 60 s; warn when one message takes 5000 ms or more |
 | `Custom:EnableAzureSignalRService` | (platform-web only — not OEv2) | — |
 | `Telemetry:Enabled` | all | telemetry on/off |
 | `Custom:UtcWindowHours:Start/End`, `Custom:SportRetention` | Cleanup | window + retention tuning |

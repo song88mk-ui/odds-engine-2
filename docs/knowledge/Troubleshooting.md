@@ -95,6 +95,19 @@ Cross-refs to canonical docs. Use with [FrequentlyModifiedAreas.md](./Frequently
 - Exclusive queue? Name gets an MD5-hostname suffix — multiple replicas get separate queues.
 - Connection retries 3× then throws `RetryableConnectionException`. ([../ImplementationPatterns.md](../ImplementationPatterns.md))
 
+**Queue grows, 0 consumers, but the pod is Running (DEVOPS-443)**
+- Signature on the broker (management API `/api/connections`): the pod's connection is open with `channels: 0`, and no
+  consumer with the service's tag exists. In Loki the pod's last line is old; for Job.Lookup the `Lookup consumer status`
+  line has stopped or shows `IsConsuming=False`.
+- Cause: RabbitMQ.Client recovers a lost connection but not a channel the broker closes (for example `406 ... delivery
+  acknowledgement timed out`, limit 30 min on STG) or a consumer it cancels (queue deleted). A handler that blocks, for
+  example on Mongo server selection (30 s per message), with prefetch 1000 passes that limit. `MessageBroker.LogConsumerStops`
+  logs `RabbitMQ consumer channel on queue {Queue} shut down: {ReplyCode} {ReplyText}`; images built before DEVOPS-410
+  (2026-10-15) do not.
+- Fix: restart the pod. A deleted queue is only re-declared when the service connects. Job.Lookup now fails the host and
+  restarts itself after 2 checks of 30 s ([../Logging.md](../Logging.md) section 3b); the other consumers need a manual
+  restart ([../TechnicalDebt.md](../TechnicalDebt.md) H9).
+
 **Websocket pod is Running but pushes nothing; its log ends with `BackgroundService failed`**
 - Pre-GM-791 signature (fixed 2026-09-03): `HttpRequestException: Connection refused
   (websocket-api.platform.svc:3000)` from `Worker.ExecuteAsync`, then the `StopHost` Fatal line, then
@@ -127,6 +140,7 @@ Cross-refs to canonical docs. Use with [FrequentlyModifiedAreas.md](./Frequently
 
 **LiveStream not updating stream URLs** — `Custom:Enabled` true? Only `ChannelType.BG` processed;
 BetGenius token/`x-api-key` valid? 60s loop, 5-min backoff on error.
+**Lookup queue growing** (`q.oe.job.lookup`) - see "Queue grows, 0 consumers, but the pod is Running" under Messaging / connectivity.
 **Cleanup not deleting** — disabled by default (`Custom:Enabled=false`); only runs in the UTC window;
 window can't cross midnight. Per-doc delete loop is slow.
 **KeepAlive says healthy but things are broken** — `IsHealthy` is **hardcoded true**; it's a liveness

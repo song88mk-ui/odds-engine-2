@@ -157,12 +157,15 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 ## OE.Job.Lookup — lookup-table maintainer
 
 - **Purpose:** Maintains denormalized reference collections used for UI filtering/dropdowns.
-- **Type:** Event-driven continuous worker (no timer).
+- **Type:** Event-driven continuous worker (message handler plus a 30 s consumer check loop).
 - **Consumes:** `r.oe.adapter.onmarketchange.#` (`ON_MARKET_CHANGE`).
 - **Writes (MongoDB):** `SportLookup`, `SegmentLookup`, `LeagueLookup`, `MarketLookup`,
   `SelectionLookup` — all upsert, unordered.
-- **Notes:** minimal Program.cs (no Serilog/telemetry registration); silent exception swallow
-  in the message handler; inefficient manual Pascal-casing.
+- **Notes:** Serilog and OpenTelemetry (`Instrumentation`, `AddTelemetry`) since DEVOPS-443; the message handler logs a failed
+  message with its fixture, redelivery flag and handler time, then acks and drops it; inefficient manual
+  Pascal-casing. `PrefetchCount` is 10 (not the 1000 default) and a watchdog in `Worker.cs` fails the host
+  (exit code 1, the pod restarts) when the RabbitMQ consumer is lost for 2 checks of 30 s. Details:
+  [Logging.md](./Logging.md) section 3b, [TechnicalDebt.md](./TechnicalDebt.md) H9.
 
 ---
 

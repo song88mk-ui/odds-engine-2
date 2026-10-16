@@ -14,7 +14,7 @@ come from argocd env (`__` delimiter) + AWS Secrets Manager. Full mechanics:
 | `MessageBroker:Queue` | — | queue (MD5-hostname suffix if exclusive) |
 | `MessageBroker:Consumer` | — | consumer-tag prefix |
 | `MessageBroker:RoutingKey` | "" | `|`-separated bind patterns |
-| `MessageBroker:PrefetchCount` | 1000 | QoS |
+| `MessageBroker:PrefetchCount` | 1000 (Lookup: 10) | QoS |
 | `MessageBroker:IsExclusive` / `:IsPriority` | false | exclusive autodelete / `x-max-priority=10` |
 
 ## `ExternalMessageBroker` (UOF.Client only) — same shape, vhost `ext`, publish-only.
@@ -24,6 +24,8 @@ come from argocd env (`__` delimiter) + AWS Secrets Manager. Full mechanics:
 |---|---|---|
 | `Custom:MongoDB-Sportsbook` | Sportsbook, Lookup, LiveStream, Settlement, Cleanup, Websocket | Mongo conn string |
 | `Custom:DbContextTimeout` | Sportsbook | SQL command timeout (180s) |
+| `Custom:ConsumerCheckSeconds` / `Custom:ConsumerDeadChecks` | Lookup | consumer watchdog interval (30 s) and consecutive misses before the host fails (2) |
+| `Custom:StatusLogSeconds` / `Custom:SlowMessageMilliseconds` | Lookup | status log interval (60 s) and slow-message warning threshold (5000 ms) |
 | `Custom:Trading` | UOF.Client | Trading SQL conn string |
 | `Custom:ClientId` / `Custom:ClientCode` | UOF.Client (`TSO`), Websocket (`S88`) | tenant id/code |
 | `Custom:AsianClient` | UOF.Client | enable Asian odds formats (Websocket `Custom:AsianClientCodes` removed in GM-811) |

@@ -69,9 +69,10 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
   load distribution (digit-suffix uniformity).
 
 ### R5 🟠 Silent failure modes mask incidents
-- **Evidence:** `w=0` unacked Mongo writes; empty `catch {}` (Lookup, UOF Platform repo); `async void`
-  startup load; KeepAlive `IsHealthy` hardcoded true.
-- **Files:** Mongo conn string + `SportsbookRepository.cs:583`; `OE.Job.Lookup/Worker.cs:81-84`;
+- **Evidence:** `w=0` unacked Mongo writes; empty `catch {}` (UOF Platform repo); `async void`
+  startup load; KeepAlive `IsHealthy` hardcoded true; a consumer the broker closes or cancels is never
+  restarted and the pod looks healthy (DEVOPS-443, [TechnicalDebt.md](./TechnicalDebt.md) H9).
+- **Files:** Mongo conn string + `SportsbookRepository.cs:583`;
   `OE.UOF.Client/Repository/PlatformRepository.cs:33,43-45`; `OE.Job.KeepAlive/Worker.cs`.
 - **Impact:** failures invisible to logs/monitoring; false-healthy signals. **Confidence:** High.
 - **Suggested investigation:** add targeted logging in a non-prod build to quantify how often these
@@ -163,7 +164,7 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
 |---|---|---|---|---|
 | V1 | Class names misdescribe responsibility/store | `TradingRepository` (Adapter=router, UOF=SQL), `PlatformRepository` (HTTP) | High | confirm intent / naming history |
 | V2 | Dual Mongo client (DI vs self-newed) | `Program.cs:61-68` vs `SportsbookRepository.cs:340` | High | confirm whether the DI client is meant to be used |
-| V3 | `OE.Job.Lookup` skips Serilog/telemetry | `OE.Job.Lookup/Program.cs` | High | confirm logging path for this job in prod |
+| V3 | ~~`OE.Job.Lookup` skips Serilog/telemetry~~ **RESOLVED 2026-10-16 (DEVOPS-443)**: both are wired like the other jobs; Prometheus scraping is still off for it in argocd (`metrics.enabled: false`) | `OE.Job.Lookup/Program.cs` | High | see [TechnicalDebt.md](./TechnicalDebt.md) M5 |
 | V4 | Settlement reads but doesn't write Mongo despite `EditSportsbook` | `OE.Job.Settlement` | Medium | trace who actually writes the fixture-close |
 | V5 | Build relies on CI matrix, not the `.sln` (KeepAlive absent; OE.API dead) | `OddsEngine.sln`, `.github/workflows/ci.yml` | High | confirm KeepAlive is intended; confirm OE.API removable |
 
@@ -173,7 +174,7 @@ Per Phase-10 rules, **no refactoring is suggested** — only investigation. Seve
 | `SportsbookRepository` | **6** | Cleanup/LiveStream/Lookup/Settlement/Sportsbook/Websocket `*/SportsbookRepository.cs` | High | confirm whether divergence is intentional per-service vs copy-paste drift |
 | `TradingRepository` | 2 | Adapter (router) + UOF.Client (SQL) | High | (different roles — likely intentional) |
 | `BaseResponseDTO` | 2 | `OE.Shared/Models/Responses` + `OE.UOF.Client/Models/DTOs` | High | confirm which is canonical; check for field drift |
-| `Instrumentation` | 8 | per-service `Telemetry/Instrumentation.cs` | High | intentional per-service telemetry boilerplate |
+| `Instrumentation` | 10 | per-service `Telemetry/Instrumentation.cs` | High | intentional per-service telemetry boilerplate |
 | Mongo `Data/Sportsbook` schema | 2 repos | OEv2 `OE.Shared` + backoffice-final inline copy | Medium (sibling) | diff for drift (#24) |
 
 ## Inconsistent patterns (system-level)

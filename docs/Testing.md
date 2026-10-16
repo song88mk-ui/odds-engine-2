@@ -21,13 +21,13 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 | `OE.Sportsbook.Service.Tests` | 41 | Catalogue writes, translation gate, worker dispatch, dormant `OnMarketCancel` tripwire (GM-959) |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
 | `OE.Job.Cleanup.Tests` | 21 | Orphan sweep: which fixture ids are swept, the delete filters, sweep interval, UTC window |
-| `OE.Job.Lookup.Tests` | 7 | Lookup worker |
+| `OE.Job.Lookup.Tests` | 20 | Lookup worker: dispatch, error and slow-message logging, consumer watchdog and status line, telemetry counter, duration histogram and spans (DEVOPS-443) |
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 630 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
+All 643 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
 2026-10-14 from a full `dotnet test` run; the previous table had drifted (its total was also one
-below the sum of its rows).
+below the sum of its rows). The `OE.Job.Lookup.Tests` row and the total were re-measured 2026-10-16 (DEVOPS-443).
 
 ```bash
 # everything

@@ -40,7 +40,7 @@ container**, and only one helper-extension pattern (LiveStream's `AddProviders()
 | Translation.Job | ❌ | `IMessageBroker` | — | `AddDbContextPool<TranslationContext>` | — | `ITranslationCleanupRepository` (**Scoped** — the only non-Singleton repo) ², two `IHostedService`s (`BetPlacementWorker`, `CleanupWorker`) |
 | UOF.Client | ✅ | `IMessageBroker` (internal+external use of same singleton) | `IMemCache` | (Trading via repo `new` context) | (Platform via repo) | `IClientRepository`, `IPlatformRepository`, `ITradingRepository` |
 | Websocket | ✅ | `IMessageBroker` | `IMemCache` | (Mongo via repo) | (Platform via repo) | `ISportsbookRepository`; SignalR `HubConnection` built in Worker |
-| Lookup | ❌ | `IMessageBroker` | — | `IMongoClient` | — | `ISportsbookRepository` |
+| Lookup | `Instrumentation` + `AddTelemetry` | `IMessageBroker` | - | `IMongoClient` | - | `ISportsbookRepository` |
 | Settlement | ✅ | `IMessageBroker` | — | (Mongo via repo) | `AddHttpClient()` (default) | `ISportsbookRepository` |
 | LiveStream | ✅ | — | `IMemCache` (in AddProviders) | (Mongo via repo) | `AddHttpClient<IBetGeniusRepository, BetGeniusRepository>()` | `AddProviders()` (factory+provider), `ISportsbookRepository` |
 | Cleanup | ✅ | — | — | (Mongo via repo) | — | `ISportsbookRepository` |

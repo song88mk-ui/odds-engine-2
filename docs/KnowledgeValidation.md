@@ -65,7 +65,7 @@ Suggested investigation**; **no refactoring is suggested**.
 | Duplicate `SportsbookRepository` | **Confirmed — 6 copies** | `find SportsbookRepository.cs` → 6 services | High |
 | Duplicate `TradingRepository` | **Confirmed — 2** (router vs SQL) | Adapter + UOF.Client | High |
 | Duplicate `BaseResponseDTO` | **Confirmed — 2** | `OE.Shared/Models/Responses` + `OE.UOF.Client/Models/DTOs` | High |
-| Per-service `Instrumentation` | 8 copies (intentional boilerplate) | `find Instrumentation.cs` → 8 | High |
+| Per-service `Instrumentation` | 10 copies (intentional boilerplate; 9 before DEVOPS-443 added Job.Lookup, so the earlier 8 was already stale) | `find Instrumentation.cs` → 10 | High |
 
 ## Coverage gaps (not fully analyzed)
 | Gap | Why | Suggested investigation |

@@ -15,8 +15,8 @@ recognize them when reading/extending the code. This is the *pattern* view; the 
   instead of nack/requeue. (H2)
 
 ## Error handling
-- **Silent exception swallowing.** Empty `catch {}` with no log: Job.Lookup message handler
-  (`Worker.cs:81-84`); UOF.Client `PlatformRepository` (`:43-45`). Failures become invisible. (M4)
+- **Silent exception swallowing.** Empty `catch {}` with no log: UOF.Client
+  `PlatformRepository` (`:43-45`). Failures become invisible. (M4)
 - **`async void` fire-and-forget.** `PlatformRepository.ProcessMarketTemplatePlayerProps()` is
   `async void` — exceptions can't be caught by the caller and a startup failure is silent. (H5/M4)
 - **`Environment.Exit(1)` as error handling** (Websocket) — bypasses graceful shutdown. (H2)
@@ -69,7 +69,7 @@ recognize them when reading/extending the code. This is the *pattern* view; the 
 - **No trace-id enricher** in Serilog — a log line can't be tied to its trace without manual correlation.
 
 ## Consistency drift (team-level)
-- Mixed `MongoDB.Driver` versions (3.4.0 vs 3.6.0), `OE.Job.Lookup` missing Serilog/telemetry,
+- Mixed `MongoDB.Driver` versions (3.4.0 vs 3.6.0),
   mixed `Nullable`/`ImplicitUsings`, Dockerfile `ENTRYPOINT`/`CMD` and output-path variance,
   two `Program.cs` styles. (TFMs and `Microsoft.Extensions.*` versions unified by GM-751.)
 

@@ -4,14 +4,16 @@ Logging, tracing, and metrics across the worker fleet. All [Verified].
 
 ## 1. Framework — Serilog + OpenTelemetry
 
-- **Serilog** is the logging framework in 8/9 services, wired via
+- **Serilog** is the logging framework in every service and job except `OE.Translation.Job` (checked 2026-10-16), wired via
   `.UseSerilog((ctx,_,cfg) => cfg.ReadFrom.Configuration(ctx.Configuration))` in `Program.cs`.
   Config-driven (the `Serilog` appsettings section), so sinks/levels/enrichers are deployment-tunable.
 - **OpenTelemetry** (via the private `Infra.Extensions.Telemetry` package + `OpenTelemetry.Api`)
   provides traces and metrics. This is the operationally important pillar (see §4–5).
-- **Outlier:** `OE.Job.Lookup` does **not** call `UseSerilog` — it uses the default
-  `Microsoft.Extensions.Logging` console logger only. Normalize when touched
-  ([TechnicalDebt.md](./TechnicalDebt.md) M5).
+- **Job.Lookup** is on Serilog since DEVOPS-443 ([TechnicalDebt.md](./TechnicalDebt.md) M5, resolved). It used
+  the default console logger before, which wrote every line of a stack trace as its own Loki entry (about 21
+  entries per failed message, measured on STG 2026-10-15). The argocd
+  `Serilog__WriteTo__0__Args__formatter` env was already set for dev, stg and prd, so it now logs compact JSON
+  like the other services, and it registers OpenTelemetry the way they do (section 5).
 
 > Note platform-web (the web repo) uses plain `builder.Logging.ClearProviders().AddConsole()` —
 > different from OEv2's Serilog. Don't assume parity between repos.
@@ -85,6 +87,27 @@ catch (Exception ex)
 
 This standard was applied across the services in DEVOPS-370.
 
+## 3b. Job.Lookup consumer health logging (DEVOPS-443)
+
+`OE.Job.Lookup` watches its own RabbitMQ consumer and says what it is doing. All lines come from
+`OE.Job.Lookup/Worker.cs`.
+
+| Line | Level | Meaning |
+|---|---|---|
+| `Connected. Processing Incoming messages from queue {Queue} with prefetch {PrefetchCount}` | Information | startup; `PrefetchCount` is `unset` when the key is absent (the broker wrapper then uses 1000) |
+| `Lookup consumer status: IsConsuming=... Received=... Failed=... AvgMs=... MaxMs=... LastMessageAgoSeconds=...` | Information | every `Custom:StatusLogSeconds` (60 s); the counters cover the last interval. No line at all means the process is gone, `Received=0` for several lines while the queue grows means the consumer is stuck, `IsConsuming=False` means the consumer was lost |
+| `RabbitMQ consumer on queue {Queue} is not consuming, check {Misses} of {Limit}` | Warning | `IsConsuming` was false at a `Custom:ConsumerCheckSeconds` (30 s) check |
+| `Lookup consumer status` at Error, then `BackgroundService failed` | Error | the consumer stayed down for `Custom:ConsumerDeadChecks` (2) checks: the worker throws, the host stops, `Program.Main` returns 1 and Kubernetes restarts the pod |
+| `Error processing message {MessageType} for fixture {FixtureId}, redelivered {Redelivered}, after {ElapsedMs} ms` | Error | the handler failed, the exception is attached; the message is acked and dropped |
+| `Slow message {MessageType} for fixture {FixtureId} took {ElapsedMs} ms` | Warning | a message took at least `Custom:SlowMessageMilliseconds` (5000 ms) |
+
+Why a watchdog: RabbitMQ.Client recovers a lost connection but not a channel the broker closes or a consumer
+it cancels. `IsConsuming` (`MessageBroker.IsConsuming`) is false in those cases and true again once automatic
+recovery re-registers the consumer, so only a consumer that stays down fails the host. The reason for a lost
+consumer is logged by `MessageBroker.LogConsumerStops` (`RabbitMQ consumer channel on queue {Queue} shut down:
+{ReplyCode} {ReplyText}` or `... cancelled by the broker`). See
+[knowledge/Troubleshooting.md](./knowledge/Troubleshooting.md) "Queue grows, 0 consumers, but the pod is Running".
+
 ## 4. Correlation IDs & distributed tracing — [Verified] (the real correlation mechanism)
 
 Correlation across the pipeline is **trace-based**, not a logged `correlationId` field:
@@ -113,6 +136,15 @@ Per-service `Telemetry/Instrumentation.cs` defines a `Meter` and instruments. Ex
 
 Other services expose `processed.messages` / `forwarded.messages` (UOF.Client) and job counters
 (e.g. LiveStream fixtures updated). Metrics scraped on `:8080/metrics` (argocd, 30s interval).
+
+Job.Lookup (DEVOPS-443) follows the Adapter: `processed.messages` (tag `message.type`, a failed message counts as
+`error`), a `handler.duration` histogram (ms, tag `message.type`) and one consumer span per message named
+`{routing key} receive` that continues the trace from the message headers. Export is switched by `Telemetry:Enabled`
+(`Telemetry__Enabled: true` was already in its argocd values). Its argocd values also set `metrics.enabled: false` in
+dev, stg and prd; in the `betgenius-app` chart that removes the metrics port, the service port and the ServiceMonitor
+(which of the two charts serves the job was not checked), so Prometheus does not scrape it until that changes.
+The span code reads `Propagators.DefaultTextMapPropagator` per message: the default is a no-op until the OpenTelemetry
+SDK initialises, so a value cached in a static field can silently stop traces linking.
 
 ## 6. Log levels & noise control
 - Default Information; `Microsoft*` → Warning. Activity/circuit detailed errors are **not** a worker
