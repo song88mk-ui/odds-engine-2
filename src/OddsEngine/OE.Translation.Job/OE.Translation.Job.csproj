@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
+    <Nullable>annotations</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-OE.Translation.Job-7c2f1a90-1b4e-4d2a-9f3c-2a6b8e4d5c11</UserSecretsId>
   </PropertyGroup>
