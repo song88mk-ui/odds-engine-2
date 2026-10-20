@@ -31,6 +31,9 @@ jobs:
         run: |
           dotnet nuget add source --username FlyingCockatoo --password ${{ secrets.NUGET_PASSWORD }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/FlyingCockatoo/index.json"
 
+      - name: Build
+        run: dotnet build src/OddsEngine/OddsEngine.sln --configuration Release -warnaserror "-nowarn:NU1901;NU1902;NU1903;NU1904"
+
       - name: Test
         run: dotnet test src/OddsEngine/OddsEngine.sln --configuration Release
 
