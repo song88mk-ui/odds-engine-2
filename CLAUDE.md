@@ -28,7 +28,7 @@ knowledge base (Phases 1–10). **Read the relevant `docs/` file before acting**
 index + the rules that matter most.
 
 ## What this repo is
-An **event-driven pipeline of 11 headless .NET executable projects (services and jobs)** that ingest normalized odds/fixture/
+An **event-driven pipeline of 12 headless .NET executable projects (services and jobs)** that ingest normalized odds/fixture/
 settlement messages from RabbitMQ (`e.central`), persist a MongoDB **Sportsbook** catalogue (SQL
 Server for translations + client config), and fan results out to (a) the platform via a SignalR push
 bridge + settlement messages and (b) an external white-label Unified Odds Feed.
@@ -57,11 +57,11 @@ observation, not a change request — upgrading it is a cross-repo decision.
 ## Build / test
 - Build: `dotnet build src/OddsEngine/OddsEngine.sln` (note: `OE.Job.KeepAlive` is NOT in the .sln but
   CI builds it, `.github/workflows/ci.yml:57`).
-- Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project). Ten test
+- Test: `dotnet test src/OddsEngine/OddsEngine.sln` (or a single `-Tests`/`-Test` project). Eleven test
   projects exist, all in the solution — `OE.Shared.Test`, `OE.Adapter.Service.Tests`,
   `OE.Sportsbook.Service.Tests`, `OE.Translation.Service.Tests`, `OE.Translation.Job.Tests`,
   `OE.Websocket.Service.Tests`, `OE.Job.KeepAlive.Tests`, `OE.Job.Lookup.Tests`,
-  `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests`. `OE.Job.LiveStream` and `OE.UOF.Client` have
+  `OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests`, `OE.Job.BoostedOddsCap.Tests`. `OE.Job.LiveStream` and `OE.UOF.Client` have
   none. `OE.Job.KeepAlive.Tests` is in the .sln even though `OE.Job.KeepAlive` itself is not.
 - Mutation testing: `dotnet stryker --project <Project>.csproj` from the matching test-project
   folder (global tool, config in `src/OddsEngine/stryker-config.json`, no CI gate). Scores and
@@ -81,7 +81,9 @@ bet-genius / (oddsfeed?) ─► OE.Adapter.Service ─► r.oe.adapter.<type>.<N
 OE.Websocket.Service ◄─ r.oe.sb.engine.* / r.bet.* / r.wallet.* ─► /platform SignalR hub ─► platform-web
 ```
 Jobs: LiveStream (BetGenius video, 60s), Settlement (close stale, 5m), Cleanup (purge, 5m window),
-KeepAlive (heartbeat, 5s), plus Lookup (above) and `OE.Translation.Job`.
+KeepAlive (heartbeat, 5s), plus Lookup (above) and `OE.Translation.Job`. `OE.Job.BoostedOddsCap` is a
+consumer, not a timer job: it reads `r.oe.sb.engine.onoddschange` and alerts (Backoffice toast, optional
+email) when a price boost's odds come within its client's cap.
 
 ## Critical rules
 Get these wrong and you break prod.

@@ -34,6 +34,7 @@ workers (`*/Program.cs`, `*/Worker.cs`); the shared broker is
 | **OE.Job.LiveStream** | Livestream URL sync | Job (60s loop) | — | BetGenius Video API (HTTP) → MongoDB `Fixture` |
 | **OE.Job.Settlement** | Stale-fixture closer | Job (5min loop) | — | reads MongoDB; publishes fixture-close `OnFixtureChange` |
 | **OE.Job.Cleanup** | Retention purge + orphan sweep | Job (5min loop, UTC window) | — | deletes from MongoDB |
+| **OE.Job.BoostedOddsCap** | Price boost cap alerts | Continuous (event-driven, single replica) | `r.oe.sb.engine.onoddschange` | `r.oe.bm.engine.notifications` (back-office toast); optional SMTP email; reads SQL `Trading` |
 | **OE.Job.KeepAlive** | Heartbeat publisher | Job (5s loop) | — | `r.oe.uof.heartbeat` |
 
 Detailed per-service behavior: [ProjectOverview.md](./ProjectOverview.md).

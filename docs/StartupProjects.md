@@ -9,7 +9,8 @@ are headless workers. (`OE.API` would have been the only web project but is dead
 
 - **Top-level statements:** OE.UOF.Client, OE.Websocket.Service, OE.Job.Settlement.
 - **Classic `class Program { Main / CreateHostBuilder }`:** OE.Adapter.Service,
-  OE.Sportsbook.Service, OE.Job.LiveStream, OE.Job.Cleanup, OE.Job.KeepAlive, OE.Job.Lookup.
+  OE.Sportsbook.Service, OE.Job.LiveStream, OE.Job.Cleanup, OE.Job.KeepAlive, OE.Job.Lookup,
+  OE.Job.BoostedOddsCap.
 
 Both styles do the same three things: configure Serilog, register telemetry + services, add the
 hosted `Worker`.
@@ -28,6 +29,7 @@ hosted `Worker`.
 | **Job.Settlement** | ✅ | ✅ | `IMessageBroker` | — | (Mongo via repo) | `AddHttpClient()`, `ISportsbookRepository` |
 | **Job.LiveStream** | ✅ | ✅ | (via providers) | — | (Mongo via repo) | `AddProviders()` (factory + BG provider), `ISportsbookRepository` |
 | **Job.Cleanup** | ✅ | ✅ | — | — | (Mongo via repo) | `ISportsbookRepository` |
+| **Job.BoostedOddsCap** | ✅ | ✅ | `IMessageBroker` | — | `BoostContext` (read-only, built per refresh; **not** pooled) | three hosted services (`BoostRefreshWorker`, `OddsChangeWorker`, `AlertDeliveryWorker`); `BoostSnapshotHolder`, `CapAlertTracker`, `OddsChangeEvaluator`, `AlertQueue`, `AlertDispatcher`, `ToastFactory`, `INotificationPublisher`, `IAlertEmailSender` (all Singleton) |
 | **Job.KeepAlive** | ✅ | ✅ | `IMessageBroker` | — | — | (broker only) |
 
 > **Lifetime convention:** everything is registered **Singleton** (including repositories and the

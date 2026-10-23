@@ -38,6 +38,8 @@ src/OddsEngine/               OddsEngine.sln + all projects
   OE.Job.LiveStream/          BetGenius video/live-stream metadata job
   OE.Job.Settlement/          Closes stale fixtures/markets
   OE.Job.Cleanup/             Purges old data (MongoDB + SQL "Betting" DB)
+  OE.Job.BoostedOddsCap/      Alerts (Backoffice toast, optional email) when a price boost's odds
+                              come within its client's cap; reads the SQL "Trading" DB
   OE.Job.KeepAlive/           Heartbeat publisher (NOT in the .sln - build separately)
   OE.API/                     Dead project - no code, not in the .sln; ignore
   OE.*.Tests, OE.Shared.Test/ xUnit test projects (in the .sln)
@@ -212,8 +214,8 @@ been verified; expect the error log in that case.)
   arrives on `e.central` unless you publish it yourself or run those receivers.
 - `OE.Websocket.Service` end-to-end delivery: the SignalR `/platform` hub host is not in
   this repo; without a hub listening at `Custom:WebSocketAPI` the service cannot deliver.
-- SQL-backed services (`OE.Adapter.Service`, `OE.Translation.*`, `OE.Job.Cleanup`): the
-  `Translation` / `Betting` schemas are not in this repo, so a fresh local SQL Server is
+- SQL-backed services (`OE.Adapter.Service`, `OE.Translation.*`, `OE.Job.Cleanup`,
+  `OE.Job.BoostedOddsCap`): the `Translation` / `Betting` / `Trading` schemas are not in this repo, so a fresh local SQL Server is
   not enough. Start SQL Server only when you have a schema to restore.
 - Confirmed Mongo writes: the connection string convention uses `w=0` (unacknowledged),
   so write failures are silent; check collections manually with `mongosh`.
@@ -338,10 +340,10 @@ to configure containers. There is no docker-compose file in this repository.
 
 ## Running tests
 
-Nine xUnit test projects are in the solution (`OE.Shared.Test`, `OE.Adapter.Service.Tests`,
+Eleven xUnit test projects are in the solution (`OE.Shared.Test`, `OE.Adapter.Service.Tests`,
 `OE.Sportsbook.Service.Tests`, `OE.Websocket.Service.Tests`, `OE.Translation.Service.Tests`,
 `OE.Translation.Job.Tests`, `OE.Job.KeepAlive.Tests`, `OE.Job.Lookup.Tests`,
-`OE.Job.Settlement.Tests`). They are unit tests (wire-contract serialization, sharding
+`OE.Job.Settlement.Tests`, `OE.Job.Cleanup.Tests`, `OE.Job.BoostedOddsCap.Tests`). They are unit tests (wire-contract serialization, sharding
 helper, translation composers, etc.) and do not need RabbitMQ/MongoDB/SQL running.
 
 ```bash

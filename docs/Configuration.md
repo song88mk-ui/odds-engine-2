@@ -47,6 +47,7 @@ Note `:` (code) vs `__` (env var) for the same key, and `__N__` for array indice
 | `ExternalMessageBroker` | second broker, vhost `ext` | UOF.Client |
 | `Custom:*` | service-specific: Mongo conn, client codes, BetGenius creds, retention, toggles | most |
 | `ConnectionStrings:Translation` / `Custom:Trading` | SQL Server | Sportsbook / UOF.Client |
+| `ConnectionStrings:Trading` | SQL Server (`Trading`, read-only) | BoostedOddsCap (same secret as UOF.Client's `Custom:Trading`, `/<env>/apps/mssql/connection-string/trading`, under another key) |
 | `API:*` | Platform API base URL / keys | UOF.Client, Websocket |
 
 ## 4. Feature flags / toggles — [Verified]
@@ -66,6 +67,13 @@ Plain boolean/numeric config keys act as feature flags (no FeatureManagement lib
 | `Custom:StatusLogSeconds` / `SlowMessageMilliseconds` | Job.Lookup | status log line every 60 s; warn when one message takes 5000 ms or more |
 | `Custom:EnableAzureSignalRService` | (platform-web only — not OEv2) | — |
 | `Telemetry:Enabled` | all | telemetry on/off |
+| `Custom:Enabled` | BoostedOddsCap | master switch (committed default **false**): off, it loads no index, connects to no broker and sends nothing |
+| `Custom:RefreshSeconds`, `Custom:HysteresisPercent`, `Custom:StartupSilentSeconds` | BoostedOddsCap | boost index reload interval (60, minimum 5); how far the gap must climb above the cap before a boost can alert again (0.25 points); how long after start a boost already inside its cap is recorded without alerting (120) |
+| `Custom:AlertBufferSize`, `Custom:BatchWindowSeconds`, `Custom:DbContextTimeout` | BoostedOddsCap | alert queue size before alerts are dropped and counted (1000); wait that lets a burst leave as one batch (5); SQL command timeout (30) |
+| `Custom:ConsumerCheckSeconds` / `ConsumerDeadChecks` / `StatusLogSeconds` | BoostedOddsCap | same watchdog and status line as Job.Lookup |
+| `Custom:PlayerPropMarketTemplateIds` | BoostedOddsCap | comma-separated market template ids priced as player props (empty by default: the job does not call the Platform API the websocket service learns them from) |
+| `Notification:*` | BoostedOddsCap | toast addressing: `Page`, `PageRedirect` (`/hk/odds-engine/manage-boost`), `ClaimType` (`SBC.OE.PriceBoost.Manage`), `Type` (1), `RoutingKey` (`r.oe.bm.engine.notifications`), `MessageType`, `SummaryThreshold` (5) |
+| `Email:Enabled` and `Email:*`, `Email:Smtp:*` | BoostedOddsCap | email off by default (**false**); `From`, `Subject`, `OverrideRecipient` (everything to one address), `MaxPerRecipientPerHour` (10), `BackofficeUrl` (link target), and the SMTP `Host`, `Port` (587), `EnableSsl`, `Username`, `Password`, `TimeoutSeconds`. Secrets via env vars (`Email__Smtp__Password`), never committed |
 | `Custom:UtcWindowHours:Start/End`, `Custom:SportRetention` | Cleanup | window + retention tuning |
 | `Custom:OrphanCleanupDryRun`, `Custom:OrphanSweepIntervalHours` | Cleanup | orphan sweep: count instead of delete (default **false**), and how often it may run (default **24**h) |
 

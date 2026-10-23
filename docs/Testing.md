@@ -7,7 +7,7 @@ before quoting them; they are a snapshot, not a contract.
 
 ## Test inventory
 
-Ten xUnit test projects, all in `OddsEngine.sln`. Framework is xunit 2.5.3 (not v3). There is no
+Eleven xUnit test projects, all in `OddsEngine.sln`. Framework is xunit 2.5.3 (not v3). There is no
 mocking library anywhere in the solution: test doubles are hand-written `Fake*` classes in
 `OE.Shared.Test` (`FakeConfiguration`, `FakeMemCache`, `FakeMessageBroker`, `FakeHttpMessageHandler`,
 `FakeModel`, ...), which the service test projects reuse via a project reference.
@@ -16,6 +16,7 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 |---|---|---|
 | `OE.Shared.Test` | 186 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
 | `OE.Websocket.Service.Tests` | 165 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
+| `OE.Job.BoostedOddsCap.Tests` | 123 | Cap alerts: header scanner, gap maths, client-odds repricing (hand-worked prices), alert tracker, evaluator, boost snapshot and EF mapping, toast and email digest, rate limiter, dispatcher, and the consumer through `FakeMessageBroker` (never throws, watchdog) |
 | `OE.Translation.Service.Tests` | 102 | Translation persistence and the translation-only odds-change path |
 | `OE.Adapter.Service.Tests` | 61 | Adapter routing, trading repository, translation cache |
 | `OE.Sportsbook.Service.Tests` | 41 | Catalogue writes, translation gate, worker dispatch, dormant `OnMarketCancel` tripwire (GM-959) |
@@ -25,9 +26,9 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 643 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
+All 766 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
 2026-10-14 from a full `dotnet test` run; the previous table had drifted (its total was also one
-below the sum of its rows). The `OE.Job.Lookup.Tests` row and the total were re-measured 2026-10-16 (DEVOPS-443).
+below the sum of its rows). The `OE.Job.Lookup.Tests` row and the total were re-measured 2026-10-16 (DEVOPS-443). The `OE.Job.BoostedOddsCap.Tests` row and the total were added 2026-10-22; `FakeMessageBroker` now also records `CPublish` calls in `CPublished`.
 
 ```bash
 # everything

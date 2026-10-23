@@ -4,7 +4,7 @@
 
 `src/OddsEngine/OddsEngine.sln` (`OddsEngine.sln:1-78`). VS 2022 (format 17).
 
-### Projects **in** the solution (9)
+### Projects **in** the solution (10)
 
 | Project | GUID suffix | Kind |
 |---|---|---|
@@ -15,6 +15,7 @@
 | OE.Websocket.Service | …F9316 | Worker (Exe) |
 | OE.Job.Settlement | …D374C5 | Worker (Exe) |
 | OE.Job.Cleanup | …DA84CE | Worker (Exe) |
+| OE.Job.BoostedOddsCap | …A5C5BD | Worker (Exe) |
 | OE.Job.LiveStream | …6019F74B | Worker (Exe) |
 | OE.Job.Lookup | …08FD62D | Worker (Exe) |
 
@@ -59,6 +60,7 @@ odds-engine-2/
     ├── OE.Job.Settlement/
     ├── OE.Job.LiveStream/          # + Extensions/ServiceCollectionBettingExtensions.cs
     ├── OE.Job.Cleanup/
+    ├── OE.Job.BoostedOddsCap/      # Alerts/, Boosts/, Data/, Evaluation/, Telemetry/ + OddsChangeWorker.cs
     ├── OE.Job.KeepAlive/           # + Messages/OnHeartbeatMessage.cs
     └── OE.API/                     # STALE — no code
 ```

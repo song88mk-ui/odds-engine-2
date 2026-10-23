@@ -13,7 +13,7 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   published to GitHub Packages (org `FlyingCockatoo`) by `oe-shared-npkg.yml`.
 - **Key packages:** EF Core 3.1.32 (+ SqlServer), MongoDB.Bson 3.4.0, RabbitMQ.Client 5.2.0,
   OpenTelemetry.Api, System.Runtime.Caching, System.Text.Json.
-- **Consumers:** all 11 worker services **and** `bet-genius` (shares the same contracts).
+- **Consumers:** all 12 worker services **and** `bet-genius` (shares the same contracts).
 - **Detail:** see [SharedLibraries.md](./SharedLibraries.md).
 
 ---
@@ -226,6 +226,69 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Notes:** disabled by default in `appsettings.json` (`Custom:Enabled=false`) but **enabled in
   argocd for dev, stg and prd since 2026-07-13** (`ca6dfa224`; prd window widened to 01–24 UTC by
   `7251bb3dd`, `SportRetention` −30 prd / −7 stg+dev). Window logic can't cross midnight.
+
+---
+
+## OE.Job.BoostedOddsCap — price boost cap alerts
+
+- **Purpose:** Tells the traders when a price boost has stopped being a boost. A boost (Backoffice "Manage
+  Boost") fixes the odds a client is offered for one selection; the client's **Cap %** (Backoffice "Boosted
+  Settings") is how close the market's current odds may come to those boosted odds. When the client's current
+  odds are within the cap, the job publishes a Backoffice toast and, when switched on, emails the client.
+  It replaces the v1 `OE.BoostedOddsCap` of the retired `oddsengine` repo.
+- **Type:** Continuous consumer plus two background loops (index refresh, alert delivery). **Single replica**:
+  alert state is in memory. Off unless `Custom:Enabled=true` (committed default `false`).
+- **Consumes:** `r.oe.sb.engine.onoddschange` (`OnOddsChange`, an `OnInternalOddsChangeMessage`) on its own
+  queue `q.oe.job.boostedoddscap`, **exclusive and auto-delete** (`MessageBroker:IsExclusive`): a stopped job
+  leaves no backlog on the shared broker and never replays stale odds.
+- **Reads (SQL `Trading`, read-only, `ConnectionStrings:Trading`):** `PriceBoostConfig` (the boosts),
+  `BoostedSettings` (`Cap`, a fraction: 0.05 is 5%) and `Client` (`Email`). Written by backoffice-final; the job
+  has its own keyless context (`Data/BoostContext.cs`) mapping only the columns it reads, which Flyway
+  `V1__Baseline` shows as NULL-able, so a row with a NULL is skipped rather than failing the load. The three
+  tables are reloaded every `Custom:RefreshSeconds` (60) into an immutable in-memory snapshot, swapped in whole;
+  a failed reload keeps the previous one. A boost therefore takes up to a minute to be seen.
+- **Hot path (per odds message, no I/O, no locks):** read `PrFiId` and `FiStId` from the top of the JSON
+  without deserialising (`OddsChangeHeaderScanner`), drop anything that is not a prematch fixture with a boost,
+  and only then deserialise and evaluate. Evaluation is pure (`OddsChangeEvaluator`): a boost applies to an
+  **active** market of the same template and specifier offered to the client (`ClCo`), for the selection of the
+  same template and specifier.
+- **Alert rule:** gap % = (boosted − current) / (boosted + current) × 100, as in v1, and the job alerts when the
+  gap is **at or below the cap** (the market has caught up with, or passed, the boost). `CapAlertTracker`
+  alerts **once per crossing**, not per message as v1 did, and re-arms only after the gap climbs back above the
+  cap by `Custom:HysteresisPercent` (0.25 points); an edit to a boost's odds or a client's cap counts as a new
+  boost. Boosts found already inside their cap in the first `Custom:StartupSilentSeconds` (120) after start are
+  recorded without alerting, because a restart forgets which ones alerted before.
+- **Current odds are the client's, computed here.** The odds change message carries master odds (`Od`); nothing
+  fills `ClOd`. `ClientOddsCalculator` repeats the per-client repricing of `OE.Websocket.Service`
+  (`GetClientOdds` and its margin, decimal format only) so the job judges the price the client sees; verified
+  identical to it on 1.25 million random selections (checked 2026-10-22 by calling the private method through
+  reflection from a throwaway harness, which is not kept). Player prop markets are priced differently and the
+  websocket service learns which templates they are from the Platform API, which the job does not call: list
+  them in `Custom:PlayerPropMarketTemplateIds`.
+- **Delivery (off the consumer thread):** alerts go through a bounded queue (`Custom:AlertBufferSize`, drops and
+  counts when full) to `AlertDeliveryWorker`, which waits `Custom:BatchWindowSeconds` (5) so a burst leaves as
+  one batch. **Toast:** `OnNewNotification` on `r.oe.bm.engine.notifications` via `CPublish` (its own channel; the
+  shared one is the consumer's), `UserId = null` so Backoffice.Web shows it to every connected user (an
+  empty-guid `UserId`, which v1 sent, is dropped there), page and permission from `Notification:*`; more than
+  `Notification:SummaryThreshold` (5) alerts for one client in a batch collapse into one summary toast. Names
+  from the feed are HTML-encoded because the toast is rendered as markup.
+- **Email (off by default, `Email:Enabled=false`):** plain SMTP through the framework `SmtpClient` (no new
+  package); host, port, TLS and credentials are configuration (`Email:Smtp:*`), so SES's SMTP endpoint or any
+  relay works with no code change. One **digest** per recipient per batch (`Client.Email`, split on `;` and `,`),
+  at most `Email:MaxPerRecipientPerHour` (10) per recipient, `Email:OverrideRecipient` redirects everything to
+  one address for a lower environment. No SMTP relay or SES is configured in any odds-engine deployment yet.
+- **Failure handling:** the handler never throws (MessageBroker would requeue and redeliver forever); a failed
+  reload, toast or email is logged, counted and does not affect the others. A consumer the broker cancels is not
+  recovered by RabbitMQ.Client, so the worker fails the host after `Custom:ConsumerDeadChecks` (2) checks of
+  `Custom:ConsumerCheckSeconds` (30) and the pod restarts, as `OE.Job.Lookup` does (H9). One status line per
+  `Custom:StatusLogSeconds`; metrics `boostedcap.*` (messages, matches, alerts, drops, toasts, emails, index size).
+- **Tests:** `OE.Job.BoostedOddsCap.Tests` (xunit): scanner, gap maths, client-odds expectations worked by hand,
+  tracker, evaluator, snapshot and the EF mapping, toast and digest builders, rate limiter, dispatcher, and the
+  consumer driven through `FakeMessageBroker`.
+- **Not in this repo yet:** the ECR repository `oev2-job-boostedoddscap`, the CI matrix entry in `ci.yml` (add it
+  only after the ECR repository exists, or the push leg fails on `main`), and the argocd app
+  (`apps/oddsengine/job-boostedoddscap/{dev,stg,prd}.yaml`, secrets `/<env>/apps/mssql/connection-string/trading`
+  as `ConnectionStrings__Trading` and `MessageBroker__*`). See [TechnicalDebt.md](./TechnicalDebt.md) M15-M17.
 
 ---
 

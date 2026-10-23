@@ -62,6 +62,14 @@ Classification: **[Verified]** (odds-engine-2) · **[Verified-sibling:X]** · **
   `OnSportSortOrderChange`) + `r.bo.config.*`; consumed by platform `CacheSync.Service`; OEv2
   Sportsbook handles `OnDynamicTranslationChange` (exact binding [Unknown]).
 - **Reuses `OE.Shared.Data.Sportsbook` namespaces** (inline copies, not NuGet) — schema-coupled.
+- **(2026-10-22) OEv2 `OE.Job.BoostedOddsCap` reads three Trading SQL tables backoffice-final writes** —
+  `PriceBoostConfig`, `BoostedSettings` (the Cap %) and `Client` (the email address) — through its own
+  read-only context (`ConnectionStrings:Trading`, reloaded every `Custom:RefreshSeconds`), and **publishes
+  `OnNewNotification` on `r.oe.bm.engine.notifications`**, which `Backoffice.WebSocket.Service` binds and
+  pushes to Backoffice.Web as a toast. Breaking for the job: renaming those tables or columns (Flyway
+  `V1__Baseline`, `Trading.dbo.*`), changing the `NotificationsDetailsModel` JSON shape, or renaming the Manage
+  Boost page (`/hk/odds-engine/manage-boost`) or its permission (`SBC.OE.PriceBoost.Manage`), both of which
+  are configuration of the job. See [ProjectOverview.md](./ProjectOverview.md).
 - Deployed via the same CI→ECR→argocd pipeline (`backoffice-*` images).
 - Full detail: [OddsEngineIntegration.md](./OddsEngineIntegration.md) §4.
 

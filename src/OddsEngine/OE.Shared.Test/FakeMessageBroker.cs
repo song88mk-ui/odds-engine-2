@@ -6,16 +6,16 @@ using RabbitMQ.Client.Events;
 namespace OE.Shared.Test
 {
     // A single call, made through whichever IMessageBroker.Publish/CPublish/ExternalPublish
-    // overload the SUT actually uses. CPublish/ExternalPublish are always no-ops on the fake
-    // below (matching every service's real usage in these tests), so only Publish<T>/Publish
-    // calls ever produce one of these.
+    // overload the SUT actually uses. ExternalPublish is always a no-op on the fake below, so
+    // only Publish<T>/Publish calls (into Published) and CPublish<T>/CPublish calls (into
+    // CPublished, which OE.Job.BoostedOddsCap uses for its notification) ever produce one.
     public sealed record PublishedMessage(object? Payload, string MessageType, string RoutingKey, string CorrelationId);
 
     // Canonical stand-in for IMessageBroker, used across every service's Worker tests. Tracks
     // every call the interface exposes (Connect/ConnectWithManualAck/Acknowledge/Dispose counts,
     // plus Publish/Publish<T> attempts and payloads) so each project's tests can assert on
-    // whichever subset applies to it. ExternalConnect/NAcknowledge/CPublish/ExternalPublish stay
-    // no-ops — no service under test relies on them doing anything.
+    // whichever subset applies to it. ExternalConnect/NAcknowledge/ExternalPublish stay no-ops, and
+    // CPublish only records the call (it never throws) — no service under test relies on more.
     public sealed class FakeMessageBroker : IMessageBroker
     {
         public int ConnectCalls { get; private set; }
@@ -30,6 +30,10 @@ namespace OE.Shared.Test
         public Action? OnConnect { get; set; }
 
         public List<PublishedMessage> Published { get; } = new();
+
+        // Calls made through CPublish (a channel of its own), kept apart from Published so a test can tell
+        // which of the two paths the SUT used.
+        public List<PublishedMessage> CPublished { get; } = new();
 
         public event EventHandler<BasicDeliverEventArgs>? MessageReceived;
 
@@ -52,8 +56,11 @@ namespace OE.Shared.Test
         public void Publish(string payload, string messageType, string routingKey, string correlationId)
             => Record(payload, messageType, routingKey, correlationId);
 
-        public void CPublish<T>(T payload, string messageType, string routingKey, string correlationId) { }
-        public void CPublish(string payload, string messageType, string routingKey, string correlationId) { }
+        public void CPublish<T>(T payload, string messageType, string routingKey, string correlationId)
+            => CPublished.Add(new PublishedMessage(payload, messageType, routingKey, correlationId));
+
+        public void CPublish(string payload, string messageType, string routingKey, string correlationId)
+            => CPublished.Add(new PublishedMessage(payload, messageType, routingKey, correlationId));
 
         public IModel BindQueue(string queueName, Dictionary<string, object> options) => throw new NotSupportedException();
 

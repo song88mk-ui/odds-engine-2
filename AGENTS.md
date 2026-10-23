@@ -1,6 +1,6 @@
 # AGENTS.md — odds-engine-2
 
-Headless .NET RabbitMQ pipeline (11 services and jobs plus the `OE.Shared` kernel) that writes the
+Headless .NET RabbitMQ pipeline (12 services and jobs plus the `OE.Shared` kernel) that writes the
 MongoDB Sportsbook catalogue and pushes odds to platform-web over SignalR. Read
 [CLAUDE.md](CLAUDE.md) first: it holds the standing rules every agent follows and the full operating
 manual. This file is the short version for agents.
