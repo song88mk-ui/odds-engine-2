@@ -241,12 +241,19 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Consumes:** `r.oe.sb.engine.onoddschange` (`OnOddsChange`, an `OnInternalOddsChangeMessage`) on its own
   queue `q.oe.job.boostedoddscap`, **exclusive and auto-delete** (`MessageBroker:IsExclusive`): a stopped job
   leaves no backlog on the shared broker and never replays stale odds.
-- **Reads (SQL `Trading`, read-only, `ConnectionStrings:Trading`):** `PriceBoostConfig` (the boosts),
-  `BoostedSettings` (`Cap`, a fraction: 0.05 is 5%) and `Client` (`Email`). Written by backoffice-final; the job
-  has its own keyless context (`Data/BoostContext.cs`) mapping only the columns it reads, which Flyway
-  `V1__Baseline` shows as NULL-able, so a row with a NULL is skipped rather than failing the load. The three
-  tables are reloaded every `Custom:RefreshSeconds` (60) into an immutable in-memory snapshot, swapped in whole;
-  a failed reload keeps the previous one. A boost therefore takes up to a minute to be seen.
+- **Reads (SQL `Trading`, read-only, `ConnectionStrings:Trading`):** `PriceBoostConfig` (the boosts) and
+  `BoostedSettings` (`Cap`, a fraction: 0.05 is 5%). Written by backoffice-final; the job has its own keyless
+  context (`Data/BoostContext.cs`) mapping only the columns it reads, which Flyway `V1__Baseline` shows as
+  NULL-able, so a row with a NULL is skipped rather than failing the load. Both tables are reloaded every
+  `Custom:RefreshSeconds` (60) into an immutable in-memory snapshot, swapped in whole; a failed reload keeps the
+  previous one. A boost therefore takes up to a minute to be seen.
+- **Reads (SQL `Backoffice`, read-only, `ConnectionStrings:Backoffice`, only when `Email:Enabled`):**
+  `ClientInformation` (`Brand`, `Email`, `IsEmailNotification`, `IsDeleted`), the table backoffice-final's Clients
+  page edits (`Data/BackofficeContext.cs`). It replaces `Trading.dbo.Client`, which flyway `V18__RetireTradingClientTable`
+  renames away and which was only a partial copy (DEV 3 of 5 clients, STG 12 of 62). `Brand` is the client code. A
+  client is a recipient only when it is not deleted, its **Notify email switch is on** and its Email Address holds
+  a valid address (`RecipientRules`); the v1 job emailed every client with an address and ignored the switch. With
+  email off the database is never opened (`NoRecipientReader`) and the job needs no connection string for it.
 - **Hot path (per odds message, no I/O, no locks):** read `PrFiId` and `FiStId` from the top of the JSON
   without deserialising (`OddsChangeHeaderScanner`), drop anything that is not a prematch fixture with a boost,
   and only then deserialise and evaluate. Evaluation is pure (`OddsChangeEvaluator`): a boost applies to an
@@ -274,11 +281,13 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   from the feed are HTML-encoded because the toast is rendered as markup.
 - **Email (off by default, `Email:Enabled=false`):** plain SMTP through the framework `SmtpClient` (no new
   package); host, port, TLS and credentials are configuration (`Email:Smtp:*`), so SES's SMTP endpoint or any
-  relay works with no code change. One **digest** per recipient per batch (`Client.Email`, split on `;` and `,`),
+  relay works with no code change. One **digest** per recipient per batch (the client's Email Address, split on `;` and `,`),
   at most `Email:MaxPerRecipientPerHour` (10) per recipient, `Email:OverrideRecipient` redirects everything to
   one address for a lower environment. No SMTP relay or SES is configured in any odds-engine deployment yet.
 - **Failure handling:** the handler never throws (MessageBroker would requeue and redeliver forever); a failed
-  reload, toast or email is logged, counted and does not affect the others. A consumer the broker cancels is not
+  reload, toast or email is logged, counted and does not affect the others. A failed read of the Backoffice
+  clients never costs the job its boost index or the toast: `BoostSnapshotLoader` keeps the previous recipients,
+  logs it and tries again on the next load, whereas a failed read of the boosts fails the load. A consumer the broker cancels is not
   recovered by RabbitMQ.Client, so the worker fails the host after `Custom:ConsumerDeadChecks` (2) checks of
   `Custom:ConsumerCheckSeconds` (30) and the pod restarts, as `OE.Job.Lookup` does (H9). One status line per
   `Custom:StatusLogSeconds`; metrics `boostedcap.*` (messages, matches, alerts, drops, toasts, emails, index size).
@@ -288,7 +297,8 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Not in this repo yet:** the ECR repository `oev2-job-boostedoddscap`, the CI matrix entry in `ci.yml` (add it
   only after the ECR repository exists, or the push leg fails on `main`), and the argocd app
   (`apps/oddsengine/job-boostedoddscap/{dev,stg,prd}.yaml`, secrets `/<env>/apps/mssql/connection-string/trading`
-  as `ConnectionStrings__Trading` and `MessageBroker__*`). See [TechnicalDebt.md](./TechnicalDebt.md) M15-M17.
+  as `ConnectionStrings__Trading`, `/<env>/apps/mssql/connection-string/backoffice` as
+  `ConnectionStrings__Backoffice` (only when email is on; bo-api already maps that secret) and `MessageBroker__*`). See [TechnicalDebt.md](./TechnicalDebt.md) M15-M17.
 
 ---
 

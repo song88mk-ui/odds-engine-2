@@ -49,7 +49,7 @@ namespace OE.Job.BoostedOddsCap.Tests
                             }
                         },
                         new[] { new BoostedSettingsRow { ClientCode = "S88", Cap = 0.05m } },
-                        new ClientRow[0], DateTime.UtcNow));
+                        new Dictionary<string, string[]>(), DateTime.UtcNow));
                 }
 
                 var tracker = new CapAlertTracker(0.25m);

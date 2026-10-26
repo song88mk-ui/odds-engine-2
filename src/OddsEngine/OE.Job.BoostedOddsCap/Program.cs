@@ -37,9 +37,19 @@ namespace OE.Job.BoostedOddsCap
                         MeterName: Instrumentation.MeterName));
                     services.AddSingleton<IMessageBroker, MessageBroker>();
 
-                    services.AddSingleton<IBoostSource>(_ => new SqlBoostSource(
-                        configuration.GetConnectionString("Trading"),
-                        configuration.GetValue<int>("Custom:DbContextTimeout", 30)));
+                    var dbTimeout = configuration.GetValue<int>("Custom:DbContextTimeout", 30);
+                    services.AddSingleton<ITradingBoostReader>(_ => new SqlTradingBoostReader(
+                        configuration.GetConnectionString("Trading"), dbTimeout));
+
+                    // The Backoffice database is read only for the clients to email, so with email off it is never opened
+                    // and the job needs no connection string for it.
+                    if (emailOptions.Enabled)
+                        services.AddSingleton<IRecipientReader>(_ => new SqlRecipientReader(
+                            configuration.GetConnectionString("Backoffice"), dbTimeout));
+                    else
+                        services.AddSingleton<IRecipientReader, NoRecipientReader>();
+
+                    services.AddSingleton<IBoostSource, BoostSnapshotLoader>();
                     services.AddSingleton<BoostSnapshotHolder>();
                     services.AddSingleton(new CapAlertTracker(configuration.GetValue<decimal>("Custom:HysteresisPercent", 0.25m)));
                     services.AddSingleton(sp => new OddsChangeEvaluator(

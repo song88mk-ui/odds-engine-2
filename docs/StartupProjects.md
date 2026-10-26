@@ -29,7 +29,7 @@ hosted `Worker`.
 | **Job.Settlement** | ✅ | ✅ | `IMessageBroker` | — | (Mongo via repo) | `AddHttpClient()`, `ISportsbookRepository` |
 | **Job.LiveStream** | ✅ | ✅ | (via providers) | — | (Mongo via repo) | `AddProviders()` (factory + BG provider), `ISportsbookRepository` |
 | **Job.Cleanup** | ✅ | ✅ | — | — | (Mongo via repo) | `ISportsbookRepository` |
-| **Job.BoostedOddsCap** | ✅ | ✅ | `IMessageBroker` | — | `BoostContext` (read-only, built per refresh; **not** pooled) | three hosted services (`BoostRefreshWorker`, `OddsChangeWorker`, `AlertDeliveryWorker`); `BoostSnapshotHolder`, `CapAlertTracker`, `OddsChangeEvaluator`, `AlertQueue`, `AlertDispatcher`, `ToastFactory`, `INotificationPublisher`, `IAlertEmailSender` (all Singleton) |
+| **Job.BoostedOddsCap** | ✅ | ✅ | `IMessageBroker` | — | `BoostContext` and, with email on, `BackofficeContext` (read-only, built per refresh; **not** pooled) | three hosted services (`BoostRefreshWorker`, `OddsChangeWorker`, `AlertDeliveryWorker`); `BoostSnapshotHolder`, `CapAlertTracker`, `OddsChangeEvaluator`, `AlertQueue`, `AlertDispatcher`, `ToastFactory`, `INotificationPublisher`, `IAlertEmailSender` (all Singleton) |
 | **Job.KeepAlive** | ✅ | ✅ | `IMessageBroker` | — | — | (broker only) |
 
 > **Lifetime convention:** everything is registered **Singleton** (including repositories and the

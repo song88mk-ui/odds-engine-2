@@ -39,7 +39,7 @@ src/OddsEngine/               OddsEngine.sln + all projects
   OE.Job.Settlement/          Closes stale fixtures/markets
   OE.Job.Cleanup/             Purges old data (MongoDB + SQL "Betting" DB)
   OE.Job.BoostedOddsCap/      Alerts (Backoffice toast, optional email) when a price boost's odds
-                              come within its client's cap; reads the SQL "Trading" DB
+                              come within its client's cap; reads the SQL "Trading" DB (and "Backoffice" for email)
   OE.Job.KeepAlive/           Heartbeat publisher (NOT in the .sln - build separately)
   OE.API/                     Dead project - no code, not in the .sln; ignore
   OE.*.Tests, OE.Shared.Test/ xUnit test projects (in the .sln)
@@ -215,7 +215,7 @@ been verified; expect the error log in that case.)
 - `OE.Websocket.Service` end-to-end delivery: the SignalR `/platform` hub host is not in
   this repo; without a hub listening at `Custom:WebSocketAPI` the service cannot deliver.
 - SQL-backed services (`OE.Adapter.Service`, `OE.Translation.*`, `OE.Job.Cleanup`,
-  `OE.Job.BoostedOddsCap`): the `Translation` / `Betting` / `Trading` schemas are not in this repo, so a fresh local SQL Server is
+  `OE.Job.BoostedOddsCap`): the `Translation` / `Betting` / `Trading` / `Backoffice` schemas are not in this repo, so a fresh local SQL Server is
   not enough. Start SQL Server only when you have a schema to restore.
 - Confirmed Mongo writes: the connection string convention uses `w=0` (unacknowledged),
   so write failures are silent; check collections manually with `mongosh`.

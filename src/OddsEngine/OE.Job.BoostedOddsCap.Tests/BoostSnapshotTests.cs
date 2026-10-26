@@ -26,8 +26,9 @@ namespace OE.Job.BoostedOddsCap.Tests
         private static BoostedSettingsRow Cap(string clientCode = "S88", decimal cap = 0.05m)
             => new BoostedSettingsRow { ClientCode = clientCode, Cap = cap };
 
-        private static BoostSnapshot Build(PriceBoostRow[] boosts, BoostedSettingsRow[] settings, params ClientRow[] clients)
-            => BoostSnapshot.Build(boosts, settings, clients, Loaded);
+        private static BoostSnapshot Build(PriceBoostRow[] boosts, BoostedSettingsRow[] settings,
+            Dictionary<string, string[]> recipients = null)
+            => BoostSnapshot.Build(boosts, settings, recipients ?? new Dictionary<string, string[]>(), Loaded);
 
         [Fact]
         public void JoinsEachBoostWithItsClientsCapAsAPercentage()
@@ -142,31 +143,32 @@ namespace OE.Job.BoostedOddsCap.Tests
         public void ReadsTheRecipientsOfAClientCaseInsensitively()
         {
             var snapshot = Build(new[] { Boost() }, new[] { Cap() },
-                    new ClientRow { ClientCode = "S88", Email = "ops@example.com" });
+                    new Dictionary<string, string[]> { ["S88"] = new[] { "ops@example.com" } });
 
             Assert.Equal(new[] { "ops@example.com" }, snapshot.RecipientsFor("s88"));
             Assert.Empty(snapshot.RecipientsFor("TSO"));
         }
 
         [Fact]
-        public void ParseRecipients_SplitsOnSemicolonsAndCommasAndDropsWhatIsNotAnAddress()
+        public void NormalisesTheClientCodesOfARecipientListBuiltByHand()
         {
-            var recipients = BoostSnapshot.ParseRecipients("a@example.com; b@example.com, not-an-address,A@EXAMPLE.COM ,");
+            var snapshot = Build(new[] { Boost() }, new[] { Cap() },
+                    new Dictionary<string, string[]> { [" s88 "] = new[] { "ops@example.com" }, [""] = new[] { "x@example.com" } });
 
-            Assert.Equal(new[] { "a@example.com", "b@example.com" }, recipients);
+            Assert.Equal(new[] { "ops@example.com" }, snapshot.RecipientsFor("S88"));
         }
 
-        [Theory]
-        [InlineData(null)]
-        [InlineData("")]
-        [InlineData("   ")]
-        public void ParseRecipients_ReturnsNothingForAnEmptyField(string email)
+        [Fact]
+        public void HasNoRecipientsForAClientWhoseListIsEmpty()
         {
-            Assert.Empty(BoostSnapshot.ParseRecipients(email));
+            var snapshot = Build(new[] { Boost() }, new[] { Cap() },
+                    new Dictionary<string, string[]> { ["S88"] = new string[0] });
+
+            Assert.Empty(snapshot.RecipientsFor("S88"));
         }
 
-        // The job reads three tables it does not own. If a name here drifts from backoffice-final's mapping
-        // (Backoffice.Shared/Data/Trading), the job loads nothing and the only symptom is silence.
+        // The job reads tables it does not own. If a name here drifts from backoffice-final's mapping
+        // (Backoffice.Shared/Data/Trading and Data/Backoffice), the job loads nothing and the only symptom is silence.
         [Fact]
         public void TheContextReadsTheTradingTablesAndColumnsBackofficeWrites()
         {
@@ -180,10 +182,24 @@ namespace OE.Job.BoostedOddsCap.Tests
                     "ClientCode", "ProviderFixtureId", "MarketTemplateId", "MarketSpecifier",
                     "SelectionTemplateId", "SelectionSpecifier", "BoostedOdds");
             AssertMapped(context, typeof(BoostedSettingsRow), "BoostedSettings", "ClientCode", "Cap");
-            AssertMapped(context, typeof(ClientRow), "Client", "ClientCode", "Email");
         }
 
-        private static void AssertMapped(BoostContext context, Type entity, string table, params string[] columns)
+        // The Trading.dbo.Client table the job first read the addresses from is retired (flyway V18), so the clients to
+        // email come from the Backoffice table its Clients page edits, keyed by Brand, the client code.
+        [Fact]
+        public void TheBackofficeContextReadsTheClientInformationColumnsTheClientsPageEdits()
+        {
+            var options = new DbContextOptionsBuilder<BackofficeContext>()
+                    .UseSqlServer("Server=localhost;Database=Backoffice;Integrated Security=true")
+                    .Options;
+
+            using var context = new BackofficeContext(options);
+
+            AssertMapped(context, typeof(ClientRecipientRow), "ClientInformation",
+                    "Brand", "Email", "IsEmailNotification", "IsDeleted");
+        }
+
+        private static void AssertMapped(DbContext context, Type entity, string table, params string[] columns)
         {
             var entityType = context.Model.FindEntityType(entity);
 

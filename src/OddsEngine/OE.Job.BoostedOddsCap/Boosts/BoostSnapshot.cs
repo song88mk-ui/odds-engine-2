@@ -1,4 +1,3 @@
-using System.Net.Mail;
 using OE.Job.BoostedOddsCap.Data;
 
 namespace OE.Job.BoostedOddsCap.Boosts
@@ -52,8 +51,10 @@ namespace OE.Job.BoostedOddsCap.Boosts
             return _recipientsByClient.TryGetValue(BoostText.Code(clientCode), out var recipients) ? recipients : NoRecipients;
         }
 
+        // recipientsByClient is what RecipientRules.Build made of the Backoffice clients; the codes are normalised
+        // again here so a caller that built it by hand cannot miss a client on case or padding.
         public static BoostSnapshot Build(IEnumerable<PriceBoostRow> boosts, IEnumerable<BoostedSettingsRow> settings,
-            IEnumerable<ClientRow> clients, DateTime loadedAtUtc)
+            IReadOnlyDictionary<string, string[]> recipientsByClient, DateTime loadedAtUtc)
         {
             var capPercentByClient = new Dictionary<string, decimal>();
             foreach (var row in settings)
@@ -63,13 +64,12 @@ namespace OE.Job.BoostedOddsCap.Boosts
                     capPercentByClient.TryAdd(code, row.Cap.Value * 100m);
             }
 
-            var recipientsByClient = new Dictionary<string, string[]>();
-            foreach (var row in clients)
+            var normalisedRecipients = new Dictionary<string, string[]>();
+            foreach (var pair in recipientsByClient)
             {
-                var code = BoostText.Code(row.ClientCode);
-                var recipients = ParseRecipients(row.Email);
-                if (code.Length > 0 && recipients.Length > 0)
-                    recipientsByClient.TryAdd(code, recipients);
+                var code = BoostText.Code(pair.Key);
+                if (code.Length > 0 && pair.Value != null && pair.Value.Length > 0)
+                    normalisedRecipients.TryAdd(code, pair.Value);
             }
 
             var seen = new HashSet<string>();
@@ -122,20 +122,7 @@ namespace OE.Job.BoostedOddsCap.Boosts
 
             return new BoostSnapshot(
                 rulesByFixture.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray()),
-                recipientsByClient, ruleCount, rowsWithoutCap, loadedAtUtc);
-        }
-
-        // Client.Email is free text. A single address is the norm, a list separated by ; or , is tolerated,
-        // and anything that is not a valid address is dropped rather than failing the whole send later.
-        public static string[] ParseRecipients(string email)
-        {
-            if (string.IsNullOrWhiteSpace(email))
-                return NoRecipients;
-
-            return email.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Where(address => MailAddress.TryCreate(address, out _))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
+                normalisedRecipients, ruleCount, rowsWithoutCap, loadedAtUtc);
         }
     }
 }

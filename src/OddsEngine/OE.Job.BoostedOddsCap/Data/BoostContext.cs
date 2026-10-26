@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace OE.Job.BoostedOddsCap.Data
 {
-    // Read-only EF context over the Trading SQL database. backoffice-final owns and writes the three
+    // Read-only EF context over the Trading SQL database. backoffice-final owns and writes the two
     // tables (Backoffice.Shared/Data/Trading/SQLEntities); only the columns the cap check reads are
     // mapped, and every entity is keyless because the job never saves or tracks anything.
     public class BoostContext : DbContext
@@ -13,13 +13,11 @@ namespace OE.Job.BoostedOddsCap.Data
 
         public DbSet<PriceBoostRow> PriceBoosts { get; set; }
         public DbSet<BoostedSettingsRow> BoostedSettings { get; set; }
-        public DbSet<ClientRow> Clients { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<PriceBoostRow>().HasNoKey().ToTable("PriceBoostConfig");
             modelBuilder.Entity<BoostedSettingsRow>().HasNoKey().ToTable("BoostedSettings");
-            modelBuilder.Entity<ClientRow>().HasNoKey().ToTable("Client");
         }
     }
 
@@ -45,12 +43,5 @@ namespace OE.Job.BoostedOddsCap.Data
     {
         public string ClientCode { get; set; }
         public decimal? Cap { get; set; }
-    }
-
-    // Minimal projection of Backoffice.Shared Client: who is emailed when a boost reaches its cap.
-    public class ClientRow
-    {
-        public string ClientCode { get; set; }
-        public string Email { get; set; }
     }
 }

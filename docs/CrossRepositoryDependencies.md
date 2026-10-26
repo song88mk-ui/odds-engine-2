@@ -62,14 +62,20 @@ Classification: **[Verified]** (odds-engine-2) · **[Verified-sibling:X]** · **
   `OnSportSortOrderChange`) + `r.bo.config.*`; consumed by platform `CacheSync.Service`; OEv2
   Sportsbook handles `OnDynamicTranslationChange` (exact binding [Unknown]).
 - **Reuses `OE.Shared.Data.Sportsbook` namespaces** (inline copies, not NuGet) — schema-coupled.
-- **(2026-10-22) OEv2 `OE.Job.BoostedOddsCap` reads three Trading SQL tables backoffice-final writes** —
-  `PriceBoostConfig`, `BoostedSettings` (the Cap %) and `Client` (the email address) — through its own
-  read-only context (`ConnectionStrings:Trading`, reloaded every `Custom:RefreshSeconds`), and **publishes
+- **(2026-10-22) OEv2 `OE.Job.BoostedOddsCap` reads two Trading SQL tables backoffice-final writes** —
+  `PriceBoostConfig` and `BoostedSettings` (the Cap %) — through its own read-only context
+  (`ConnectionStrings:Trading`, reloaded every `Custom:RefreshSeconds`), and **publishes
   `OnNewNotification` on `r.oe.bm.engine.notifications`**, which `Backoffice.WebSocket.Service` binds and
   pushes to Backoffice.Web as a toast. Breaking for the job: renaming those tables or columns (Flyway
   `V1__Baseline`, `Trading.dbo.*`), changing the `NotificationsDetailsModel` JSON shape, or renaming the Manage
   Boost page (`/hk/odds-engine/manage-boost`) or its permission (`SBC.OE.PriceBoost.Manage`), both of which
   are configuration of the job. See [ProjectOverview.md](./ProjectOverview.md).
+- **(2026-10-27) The same job reads `Backoffice.dbo.ClientInformation`** (`Brand`, `Email`, `IsEmailNotification`,
+  `IsDeleted`; `ConnectionStrings:Backoffice`, only when email is on) for the clients to email. That is the table
+  backoffice-final's Clients page edits, and it replaces `Trading.dbo.Client`, which backoffice-final retired
+  (BO-42: infrastructure flyway `V18__RetireTradingClientTable`, a rename to `Client_DELETE_AFTER_BO42` and a later
+  drop) because it was only a partial copy of the client list. Renaming those columns, or changing what the Notify
+  email switch means, breaks the recipients; the toast keeps working.
 - Deployed via the same CI→ECR→argocd pipeline (`backoffice-*` images).
 - Full detail: [OddsEngineIntegration.md](./OddsEngineIntegration.md) §4.
 
@@ -89,7 +95,8 @@ Classification: **[Verified]** (odds-engine-2) · **[Verified-sibling:X]** · **
 |---|---|
 | RabbitMQ `e.central` | bet-genius, all OE.*, platform-final, backoffice-final |
 | MongoDB `Sportsbook` | OEv2 (write) · platform-final, backoffice-final (read) |
-| SQL `Trading` | backoffice-final (write) · OEv2 UOF.Client (read) |
+| SQL `Trading` | backoffice-final (write) · OEv2 UOF.Client and OE.Job.BoostedOddsCap (read) |
+| SQL `Backoffice` (`ClientInformation`) | backoffice-final (read/write) · OEv2 OE.Job.BoostedOddsCap (read, email recipients only) |
 | SQL `Translation` | OEv2 Translation.Service (read/write) · Translation.Job (write) · Adapter (read) · the external translation pipeline (writes `TARGET_TEXT_*`) · backoffice · **plus unrelated tenants in the same DB** (`SportsApiTranslationCache`, `SportsbookStatic`, `BackofficeStatic`) |
 | SQL `Sportsbook` (order/template config) | backoffice-final (read/write) · platform [Likely] |
 | SQL `Auth` | Auth only |

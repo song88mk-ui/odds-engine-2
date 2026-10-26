@@ -71,10 +71,10 @@ namespace OE.Job.BoostedOddsCap.Tests
             public readonly FakeEmailSender Sender = new FakeEmailSender();
             public AlertDispatcher Dispatcher;
 
-            public Harness(EmailOptions email, params ClientRow[] clients)
+            public Harness(EmailOptions email, params ClientRecipientRow[] clients)
             {
                 var holder = new BoostSnapshotHolder();
-                holder.Set(BoostSnapshot.Build(new PriceBoostRow[0], new BoostedSettingsRow[0], clients, Now));
+                holder.Set(BoostSnapshot.Build(new PriceBoostRow[0], new BoostedSettingsRow[0], RecipientRules.Build(clients), Now));
 
                 Dispatcher = new AlertDispatcher(new ToastFactory(new NotificationOptions()), Publisher, Sender, email,
                         new RecipientRateLimiter(email.MaxPerRecipientPerHour), holder, new Instrumentation(),
@@ -87,7 +87,9 @@ namespace OE.Job.BoostedOddsCap.Tests
         private static EmailOptions EmailOn(string overrideRecipient = "", int maxPerHour = 10, string smtpHost = "smtp.example.com")
             => new EmailOptions { Enabled = true, SmtpHost = smtpHost, OverrideRecipient = overrideRecipient, MaxPerRecipientPerHour = maxPerHour };
 
-        private static ClientRow Client(string code, string email) => new ClientRow { ClientCode = code, Email = email };
+        // A Backoffice client with the Notify email switch on.
+        private static ClientRecipientRow Client(string code, string email)
+            => new ClientRecipientRow { Brand = code, Email = email, IsEmailNotification = true };
 
         // --- toast -----------------------------------------------------------------------------------
 
