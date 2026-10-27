@@ -63,7 +63,8 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 ### Message-type constants (`Constants/MessageType.cs`)
 - **BetGenius provider:** `OnProcessMessage`, `OnFixtureClose`, `OnMarketClose`, `OnMatchSummary`, `OnOtherMessage`.
 - **Adapter (primary trading events):** `OnFixtureChange`, `OnMarketChange`, `OnMarketSettlement`,
-  `OnMarketCancel`, `OnBetStopFixture`, `OnBetStopGlobal`, `OnHeartBeat`, `OnDynamicTranslationChange`.
+  `OnMarketCancel`, `OnBetStopFixture`, `OnBetStopGlobal`, `OnHeartBeat`, `OnDynamicTranslationChange`,
+  `OnPriceBoost`.
 - **Internal sportsbook:** `OnOddsChange`, `OnBetSettlement`, `OnBetCancellation`.
 
 ### `Messages/OutgoingAdapterMessages/`
@@ -77,6 +78,7 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 | `OnBetStopFixtureMessage` | ON_BET_STOP_FIXTURE | `IsBetStop`, `SetActiveMarketsToInactive` |
 | `OnBetStopGlobalMessage` | ON_BET_STOP_GLOBAL | `IsBetStop` |
 | `OnBetSettlementMessage` | ON_BET_SETTLEMENT | `Selections[]` with `Result`, `VoidFactor`, `DeadHeatFactor` (full property names, not abbreviated) |
+| `OnPriceBoostMessage` | ON_PRICE_BOOST | one client's boost on one selection: `ClientCode`, `ProviderFixtureId`, `MarketTemplateId`, `SelectionSpecifier`, `BoostedOdds` (0 removes it), `IsBoosted`, names and translations. Not derived from the base class: it is backoffice's JSON, full property names |
 
 ### `Messages/OutgoingSportsbookMessages/`
 | Message | Maps to | Notes |

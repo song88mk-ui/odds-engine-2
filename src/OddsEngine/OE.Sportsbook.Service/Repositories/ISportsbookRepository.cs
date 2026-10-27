@@ -13,6 +13,7 @@ namespace OE.Sportsbook.Service.Repositories
         void ProcessOnBetStopGlobalMessage(IMessageBroker messageBroker, OnBetStopGlobalMessage message, string correlationId);
         void ProcessOnBetStopFixtureMessage(IMessageBroker messageBroker, OnBetStopFixtureMessage message, string correlationId);
         void ProcessOnMarketCancellationMessage(IMessageBroker messageBroker, OnMarketCancellationMessage message, string correlationId);
+        void ProcessOnPriceBoostMessage(IMessageBroker messageBroker, OnPriceBoostMessage message, string correlationId);
         void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message);
         Task SetInitialData();
     }

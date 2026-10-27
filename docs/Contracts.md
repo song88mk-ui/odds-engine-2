@@ -32,6 +32,7 @@ Defined in `OE.Shared/Messages/*` and `OE.Shared/Constants/MessageType.cs`. Full
 | `OnMarketCancellationMessage` | `OnMarketCancel` | …→ Sportsbook, which drops it: no Worker case since DEVOPS-251. The `OnBetCancellation` it would publish on `r.oe.bet.settlement` sends `MarketId` as a string, and platform-final reads a long. Tripwire: `WorkerTests.MessageReceived_OnMarketCancel_IfDispatched_OnBetCancellationMarketIdMustBeNumeric` (GM-959) |
 | `OnBetStopFixtureMessage` / `OnBetStopGlobalMessage` | `OnBetStopFixture` / `OnBetStopGlobal` | …→ Sportsbook → Websocket |
 | `OnBetSettlementMessage` | `OnBetSettlement` | Sportsbook → platform Settlement |
+| `OnPriceBoostMessage` | `OnPriceBoost` | backoffice (`r.uof.onpriceboost`) → Adapter → the fixture's Sportsbook shard (`r.oe.adapter.onpriceboost.<NN>`) → Mongo `IsBo`/`ClBo`/`ClBoOd`/`ClBoSeNa`/`ClBoSeNaTr`, read by platform-final `GetBoostedFixtures`. The JSON property names are backoffice's (`Backoffice.Shared.Models.OnPriceBoostMessage`): renaming one drops that field of every boost. `ClBoOd` is `CODE:odds\|CODE:odds`, a format platform-final splits on `\|` and `:` (BO-10) |
 | `OnInternalOddsChangeMessage` | `OnOddsChange` | Sportsbook → Websocket |
 | `OnDeleteCacheMessage` | (cache mgmt, `CacheType`) | backoffice/platform → cache consumers |
 | `OnHeartbeatMessage` | `OnHeartBeat` | KeepAlive → UOF.Client |

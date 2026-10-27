@@ -93,6 +93,7 @@ namespace OE.Sportsbook.Service.Tests
         [InlineData(MessageType.ON_BET_SETTLEMENT)]
         [InlineData(MessageType.ON_BET_STOP_GLOBAL)]
         [InlineData(MessageType.ON_BET_STOP_FIXTURE)]
+        [InlineData(MessageType.ON_PRICE_BOOST)]
         public async Task MessageReceived_DispatchesEachKnownTypeToTheMatchingHandler(string messageType)
         {
             var broker = new FakeMessageBroker();
@@ -129,6 +130,32 @@ namespace OE.Sportsbook.Service.Tests
             broker.Raise(Delivery(MessageType.ON_MARKET_CHANGE, new OnMarketChangeMessage { PrFiId = "F1" }));
 
             Assert.Single(repository.MarketChangeCalls);
+        }
+
+        [Fact]
+        public async Task MessageReceived_OnPriceBoost_DeserializesTheMessageTheAdapterForwards()
+        {
+            var broker = new FakeMessageBroker();
+            var repository = new FakeSportsbookRepository();
+            var worker = await StartAndWaitAsync(BuildWorker(broker, repository));
+            var boost = new OnPriceBoostMessage
+            {
+                ClientCode = "G02",
+                ProviderFixtureId = "14416699",
+                MarketTemplateId = "10162",
+                SelectionSpecifier = "bg:145241129:418700776",
+                BoostedOdds = 1.61m,
+                IsBoosted = true,
+                ClientBoostedSelectionNames = { new ClientBoostedSelectionNameMessage { ClientCode = "G02", BoostedSelectionName = "Asteras Tripolis" } }
+            };
+
+            broker.Raise(Delivery(MessageType.ON_PRICE_BOOST, boost, correlationId: "cid-1", routingKey: "r.oe.adapter.onpriceboost.09"));
+
+            var call = Assert.Single(repository.PriceBoostCalls);
+            Assert.Equal("G02", call.ClientCode);
+            Assert.Equal(1.61m, call.BoostedOdds);
+            Assert.Equal("bg:145241129:418700776", call.SelectionSpecifier);
+            Assert.Equal("Asteras Tripolis", Assert.Single(call.ClientBoostedSelectionNames).BoostedSelectionName);
         }
 
         [Fact]
@@ -243,6 +270,7 @@ namespace OE.Sportsbook.Service.Tests
             public List<(IMessageBroker Broker, OnFixtureChangeMessage Message, string CorrelationId)> FixtureChangeCalls { get; } = new();
             public List<(IMessageBroker Broker, OnMarketChangeMessage Message, string CorrelationId)> MarketChangeCalls { get; } = new();
             public List<OnDeleteCacheMessage> CacheInvalidationCalls { get; } = new();
+            public List<OnPriceBoostMessage> PriceBoostCalls { get; } = new();
 
             public Task SetInitialData()
             {
@@ -280,6 +308,12 @@ namespace OE.Sportsbook.Service.Tests
 
             public void ProcessOnMarketCancellationMessage(IMessageBroker messageBroker, OnMarketCancellationMessage message, string correlationId)
                 => Invocations.Add(MessageType.ON_MARKET_CANCEL);
+
+            public void ProcessOnPriceBoostMessage(IMessageBroker messageBroker, OnPriceBoostMessage message, string correlationId)
+            {
+                Invocations.Add(MessageType.ON_PRICE_BOOST);
+                PriceBoostCalls.Add(message);
+            }
 
             public void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message)
             {

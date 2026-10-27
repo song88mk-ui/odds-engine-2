@@ -95,6 +95,27 @@ namespace OE.Adapter.Service.Repositories
             PublishMessage(messageBroker, message, MessageType.ON_BET_STOP_FIXTURE, correlationId);
         }
 
+        // Backoffice's price boost (r.uof.onpriceboost) is forwarded to the shard that owns the fixture, like
+        // the settlement and bet-stop messages, so one consumer applies a fixture's boosts, odds and status
+        // changes in order. The message is forwarded as it is: the shard stamps it onto Mongo.
+        public void ProcessOnPriceBoostMessage(IMessageBroker messageBroker, OnPriceBoostMessage message, string correlationId)
+        {
+            try
+            {
+                using (var activity = _activitySource.StartActivity("publish.message"))
+                {
+                    var instanceName = _helper.GetInstanceName(message.ProviderFixtureId);
+                    activity?.SetTag("sb.engine.service.id", instanceName);
+                    messageBroker.Publish(message, MessageType.ON_PRICE_BOOST, $"r.oe.adapter.{MessageType.ON_PRICE_BOOST.ToLower()}.{instanceName}", correlationId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"{MessageType.ON_PRICE_BOOST} {JsonSerializer.Serialize(message)}");
+                throw;
+            }
+        }
+
         // Cache-apply only (2026-07 translation-flow redesign): the enrichment snapshot follows
         // the change. Persistence + translation-only odds pushes are OE.Translation.Service's job —
         // its queue binds the same r.oe.ontranslationchange key on the topic exchange, so no

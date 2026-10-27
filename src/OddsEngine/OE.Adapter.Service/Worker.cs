@@ -186,6 +186,13 @@ namespace OE.Adapter.Service
                                 (msg) => _tradingRepository.ProcessOnBetStopFixture(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_PRICE_BOOST:
+                            _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
+                            ProcessMessage<OnPriceBoostMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnPriceBoostMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                         case MessageType.ON_TRANSLATION_CHANGE:
                             _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
                             ProcessMessage<OnTranslationChangeMessage>(

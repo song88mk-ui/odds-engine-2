@@ -622,6 +622,61 @@ namespace OE.Adapter.Service.Tests
             Assert.Equal("凯尔采或客队", message.Ma.Single().Se.Single().SeNaTr!.Single().Tx);
         }
 
+        private static OnPriceBoostMessage PriceBoostMessage(string providerFixtureId = PROVIDER_FIXTURE_ID) => new()
+        {
+            ClientCode = "G02",
+            SportId = 10,
+            SegmentId = 223,
+            LeagueId = 145,
+            FixtureTypeId = 0,
+            ProviderFixtureId = providerFixtureId,
+            MarketTemplateId = "10162",
+            SelectionSpecifier = "bg:145241129:418700776",
+            BoostedOdds = 1.61m,
+            IsBoosted = true,
+            ClientBoosted = "G02",
+            ClientMarketBoosted = "G02"
+        };
+
+        // Backoffice's boost (r.uof.onpriceboost) goes to the shard that owns the fixture, as it is, so the
+        // shard applies a fixture's boosts, odds and status changes in order.
+        [Fact]
+        public void PriceBoost_IsForwardedAsItIsToTheShardOfTheFixture()
+        {
+            var message = PriceBoostMessage();
+
+            _repository.ProcessOnPriceBoostMessage(_broker, message, "cid");
+
+            var published = Assert.Single(_broker.Published);
+            Assert.Equal(MessageType.ON_PRICE_BOOST, published.MessageType);
+            Assert.Equal($"r.oe.adapter.onpriceboost.{_instanceName}", published.RoutingKey);
+            Assert.Equal("cid", published.CorrelationId);
+            Assert.Same(message, published.Payload);
+        }
+
+        // The shard is the one the fixture's other messages go to: the sportsbook services bind
+        // r.oe.adapter.#.{NN}, so a boost sent to a shard that does not own the fixture would look for a
+        // fixture it never loaded.
+        [Theory]
+        [InlineData("14416699", "09")]
+        [InlineData("1234567890", "01")]
+        public void PriceBoost_ShardFollowsTheLastTwoDigitsOfTheProviderFixtureId(string providerFixtureId, string shard)
+        {
+            _repository.ProcessOnPriceBoostMessage(_broker, PriceBoostMessage(providerFixtureId), "cid");
+
+            Assert.Equal($"r.oe.adapter.onpriceboost.{shard}", Assert.Single(_broker.Published).RoutingKey);
+        }
+
+        // A boost without a fixture cannot be routed. The adapter Worker catches this and reports it on
+        // r.error.oe.adapter, so the message is not requeued.
+        [Fact]
+        public void PriceBoost_WithoutProviderFixtureId_ThrowsAndPublishesNothing()
+        {
+            Assert.Throws<ArgumentException>(() => _repository.ProcessOnPriceBoostMessage(_broker, PriceBoostMessage(providerFixtureId: null!), "cid"));
+
+            Assert.Empty(_broker.Published);
+        }
+
         // Cache-apply only (2026-07 translation-flow redesign): persistence + notification are
         // OE.Translation.Service's job — the adapter must NOT forward the message anywhere.
         [Fact]

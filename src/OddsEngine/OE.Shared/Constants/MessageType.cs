@@ -20,6 +20,10 @@
         // carries changed TranslationCache2 rows from Platform.CacheSync.Service to the
         // OE.Adapter.Service instances (see OnTranslationChangeMessage).
         public const string ON_TRANSLATION_CHANGE = "OnTranslationChange";
+        // A price boost saved, changed or removed in Backoffice (r.uof.onpriceboost). OE.Adapter.Service
+        // forwards it to the OE.Sportsbook.Service shard of the fixture, which stamps the boost onto
+        // the fixture, market and selection documents (see OnPriceBoostMessage).
+        public const string ON_PRICE_BOOST = "OnPriceBoost";
 
         // Internal
         public const string ON_ODDS_CHANGE = "OnOddsChange";

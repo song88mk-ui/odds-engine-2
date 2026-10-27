@@ -40,6 +40,9 @@ that are **currently disabled** in code (intent uncertain — see [Unknowns.md](
   a selection can carry different boosted odds and display names per client. platform-web enforces
   boost rules at placement (`StatusCode.Boosted_Odds_*`): no parlay with boosts, no duplicate bets on
   the same boost, decimal-only, not allowed once a fixture goes live, not combinable with bet-builder.
+  Backoffice sets a boost with `OnPriceBoost` (`r.uof.onpriceboost`); `OE.Sportsbook.Service` stamps it onto
+  the documents (`PriceBoostMerger`): `ClBoOd` is `CODE:odds|CODE:odds` per selection, and a market's or
+  fixture's `IsBo`/`ClBo` follow the boosts of the selections under it.
 - **BR-11 [Verified]** **Odds change is the highest-frequency event**; selections toggle `IsAc`
   rather than being deleted when unavailable.
 

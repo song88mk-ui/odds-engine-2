@@ -322,6 +322,55 @@ namespace OE.Sportsbook.Service.Repositories
             }
         }
 
+        // Backoffice's price boost (OnPriceBoost): stamps one client's boost onto the selection, its market and
+        // its fixture, the documents the site reads for the Price Boost tab and the bet slip. Nothing is
+        // published: the site loads the boosts from Mongo when it opens the tab. A boost whose fixture or
+        // selection is not in Mongo (not loaded yet, or already gone) is logged and dropped.
+        public void ProcessOnPriceBoostMessage(IMessageBroker messageBroker, OnPriceBoostMessage message, string correlationId)
+        {
+            if (string.IsNullOrWhiteSpace(message.ClientCode) || string.IsNullOrWhiteSpace(message.ProviderFixtureId)
+                || string.IsNullOrWhiteSpace(message.MarketTemplateId) || string.IsNullOrWhiteSpace(message.SelectionSpecifier))
+            {
+                _logger.LogWarningEx($"OnPriceBoost without client, fixture, market or selection, not applied: {JsonSerializer.Serialize(message)}");
+                return;
+            }
+
+            var fixture = FindPriceBoostFixture(message);
+
+            if (fixture == null)
+            {
+                _logger.LogWarningEx($"FixtureId:{message.ProviderFixtureId} OnPriceBoost {message.ClientCode}: fixture not found, boost not applied");
+                return;
+            }
+
+            var selection = _selectionCollection.Find(Builders<Selection>.Filter.Where(c => c.FiId == fixture.FiId
+                && c.MaTeId == message.MarketTemplateId && c.SeSp == message.SelectionSpecifier)).FirstOrDefault();
+
+            if (selection == null)
+            {
+                _logger.LogWarningEx($"FixtureId:{message.ProviderFixtureId} OnPriceBoost {message.ClientCode}: selection {message.SelectionSpecifier} of market template {message.MarketTemplateId} not found, boost not applied");
+                return;
+            }
+
+            var boost = PriceBoostMerger.Merge(selection, message);
+
+            // The market's and the fixture's flags follow the boosts of their selections. The other selections
+            // are read before this one is written, and this one is taken from the merge, so no flag depends on
+            // reading a write back.
+            var marketFlags = PriceBoostMerger.Flags(FindBoostedOdds(Builders<Selection>.Filter.Eq(c => c.MaId, selection.MaId), selection.Id).Append(boost.ClBoOd));
+            var fixtureFlags = PriceBoostMerger.Flags(FindBoostedOdds(Builders<Selection>.Filter.Eq(c => c.FiId, fixture.FiId), selection.Id).Append(boost.ClBoOd));
+
+            // Acknowledged, unlike the default connection (w=0): this is a read-modify-write of one string
+            // per selection, so the next boost message, of another client of the same selection, must read
+            // this one. The selection goes first and the fixture last, so the site never finds a boosted
+            // fixture before its selections.
+            BulkWrite(_selectionCollection.WithWriteConcern(WriteConcern.Acknowledged), ToSelectionBoosted(selection.Id, boost));
+            BulkWrite(_marketCollection.WithWriteConcern(WriteConcern.Acknowledged), ToMarketBoosted(selection.MaId, marketFlags));
+            BulkWrite(_fixtureCollection.WithWriteConcern(WriteConcern.Acknowledged), ToFixtureBoosted(fixture.Id, fixtureFlags));
+
+            _logger.LogInformationEx($"FixtureId:{message.ProviderFixtureId} OnPriceBoost {message.ClientCode} selection {selection.SeId} boosted odds {message.BoostedOdds} ({selection.ClBoOd} -> {boost.ClBoOd})");
+        }
+
         public void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message)
         {
             if (message.PurgeAll)
@@ -434,6 +483,67 @@ namespace OE.Sportsbook.Service.Repositories
             {
                     new UpdateOneModel<Fixture>(filter, updateFixture)
                     { IsUpsert = true }
+            };
+        }
+
+        // The fixture of a boost: Backoffice sends the provider fixture id, and the document id is
+        // "{channel type}:{provider fixture id}" (OutgoingAdapterMessageBase.Id), so every channel is tried
+        // by id and the sport, segment, league and fixture type confirm it. PrFiId has no index.
+        private Fixture FindPriceBoostFixture(OnPriceBoostMessage message)
+        {
+            var ids = Enum.GetValues<ChannelType>().Select(channel => $"{(int)channel}:{message.ProviderFixtureId}").ToList();
+
+            return _fixtureCollection.Find(Builders<Fixture>.Filter.In(f => f.Id, ids)).ToList()
+                .FirstOrDefault(f => f.SpId == message.SportId && f.SegId == message.SegmentId
+                    && f.LeId == message.LeagueId && f.FiTyId == message.FixtureTypeId);
+        }
+
+        // The ClBoOd of the boosted selections inside the scope (a market or a fixture), but the one given.
+        private List<string> FindBoostedOdds(FilterDefinition<Selection> scope, string excludedSelectionId)
+        {
+            var filter = Builders<Selection>.Filter.And(
+                scope,
+                Builders<Selection>.Filter.Ne(c => c.Id, excludedSelectionId),
+                Builders<Selection>.Filter.Ne(c => c.ClBoOd, null),
+                Builders<Selection>.Filter.Ne(c => c.ClBoOd, string.Empty));
+
+            return _selectionCollection.Find(filter).Project(c => c.ClBoOd).ToList();
+        }
+
+        internal static WriteModel<Selection>[] ToSelectionBoosted(string selectionId, PriceBoostSelection boost)
+        {
+            return new WriteModel<Selection>[]
+            {
+                new UpdateOneModel<Selection>(Builders<Selection>.Filter.Eq(s => s.Id, selectionId),
+                    Builders<Selection>.Update
+                        .Set(s => s.ClBoOd, boost.ClBoOd)
+                        .Set(s => s.ClBoSeNa, boost.ClBoSeNa)
+                        .Set(s => s.ClBoSeNaTr, boost.ClBoSeNaTr))
+                { IsUpsert = false }
+            };
+        }
+
+        internal static WriteModel<Market>[] ToMarketBoosted(long marketId, (bool IsBo, string ClBo) flags)
+        {
+            return new WriteModel<Market>[]
+            {
+                new UpdateOneModel<Market>(Builders<Market>.Filter.Eq(m => m.MaId, marketId),
+                    Builders<Market>.Update
+                        .Set(m => m.IsBo, flags.IsBo)
+                        .Set(m => m.ClBo, flags.ClBo))
+                { IsUpsert = false }
+            };
+        }
+
+        internal static WriteModel<Fixture>[] ToFixtureBoosted(string fixtureId, (bool IsBo, string ClBo) flags)
+        {
+            return new WriteModel<Fixture>[]
+            {
+                new UpdateOneModel<Fixture>(Builders<Fixture>.Filter.Eq(f => f.Id, fixtureId),
+                    Builders<Fixture>.Update
+                        .Set(f => f.IsBo, flags.IsBo)
+                        .Set(f => f.ClBo, flags.ClBo))
+                { IsUpsert = false }
             };
         }
 

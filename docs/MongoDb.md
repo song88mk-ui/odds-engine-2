@@ -68,8 +68,14 @@ histogram. Writes are **`UpdateOneModel` upserts**:
 > (`:594, :610`) and must stay that way: `OE.Translation.Service` owns all `*NaTr` writes
 > (`SportsbookRepository.cs:414`). Sportsbook *reads* the persisted `*NaTr` back out when building
 > `OnInternalOddsChangeMessage` (`:839, :864`). Likewise `LiId`, `ClMa`,
-> `GeAl`, `IsBo`, `ClBo`, period scores, betradar ids are commented out — those Fixture fields exist
+> `GeAl`, period scores, betradar ids are commented out — those Fixture fields exist
 > in the schema but are **not written by Sportsbook.Service** (LiveStream writes `LiId`/`GeAl`).
+>
+> **`IsBo`/`ClBo` are the exception, written only by the `OnPriceBoost` handler** (Fixture and Market
+> `IsBo`/`ClBo`, Selection `ClBoOd`/`ClBoSeNa`/`ClBoSeNaTr`; BO-10). The fixture-change `.Set(IsBo/ClBo)`
+> lines must stay commented out: a fixture change carries no boost, so enabling them would erase the
+> boosts on every fixture update. The boost writes use an acknowledged write concern (the default
+> connection is `w=0`).
 
 ## Read patterns — [Verified]
 | Where | Filter | Index used |
@@ -78,6 +84,9 @@ histogram. Writes are **`UpdateOneModel` upserts**:
 | `ProcessOnMarketSettlementMessage` (`:146`) | `MaId == X` | `idx_maid` ✅ |
 | `ProcessOnBetSettlementMessage` (`:189`) | `PrFiId == X && MaTeId && SeTeId && SeSp` | **none — unindexed** ⚠️ |
 | `ProcessOnBetStopFixtureMessage` (`:243`) | `_id == X` | `_id` ✅ |
+| `ProcessOnPriceBoostMessage`, fixture | `_id ∈ {"{ChTyId}:{PrFiId}"}` for each `ChannelType` (`PrFiId` has no index, so it is not used) | `_id` ✅ |
+| `ProcessOnPriceBoostMessage`, selection | `FiId == X && MaTeId == Y && SeSp == Z` | `idx_fiid_mastid_mateid` (prefix `FiId`) ✅ |
+| `ProcessOnPriceBoostMessage`, other boosted selections | `MaId == X` (market) or `FiId == X` (fixture), `ClBoOd` not empty, `_id != the selection`; projection `ClBoOd` | `idx_maid` / `idx_fiid_mastid_mateid` (prefix `FiId`) ✅ |
 | `GetActiveMarketIds` (`:876`) | `FiId == X && MaStId ∈ {Active,Suspended}` + **projection** (`MaId,PrFiId` → `MarketStatusProjection`) | `idx_fiid_mastid_mateid` ✅ |
 | `SetBetStopStatus` (`:869`) | `BeSo == "betstop"` | `_id` ✅ |
 

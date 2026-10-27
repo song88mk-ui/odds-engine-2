@@ -144,6 +144,7 @@ namespace OE.Adapter.Service.Tests
         [InlineData(MessageType.ON_MARKET_CANCEL)]
         [InlineData(MessageType.ON_BET_STOP_FIXTURE)]
         [InlineData(MessageType.ON_TRANSLATION_CHANGE)]
+        [InlineData(MessageType.ON_PRICE_BOOST)]
         public async Task MessageReceived_DispatchesEachKnownTypeToTheMatchingHandler(string messageType)
         {
             var broker = new FakeMessageBroker();
@@ -180,6 +181,45 @@ namespace OE.Adapter.Service.Tests
             broker.Raise(Delivery(MessageType.ON_MARKET_CHANGE, new OnMarketChangeMessage { PrFiId = "F1" }));
 
             Assert.Single(repository.MarketChangeCalls);
+        }
+
+        [Fact]
+        public async Task MessageReceived_OnPriceBoost_DeserializesTheJsonBackofficePublishes()
+        {
+            var broker = new FakeMessageBroker();
+            var repository = new FakeTradingRepository();
+            var worker = await StartAndWaitAsync(BuildWorker(broker, repository));
+
+            // Verbatim what Backoffice.Shared.Models.OnPriceBoostMessage serializes to (default System.Text.Json
+            // options): the names below are the contract with Backoffice, so a rename here must fail this test.
+            const string backofficeJson = "{\"ClientCode\":\"G02\",\"SportId\":10,\"SegmentId\":223,\"LeagueId\":145,\"FixtureTypeId\":0,"
+                + "\"ProviderFixtureId\":\"14416699\",\"MarketTemplateId\":\"10162\",\"SelectionTemplateId\":\"4\","
+                + "\"SelectionSpecifier\":\"bg:145241129:418700776\",\"BoostedOdds\":1.61,\"IsBoosted\":true,"
+                + "\"ClientBoosted\":\"G02|G03\",\"ClientMarketBoosted\":\"G02\","
+                + "\"ClientBoostedSelectionNames\":[{\"ClientCode\":\"G02\",\"BoostedSelectionName\":\"Asteras Tripolis\"}],"
+                + "\"ClientBoostedSelectionNameTranslations\":[{\"LanguageCode\":\"ZH\",\"ClientCode\":\"G02\",\"BoostedSelectionName\":\"Asteras ZH\"}]}";
+            var properties = new BasicProperties { Type = MessageType.ON_PRICE_BOOST, CorrelationId = "cid-1" };
+
+            broker.Raise(new BasicDeliverEventArgs("consumer", 1, false, "e.central", "r.uof.onpriceboost", properties, Encoding.UTF8.GetBytes(backofficeJson)));
+
+            var boost = Assert.Single(repository.PriceBoostCalls);
+            Assert.Equal("G02", boost.ClientCode);
+            Assert.Equal(10, boost.SportId);
+            Assert.Equal(223, boost.SegmentId);
+            Assert.Equal(145, boost.LeagueId);
+            Assert.Equal(0, boost.FixtureTypeId);
+            Assert.Equal("14416699", boost.ProviderFixtureId);
+            Assert.Equal("10162", boost.MarketTemplateId);
+            Assert.Equal("4", boost.SelectionTemplateId);
+            Assert.Equal("bg:145241129:418700776", boost.SelectionSpecifier);
+            Assert.Equal(1.61m, boost.BoostedOdds);
+            Assert.True(boost.IsBoosted);
+            Assert.Equal("G02|G03", boost.ClientBoosted);
+            Assert.Equal("G02", boost.ClientMarketBoosted);
+            Assert.Equal("Asteras Tripolis", Assert.Single(boost.ClientBoostedSelectionNames).BoostedSelectionName);
+            var translation = Assert.Single(boost.ClientBoostedSelectionNameTranslations);
+            Assert.Equal("ZH", translation.LanguageCode);
+            Assert.Equal("Asteras ZH", translation.BoostedSelectionName);
         }
 
         [Fact]
@@ -287,6 +327,14 @@ namespace OE.Adapter.Service.Tests
 
             public void ProcessOnTranslationChangeMessage(IMessageBroker messageBroker, OnTranslationChangeMessage message, string correlationId)
                 => Invocations.Add(MessageType.ON_TRANSLATION_CHANGE);
+
+            public List<OnPriceBoostMessage> PriceBoostCalls { get; } = new();
+
+            public void ProcessOnPriceBoostMessage(IMessageBroker messageBroker, OnPriceBoostMessage message, string correlationId)
+            {
+                Invocations.Add(MessageType.ON_PRICE_BOOST);
+                PriceBoostCalls.Add(message);
+            }
         }
     }
 }

@@ -15,7 +15,10 @@ file: `OE.Sportsbook.Service/Repositories/SportsbookRepository.cs`. Reference: [
   `idx_fiid_mastid_mateid` (Market+Selection); `idx_maid` (Selection).
 - Writes: unordered `BulkWrite` upserts, `Set`/`SetOnInsert`, **`w=0` (unacked — silent failures)**.
 - Reads: `Builders<T>.Filter` + `Find`; primary read pref in OEv2.
-- ⚠️ **`LiId`/`ClMa`/`GeAl`/`IsBo`/`PeSc` are NOT persisted** by `OE.Sportsbook.Service` (commented out).
+- ⚠️ **`LiId`/`ClMa`/`GeAl`/`PeSc` are NOT persisted** by `OE.Sportsbook.Service` (commented out).
+  `IsBo`/`ClBo` (Fixture, Market) and `ClBoOd`/`ClBoSeNa`/`ClBoSeNaTr` (Selection) are written only by the
+  `OnPriceBoost` handler (`ProcessOnPriceBoostMessage`, acknowledged writes); the fixture-change `Set` lines
+  for `IsBo`/`ClBo` stay commented out, or they would erase the boosts.
   Translations ARE persisted: `OE.Translation.Service` writes the `*NaTr` fields on
   `Fixture`/`Market`/`Selection` (`OE.Translation.Service/Repositories/MongoTranslationRepository.cs`,
   e.g. `Update.Set` of `SpNaTr`/`SegNaTr` at :98/:102); the `*Lookup` collections carry none. See

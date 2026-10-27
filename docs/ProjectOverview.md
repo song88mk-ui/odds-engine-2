@@ -25,7 +25,8 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Consumes:** `r.uof.#` and `r.bg.receiver.#` (argocd) from `e.central`.
 - **Handles** (`Worker.cs:98-144`): `ON_FIXTURE_CHANGE`, `ON_MARKET_CHANGE`,
   `ON_MARKET_SETTLEMENT`, `ON_BET_SETTLEMENT`, `ON_BET_STOP_GLOBAL`, `ON_MARKET_CANCEL`,
-  `ON_BET_STOP_FIXTURE`.
+  `ON_BET_STOP_FIXTURE`, `ON_PRICE_BOOST` (backoffice's `r.uof.onpriceboost`, forwarded as it is to the
+  fixture's shard, `r.oe.adapter.onpriceboost.<NN>`).
 - **Publishes:** `r.oe.adapter.<type>.<NN>` where `<NN>` = `Helper.GetInstanceName(ProviderFixtureId)`
   (`Repositories/TradingRepository.cs:58,121`); global bet-stop → `...on_bet_stop_global.10`
   (`:75`); errors → `r.error.oe.adapter` (`Worker.cs:210`).
@@ -52,9 +53,16 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Startup:** creates Mongo indexes (`MongoIndexBootstrapper.CreateIndexesAsync`,
   `Program.cs:21-25`), loads global bet-stop state from `BettingStatus` (`Worker.cs:68`).
 - **Handles** (`Worker.cs:100-144`): fixture/market change, market & bet settlement,
-  bet-stop global/fixture, and `ON_DYNAMIC_TRANSLATION_CHANGE` (cache purge).
+  bet-stop global/fixture, `ON_PRICE_BOOST` (a client's price boost, see below) and
+  `ON_DYNAMIC_TRANSLATION_CHANGE` (cache purge).
 - **Writes (MongoDB `Sportsbook`):** Fixture, Market, Selection, BettingStatus — via unordered
-  `BulkWrite` (histogram `bulkwrite.duration`).
+  `BulkWrite` (histogram `bulkwrite.duration`). The price boost fields (`IsBo`, `ClBo`, `ClBoOd`,
+  `ClBoSeNa`, `ClBoSeNaTr`) are written only by the `ON_PRICE_BOOST` handler
+  (`SportsbookRepository.ProcessOnPriceBoostMessage`, merge rules in `PriceBoostMerger`): it finds the
+  fixture by `_id` (`{ChTyId}:{provider fixture id}`), the selection by `FiId` + `MaTeId` + `SeSp`, rewrites
+  that client's entry, then derives the market's and the fixture's `IsBo`/`ClBo` from the boosts their
+  selections hold. These writes are acknowledged, unlike the default `w=0` connection, because each message
+  is a read-modify-write of one string per selection.
 - **SQL:** none. Sportsbook has **no** `TranslationContext` registration and reads no SQL — it is
   Mongo-only. (Before the 2026-07 redesign it read `SportsbookDynamic` per message; that path is gone.)
 - **Translations:** *forwards*, never sources. Inbound `*Tr` lists are passed through

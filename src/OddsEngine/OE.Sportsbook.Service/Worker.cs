@@ -135,6 +135,12 @@ namespace OE.Sportsbook.Service
                                 (msg) => _sportsbookRepository.ProcessOnBetStopFixtureMessage(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_PRICE_BOOST:
+                            ProcessMessage<OnPriceBoostMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnPriceBoostMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                         case MessageType.ON_DYNAMIC_TRANSLATION_CHANGE:
                             ProcessMessage<OnDeleteCacheMessage>(
                                 payload,
