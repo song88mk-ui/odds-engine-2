@@ -46,9 +46,10 @@ Evidence: each `*.csproj` has exactly one `<ProjectReference Include="..\OE.Shar
 | Package | Used by | Why |
 |---|---|---|
 | MongoDB.Driver 3.4.0/3.6.0 | Sportsbook, Lookup, Settlement, Cleanup, LiveStream | Mongo access (driver versions differ) |
-| Microsoft.AspNetCore.SignalR.Client 10.0.11 (+ MessagePack protocol) | Websocket.Service | SignalR client to `/platform` |
+| Microsoft.AspNetCore.SignalR.Client 10.0.13 (+ MessagePack protocol) | Websocket.Service | SignalR client to `/platform` |
 | Microsoft.Extensions.Http 10.0.11 | Lookup, Settlement | `IHttpClientFactory` |
 | IdGen 3.0.7 | Sportsbook.Service | **referenced but unused** (snowflake id gen) |
+| System.Security.Cryptography.Pkcs 9.0.21 | OE.Shared (flows to every project and the published package) | security pin over Microsoft.Data.SqlClient 7.0.x's vulnerable 8.0.1/9.0.13 |
 
 > **Inconsistency:** `MongoDB.Driver` split 3.4.0 vs 3.6.0 remains (deliberately untouched by
 > GM-751 — the driver upgrade is a separate effort). TFMs, `Microsoft.Extensions.Hosting`, and
