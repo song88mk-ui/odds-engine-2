@@ -16,19 +16,19 @@ mocking library anywhere in the solution: test doubles are hand-written `Fake*` 
 |---|---|---|
 | `OE.Shared.Test` | 186 | Shared kernel: sharding helper, wire contracts, MemCache, MessageBroker, providers |
 | `OE.Websocket.Service.Tests` | 165 | Client registry and presence, SignalR groups, odds maths, outgoing payload mapping |
-| `OE.Job.BoostedOddsCap.Tests` | 147 | Cap alerts: header scanner, gap maths, client-odds repricing (hand-worked prices), alert tracker, evaluator, boost snapshot and loader (failure isolation), email recipient rules and EF mappings, toast and email digest, rate limiter, dispatcher, and the consumer through `FakeMessageBroker` (never throws, watchdog) |
+| `OE.Job.BoostedOddsCap.Tests` | 162 | Cap alerts: header scanner, gap maths, client-odds repricing (hand-worked prices), alert tracker, evaluator, boost snapshot and loader (failure isolation), email recipient rules and EF mappings, toast and email digest, the internal BCC copy, rate limiter, dispatcher, and the consumer through `FakeMessageBroker` (never throws, watchdog) |
 | `OE.Translation.Service.Tests` | 102 | Translation persistence and the translation-only odds-change path |
-| `OE.Adapter.Service.Tests` | 61 | Adapter routing, trading repository, translation cache |
-| `OE.Sportsbook.Service.Tests` | 41 | Catalogue writes, translation gate, worker dispatch, dormant `OnMarketCancel` tripwire (GM-959) |
+| `OE.Adapter.Service.Tests` | 67 | Adapter routing, trading repository, translation cache |
+| `OE.Sportsbook.Service.Tests` | 66 | Catalogue writes, translation gate, worker dispatch, dormant `OnMarketCancel` tripwire (GM-959) |
 | `OE.Translation.Job.Tests` | 37 | Bet placement worker, cleanup worker, key builder |
 | `OE.Job.Cleanup.Tests` | 21 | Orphan sweep: which fixture ids are swept, the delete filters, sweep interval, UTC window |
 | `OE.Job.Lookup.Tests` | 20 | Lookup worker: dispatch, error and slow-message logging, consumer watchdog and status line, telemetry counter, duration histogram and spans (DEVOPS-443) |
 | `OE.Job.KeepAlive.Tests` | 5 | Heartbeat worker |
 | `OE.Job.Settlement.Tests` | 5 | Settlement worker |
 
-All 790 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
+All 836 are unit tests. None needs RabbitMQ, MongoDB or SQL Server running. Counts re-measured
 2026-10-14 from a full `dotnet test` run; the previous table had drifted (its total was also one
-below the sum of its rows). The `OE.Job.Lookup.Tests` row and the total were re-measured 2026-10-16 (DEVOPS-443). The `OE.Job.BoostedOddsCap.Tests` row and the total were added 2026-10-22; `FakeMessageBroker` now also records `CPublish` calls in `CPublished`.
+below the sum of its rows). The `OE.Job.Lookup.Tests` row and the total were re-measured 2026-10-16 (DEVOPS-443). The `OE.Job.BoostedOddsCap.Tests` row and the total were added 2026-10-22; `FakeMessageBroker` now also records `CPublish` calls in `CPublished`. The `OE.Job.BoostedOddsCap.Tests` row (internal BCC copy, BO-150) and the total were re-measured 2026-11-02, which also corrects the `OE.Adapter.Service.Tests` and `OE.Sportsbook.Service.Tests` rows that the price boost writer had left stale.
 
 ```bash
 # everything

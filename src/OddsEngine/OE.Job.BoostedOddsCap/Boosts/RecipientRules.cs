@@ -43,13 +43,27 @@ namespace OE.Job.BoostedOddsCap.Boosts
         // tolerated, and anything that is not a valid address is dropped rather than failing the whole send later.
         public static string[] ParseAddresses(string email)
         {
-            if (string.IsNullOrWhiteSpace(email))
-                return new string[0];
-
-            return email.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            return Entries(email)
                     .Where(address => MailAddress.TryCreate(address, out _))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
+        }
+
+        // The entries ParseAddresses drops, so a field that holds a typo can be reported instead of losing the
+        // address without a trace.
+        public static string[] RejectedAddresses(string email)
+        {
+            return Entries(email)
+                    .Where(address => !MailAddress.TryCreate(address, out _))
+                    .ToArray();
+        }
+
+        private static string[] Entries(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return new string[0];
+
+            return email.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
     }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using OE.Job.BoostedOddsCap.Boosts;
 
 namespace OE.Job.BoostedOddsCap.Alerts
 {
@@ -14,6 +15,13 @@ namespace OE.Job.BoostedOddsCap.Alerts
         // When set, every email goes to this one address instead of the client's own, so a lower
         // environment can be exercised without writing to a real client.
         public string OverrideRecipient { get; init; } = string.Empty;
+
+        // Internal addresses that each get a hidden copy (BCC) of every client email, so the team can look back at
+        // what a client was sent. Read from the comma separated Email:Bcc; empty means no copy. Entries that are not
+        // valid addresses are dropped and kept in BccRejected so the sender can report them. Not used while
+        // OverrideRecipient is set (see SmtpAlertEmailSender.BuildMessage).
+        public string[] Bcc { get; init; } = new string[0];
+        public string[] BccRejected { get; init; } = new string[0];
 
         // At most this many emails reach one recipient in any rolling hour; 0 removes the limit.
         public int MaxPerRecipientPerHour { get; init; } = 10;
@@ -33,6 +41,7 @@ namespace OE.Job.BoostedOddsCap.Alerts
         public static EmailOptions FromConfiguration(IConfiguration configuration)
         {
             var defaults = new EmailOptions();
+            var bcc = configuration.GetValue("Email:Bcc", string.Empty);
 
             return new EmailOptions
             {
@@ -40,6 +49,8 @@ namespace OE.Job.BoostedOddsCap.Alerts
                 From = configuration.GetValue("Email:From", defaults.From),
                 Subject = configuration.GetValue("Email:Subject", defaults.Subject),
                 OverrideRecipient = configuration.GetValue("Email:OverrideRecipient", defaults.OverrideRecipient),
+                Bcc = RecipientRules.ParseAddresses(bcc),
+                BccRejected = RecipientRules.RejectedAddresses(bcc),
                 MaxPerRecipientPerHour = configuration.GetValue("Email:MaxPerRecipientPerHour", defaults.MaxPerRecipientPerHour),
                 BackofficeUrl = configuration.GetValue("Email:BackofficeUrl", defaults.BackofficeUrl),
                 SmtpHost = configuration.GetValue("Email:Smtp:Host", defaults.SmtpHost),

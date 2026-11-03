@@ -291,7 +291,9 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   package); host, port, TLS and credentials are configuration (`Email:Smtp:*`), so SES's SMTP endpoint or any
   relay works with no code change. One **digest** per recipient per batch (the client's Email Address, split on `;` and `,`),
   at most `Email:MaxPerRecipientPerHour` (10) per recipient, `Email:OverrideRecipient` redirects everything to
-  one address for a lower environment. No SMTP relay or SES is configured in any odds-engine deployment yet.
+  one address for a lower environment. `Email:Bcc` (comma separated internal addresses) gives each of them a hidden copy
+  (BCC) of every client email so the team can look back at what a client was sent; it is not used while the override
+  is set, and entries that are not valid addresses are dropped and logged at startup. No SMTP relay or SES is configured in any odds-engine deployment yet.
 - **Failure handling:** the handler never throws (MessageBroker would requeue and redeliver forever); a failed
   reload, toast or email is logged, counted and does not affect the others. A failed read of the Backoffice
   clients never costs the job its boost index or the toast: `BoostSnapshotLoader` keeps the previous recipients,
