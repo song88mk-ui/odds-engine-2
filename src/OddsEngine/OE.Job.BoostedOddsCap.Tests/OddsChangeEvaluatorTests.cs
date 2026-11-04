@@ -124,6 +124,63 @@ namespace OE.Job.BoostedOddsCap.Tests
                     TestMessages.Rule(marketTemplateId: "18", marketSpecifier: "total=2.5")));
         }
 
+        // bet-genius tells its markets apart by an id of their own ("bg:market:{PrMaId}") and the selection specifier
+        // ("bg:{PrMaId}:{PrSeId}") carries the same id. Backoffice reads the market from Mongo, which keeps no market
+        // specifier, so it saves the boost with an empty one. On DEV (2026-11-04) such boosts never alerted because the
+        // message's "bg:market:..." was compared with that empty value.
+        [Fact]
+        public void MatchesABetGeniusMarketForABoostSavedWithoutAMarketSpecifier()
+        {
+            var market = BetGeniusMarket("bg:market:146462770", "bg:146462770:422421840", "bg:146462770:422421841", 2.00m);
+
+            var alert = Assert.Single(Evaluate(NewEvaluator(), Prematch(market),
+                    TestMessages.Rule(marketTemplateId: "115", marketSpecifier: "", selectionSpecifier: "bg:146462770:422421840")));
+
+            Assert.Equal(2.00m, alert.CurrentOdds);
+        }
+
+        [Fact]
+        public void ABoostSavedWithAMarketSpecifierStillNeedsTheBetGeniusMarketToCarryIt()
+        {
+            var market = BetGeniusMarket("bg:market:146462770", "bg:146462770:422421840", "bg:146462770:422421841", 2.00m);
+
+            Assert.Empty(Evaluate(NewEvaluator(), Prematch(market),
+                    TestMessages.Rule(marketTemplateId: "115", marketSpecifier: "bg:market:999", selectionSpecifier: "bg:146462770:422421840")));
+            Assert.Single(Evaluate(NewEvaluator(), Prematch(market),
+                    TestMessages.Rule(marketTemplateId: "115", marketSpecifier: "bg:market:146462770", selectionSpecifier: "bg:146462770:422421840")));
+        }
+
+        [Fact]
+        public void TwoBetGeniusMarketsOfOneTemplateAreToldApartBySelectionSpecifier()
+        {
+            var first = BetGeniusMarket("bg:market:10", "bg:10:1", "bg:10:2", 2.00m);
+            var second = BetGeniusMarket("bg:market:11", "bg:11:1", "bg:11:2", 2.04m);
+
+            var alerts = NewEvaluator().Evaluate(TestMessages.OddsChange(TestMessages.FixtureId, 0, first, second),
+                    new[] { TestMessages.Rule(marketTemplateId: "115", marketSpecifier: "", selectionSpecifier: "bg:11:1") }, Now);
+
+            // only the second market holds the boosted selection, and the odds in the alert are its own
+            Assert.Equal(2.04m, Assert.Single(alerts).CurrentOdds);
+        }
+
+        [Fact]
+        public void ABoostWithoutAMarketSpecifierDoesNotMatchAnotherProvidersSpecifiedMarket()
+        {
+            var market = TestMessages.Market("18", "total=2.5", "S88", "", 1,
+                    TestMessages.Selection("1", "", 2.00m), TestMessages.Selection("2", "", 2.00m));
+
+            Assert.Empty(Evaluate(NewEvaluator(), Prematch(market),
+                    TestMessages.Rule(marketTemplateId: "18", marketSpecifier: "")));
+        }
+
+        // the shape bet-genius publishes: no client margins (ClCoMa empty), the market and selection ids in the specifiers
+        private static InternalMarketMessage BetGeniusMarket(string marketSpecifier, string firstSelectionSpecifier,
+            string secondSelectionSpecifier, decimal odds)
+        {
+            return TestMessages.Market("115", marketSpecifier, "S88", "", 1,
+                    TestMessages.Selection("1", firstSelectionSpecifier, odds), TestMessages.Selection("3", secondSelectionSpecifier, odds));
+        }
+
         [Theory]
         [InlineData(null)]
         [InlineData("")]

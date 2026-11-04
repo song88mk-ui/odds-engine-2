@@ -42,7 +42,14 @@ namespace OE.Job.BoostedOddsCap.Evaluation
 
                 foreach (var rule in rules)
                 {
-                    if (rule.MarketTemplateId != market.MaTeId || rule.MarketSpecifier != marketSpecifier)
+                    if (rule.MarketTemplateId != market.MaTeId)
+                        continue;
+
+                    // A boost saved without a market specifier still matches a bet-genius market, whose specifier is its own id:
+                    // the selection specifier below carries that id, so it still pins the exact market and selection. Any other
+                    // specifier has to be the one the boost was saved with.
+                    if (rule.MarketSpecifier != marketSpecifier
+                            && !(string.IsNullOrEmpty(rule.MarketSpecifier) && BoostText.IsBetGeniusMarketSpecifier(marketSpecifier)))
                         continue;
 
                     // the client is not offered this market, so there are no client odds to compare with

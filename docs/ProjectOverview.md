@@ -278,7 +278,9 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
   without deserialising (`OddsChangeHeaderScanner`), drop anything that is not a prematch fixture with a boost,
   and only then deserialise and evaluate. Evaluation is pure (`OddsChangeEvaluator`): a boost applies to an
   **active** market of the same template and specifier offered to the client (`ClCo`), for the selection of the
-  same template and specifier.
+  same template and specifier. A boost saved without a market specifier also matches a bet-genius market, whose
+  specifier is its own id (`bg:market:{PrMaId}`): Backoffice reads the market from Mongo, which keeps no market
+  specifier, and the selection specifier (`bg:{PrMaId}:{PrSeId}`) still pins the exact market and selection.
 - **Alert rule:** gap % = (boosted − current) / (boosted + current) × 100, as in v1, and the job alerts when the
   gap is **at or below the cap** (the market has caught up with, or passed, the boost). `CapAlertTracker`
   alerts **once per crossing**, not per message as v1 did, and re-arms only after the gap climbs back above the
