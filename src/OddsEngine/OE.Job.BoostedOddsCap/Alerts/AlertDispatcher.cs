@@ -1,3 +1,4 @@
+using System.Net.Mail;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using OE.Job.BoostedOddsCap.Boosts;
@@ -121,8 +122,11 @@ namespace OE.Job.BoostedOddsCap.Alerts
                 catch (Exception ex)
                 {
                     _instrumentation.EmailsFailed.Add(1);
-                    _logger.LogError(ex, "Failed to email {Count} price boost cap alerts to {Recipient}",
-                            pair.Value.Count, MaskAddress(pair.Key));
+                    // Which server and settings were used, because a mail server that drops the connection says nothing about
+                    // itself. Names and flags only: never the user name or the password.
+                    _logger.LogError(ex, "Failed to email {Count} price boost cap alerts to {Recipient} through {SmtpHost}:{SmtpPort} (STARTTLS {SmtpEnableSsl}, login {HasLogin}) as {From}, SMTP status {SmtpStatus}",
+                            pair.Value.Count, MaskAddress(pair.Key), _emailOptions.SmtpHost, _emailOptions.SmtpPort, _emailOptions.SmtpEnableSsl,
+                            !string.IsNullOrEmpty(_emailOptions.SmtpUsername), _emailOptions.From, (ex as SmtpException)?.StatusCode);
                 }
             }
         }
