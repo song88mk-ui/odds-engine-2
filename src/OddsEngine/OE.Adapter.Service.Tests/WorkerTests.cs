@@ -39,7 +39,8 @@ namespace OE.Adapter.Service.Tests
             FakeMessageBroker broker,
             FakeTradingRepository? tradingRepository = null,
             FakeTranslationCache? translationCache = null,
-            string? translationConnectionString = null)
+            string? translationConnectionString = null,
+            FakeClientVisibility? clientVisibility = null)
         {
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
@@ -53,6 +54,7 @@ namespace OE.Adapter.Service.Tests
                 broker,
                 tradingRepository ?? new FakeTradingRepository(),
                 translationCache ?? new FakeTranslationCache(),
+                clientVisibility ?? new FakeClientVisibility(),
                 configuration,
                 new Instrumentation());
         }
@@ -145,6 +147,7 @@ namespace OE.Adapter.Service.Tests
         [InlineData(MessageType.ON_BET_STOP_FIXTURE)]
         [InlineData(MessageType.ON_TRANSLATION_CHANGE)]
         [InlineData(MessageType.ON_PRICE_BOOST)]
+        [InlineData(MessageType.ON_LEAGUE_CONFIG)]
         public async Task MessageReceived_DispatchesEachKnownTypeToTheMatchingHandler(string messageType)
         {
             var broker = new FakeMessageBroker();
@@ -272,6 +275,52 @@ namespace OE.Adapter.Service.Tests
             Assert.False(string.IsNullOrEmpty(envelope.RootElement.GetProperty("StackTrace").GetString()));
             Assert.Contains("F1", envelope.RootElement.GetProperty("Payload").GetString());
         }
+        [Fact]
+        public async Task ExecuteAsync_PreloadsTheClientVisibilityBeforeConnecting()
+        {
+            var broker = new FakeMessageBroker();
+            var clientVisibility = new FakeClientVisibility();
+            var preloadsWhenConnecting = -1;
+            broker.OnConnect = () => preloadsWhenConnecting = clientVisibility.PreloadCalls;
+
+            await StartAndWaitAsync(BuildWorker(broker, clientVisibility: clientVisibility));
+
+            Assert.Equal(1, preloadsWhenConnecting);
+            Assert.Equal(1, broker.ConnectCalls);
+        }
+
+        [Fact]
+        public async Task ExecuteAsync_ClientVisibilityPreloadFails_NeverConnects_SoMessagesAreNotStampedFromNothing()
+        {
+            var broker = new FakeMessageBroker();
+            var worker = BuildWorker(broker, clientVisibility: new FakeClientVisibility { ThrowOnPreload = true });
+
+            // ExecuteAsync runs after StartAsync returns (see StartAndWaitAsync), so the failure surfaces on ExecuteTask
+            await worker.StartAsync(CancellationToken.None);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => worker.ExecuteTask!);
+
+            Assert.Equal(0, broker.ConnectCalls);
+        }
+
+        [Fact]
+        public async Task MessageReceived_OnLeagueConfig_DeserializesTheJsonBackofficePublishes()
+        {
+            var broker = new FakeMessageBroker();
+            var repository = new FakeTradingRepository();
+            await StartAndWaitAsync(BuildWorker(broker, repository));
+
+            // Verbatim what Backoffice.Shared.OutgoingEngineMessages.OnLeagueConfigMessage serializes to (default
+            // System.Text.Json options): the names are the contract with Backoffice, so a rename must fail this test.
+            const string backofficeJson = "{\"ClientId\":\"6f5c3f44-0000-0000-0000-000000000001\",\"ClientCode\":\"G01\",\"SportId\":1,\"SegmentId\":2,\"LeagueId\":3,\"IsActive\":false}";
+            var properties = new BasicProperties { Type = MessageType.ON_LEAGUE_CONFIG, CorrelationId = "cid-lc" };
+            broker.Raise(new BasicDeliverEventArgs("consumer", 1, false, "e.central", "r.uof.onleagueconfig", properties, Encoding.UTF8.GetBytes(backofficeJson)));
+
+            var message = Assert.Single(repository.LeagueConfigCalls);
+            Assert.Equal("G01", message.ClientCode);
+            Assert.Equal((1, 2, 3), (message.SportId, message.SegmentId, message.LeagueId));
+            Assert.False(message.IsActive);
+        }
+
         private sealed class FakeTranslationCache : ITranslationCache
         {
             public int PreloadCalls { get; private set; }
@@ -334,6 +383,14 @@ namespace OE.Adapter.Service.Tests
             {
                 Invocations.Add(MessageType.ON_PRICE_BOOST);
                 PriceBoostCalls.Add(message);
+            }
+
+            public List<OnLeagueConfigMessage> LeagueConfigCalls { get; } = new();
+
+            public void ProcessOnLeagueConfigMessage(IMessageBroker messageBroker, OnLeagueConfigMessage message, string correlationId)
+            {
+                Invocations.Add(MessageType.ON_LEAGUE_CONFIG);
+                LeagueConfigCalls.Add(message);
             }
         }
     }

@@ -50,6 +50,8 @@ Note `:` (code) vs `__` (env var) for the same key, and `__N__` for array indice
 | `ConnectionStrings:Trading` | SQL Server (`Trading`, read-only) | BoostedOddsCap (same secret as UOF.Client's `Custom:Trading`, `/<env>/apps/mssql/connection-string/trading`, under another key) |
 | `ConnectionStrings:Backoffice` | SQL Server (`Backoffice`, read-only, `ClientInformation` only) | BoostedOddsCap, only when `Email:Enabled` is true (the secret backoffice-final's bo-api already maps, `/<env>/apps/mssql/connection-string/backoffice`). A login that can only read that table is preferable |
 | `API:*` | Platform API base URL / keys | UOF.Client, Websocket |
+| `ConnectionStrings:Trading`, `API:PlatformAPI`, `API:APIKey` | Adapter client visibility (BO-145): Trading `ClientLeagueConfig` (read-only) and the Platform API `GET v1/clients`, the names UOF.Client uses for the API. Either address empty leaves `ClCo` as the provider sent it | Adapter |
+| `Custom:ClientVisibilityRefreshSeconds` (60), `Custom:ClientVisibilityDebounceMilliseconds` (1000), `Custom:ClientVisibilityPreloadRetryCount` (5), `Custom:ClientVisibilityPreloadRetryDelaySeconds` (10), `Custom:ClientVisibilityApiTimeoutSeconds` (15) | reload timer, coalescing of a burst of league messages, startup retries, Platform API timeout | Adapter |
 
 ## 4. Feature flags / toggles — [Verified]
 

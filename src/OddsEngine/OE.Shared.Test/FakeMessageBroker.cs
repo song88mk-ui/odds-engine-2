@@ -25,6 +25,7 @@ namespace OE.Shared.Test
         public int PublishAttempts { get; private set; }
         public bool ThrowOnDispose { get; set; }
         public bool ThrowOnPublish { get; set; }
+        public bool ThrowOnCPublish { get; set; }
         public bool IsConsuming { get; set; }
         // Runs inside Connect(), before it returns: lets a test deliver a message while the consumer is starting.
         public Action? OnConnect { get; set; }
@@ -57,7 +58,12 @@ namespace OE.Shared.Test
             => Record(payload, messageType, routingKey, correlationId);
 
         public void CPublish<T>(T payload, string messageType, string routingKey, string correlationId)
-            => CPublished.Add(new PublishedMessage(payload, messageType, routingKey, correlationId));
+        {
+            if (ThrowOnCPublish)
+                throw new InvalidOperationException("cpublish failed");
+
+            CPublished.Add(new PublishedMessage(payload, messageType, routingKey, correlationId));
+        }
 
         public void CPublish(string payload, string messageType, string routingKey, string correlationId)
             => CPublished.Add(new PublishedMessage(payload, messageType, routingKey, correlationId));

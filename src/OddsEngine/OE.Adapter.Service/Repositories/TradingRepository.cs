@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using OE.Adapter.Service.ClientVisibility;
 using OE.Adapter.Service.Telemetry;
 using OE.Shared.Constants;
 using OE.Shared.Enums;
@@ -18,6 +19,8 @@ namespace OE.Adapter.Service.Repositories
         private readonly IHelper _helper;
         private readonly ILogger<TradingRepository> _logger;
         private readonly ITranslationCache _translationCache;
+        private readonly IClientVisibility _clientVisibility;
+        private readonly ILeagueRefreshRequests _leagueRefreshRequests;
         private const ChannelType _bgProvider = ChannelType.BG;
         private readonly ActivitySource _activitySource;
 
@@ -25,11 +28,14 @@ namespace OE.Adapter.Service.Repositories
 
         #region Ctor
 
-        public TradingRepository(IHelper helper, ILogger<TradingRepository> logger, ITranslationCache translationCache, Instrumentation instrumentation)
+        public TradingRepository(IHelper helper, ILogger<TradingRepository> logger, ITranslationCache translationCache,
+            IClientVisibility clientVisibility, ILeagueRefreshRequests leagueRefreshRequests, Instrumentation instrumentation)
         {
             _helper = helper;
             _logger = logger;
             _translationCache = translationCache;
+            _clientVisibility = clientVisibility;
+            _leagueRefreshRequests = leagueRefreshRequests;
             _activitySource = instrumentation.ActivitySource;
         }
 
@@ -40,6 +46,7 @@ namespace OE.Adapter.Service.Repositories
         public void ProcessOnFixtureChangeMessage(IMessageBroker messageBroker, OnFixtureChangeMessage message, string correlationId)
         {
             EnrichFixtureTranslations(message);
+            StampClientCodes(message);
 
             PublishMessage(messageBroker, message, MessageType.ON_FIXTURE_CHANGE, correlationId);
         }
@@ -48,6 +55,7 @@ namespace OE.Adapter.Service.Repositories
         {
             EnrichFixtureTranslations(message);
             EnrichMarketTranslations(message);
+            StampClientCodes(message);
 
             PublishMessage(messageBroker, message, MessageType.ON_MARKET_CHANGE, correlationId);
         }
@@ -113,6 +121,38 @@ namespace OE.Adapter.Service.Repositories
             {
                 _logger.LogError(ex, $"{MessageType.ON_PRICE_BOOST} {JsonSerializer.Serialize(message)}");
                 throw;
+            }
+        }
+
+        // Backoffice saved a league setting (r.uof.onleagueconfig). The message only names the league: the adapter reads
+        // the saved settings again and sends the league's clients to the shard (see ClientVisibilityRefresher).
+        public void ProcessOnLeagueConfigMessage(IMessageBroker messageBroker, OnLeagueConfigMessage message, string correlationId)
+        {
+            if (message == null)
+                return;
+
+            _leagueRefreshRequests.Request(message.SportId, message.SegmentId, message.LeagueId);
+        }
+
+        // The provider sends ClCo empty (bet-genius), and nothing downstream fills it: the site, the websocket and the
+        // boosted odds cap job all read it as the clients allowed to see the league. So the adapter stamps it, onto the
+        // fixture and onto every market, from the league's saved settings: every client except the ones Backoffice
+        // restricted for it. Before the first load, or when the lists are not configured, the message is left as it came.
+        private void StampClientCodes(OnFixtureChangeMessage message)
+        {
+            var clientCodes = _clientVisibility.ClientCodesFor(message.SpId, message.SegId, message.LeId);
+            if (clientCodes == null)
+                return;
+
+            message.ClCo = clientCodes;
+
+            if (message is OnMarketChangeMessage marketMessage && marketMessage.Ma != null)
+            {
+                foreach (var market in marketMessage.Ma)
+                {
+                    if (market != null)
+                        market.ClCo = clientCodes;
+                }
             }
         }
 

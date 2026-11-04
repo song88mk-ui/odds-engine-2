@@ -141,6 +141,13 @@ namespace OE.Sportsbook.Service
                                 (msg) => _sportsbookRepository.ProcessOnPriceBoostMessage(_messageBroker, msg, correlationId)
                             );
                             break;
+                        case MessageType.ON_LEAGUE_CLIENTS_CHANGE:
+                            _logger.LogInformation("OESportsbook {MessageType}: {Payload}", messageType, payload);
+                            ProcessMessage<OnLeagueClientsChangeMessage>(
+                                payload,
+                                (msg) => _sportsbookRepository.ProcessOnLeagueClientsChangeMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
                         case MessageType.ON_DYNAMIC_TRANSLATION_CHANGE:
                             ProcessMessage<OnDeleteCacheMessage>(
                                 payload,

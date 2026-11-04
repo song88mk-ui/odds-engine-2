@@ -33,6 +33,8 @@ Defined in `OE.Shared/Messages/*` and `OE.Shared/Constants/MessageType.cs`. Full
 | `OnBetStopFixtureMessage` / `OnBetStopGlobalMessage` | `OnBetStopFixture` / `OnBetStopGlobal` | …→ Sportsbook → Websocket |
 | `OnBetSettlementMessage` | `OnBetSettlement` | Sportsbook → platform Settlement |
 | `OnPriceBoostMessage` | `OnPriceBoost` | backoffice (`r.uof.onpriceboost`) → Adapter → the fixture's Sportsbook shard (`r.oe.adapter.onpriceboost.<NN>`) → Mongo `IsBo`/`ClBo`/`ClBoOd`/`ClBoSeNa`/`ClBoSeNaTr`, read by platform-final `GetBoostedFixtures`. The JSON property names are backoffice's (`Backoffice.Shared.Models.OnPriceBoostMessage`): renaming one drops that field of every boost. `ClBoOd` is `CODE:odds\|CODE:odds`, a format platform-final splits on `\|` and `:` (BO-10) |
+| `OnLeagueConfigMessage` | `OnLeagueConfig` | backoffice (`r.uof.onleagueconfig`, published by `BackofficeRepository.SetConfigState` after a Config page save, BO-145) → Adapter: reloads which clients may see which league. The JSON property names are backoffice's (`Backoffice.Shared.OutgoingEngineMessages.OnLeagueConfigMessage`); only the league ids are used, the adapter reads the saved settings again |
+| `OnLeagueClientsChangeMessage` | `OnLeagueClientsChange` | Adapter (`r.oe.adapter.onleagueclientschange.10`) → Sportsbook shard 10 → Mongo `ClCo` of every stored fixture and market of the league. `ClientCodes` is the whole pipe-joined list, not a change to it, and an empty string means no client may see the league (BO-145) |
 | `OnInternalOddsChangeMessage` | `OnOddsChange` | Sportsbook → Websocket |
 | `OnDeleteCacheMessage` | (cache mgmt, `CacheType`) | backoffice/platform → cache consumers |
 | `OnHeartbeatMessage` | `OnHeartBeat` | KeepAlive → UOF.Client |

@@ -371,6 +371,34 @@ namespace OE.Sportsbook.Service.Repositories
             _logger.LogInformationEx($"FixtureId:{message.ProviderFixtureId} OnPriceBoost {message.ClientCode} selection {selection.SeId} boosted odds {message.BoostedOdds} ({selection.ClBoOd} -> {boost.ClBoOd})");
         }
 
+        // The clients allowed to see one league changed (OnLeagueClientsChange, from OE.Adapter.Service): stamps the new
+        // list onto the stored fixtures and markets of the league. Messages that arrive afterwards already carry it, so
+        // this is only about what is stored. Acknowledged, unlike the default connection (w=0), so that the count it logs
+        // is real. The message holds the whole list, not a change to it, so applying one twice leaves the same state.
+        public void ProcessOnLeagueClientsChangeMessage(IMessageBroker messageBroker, OnLeagueClientsChangeMessage message, string correlationId)
+        {
+            if (message == null || message.ClientCodes == null)
+            {
+                _logger.LogWarningEx($"OnLeagueClientsChange without a client list, not applied: {JsonSerializer.Serialize(message)}");
+                return;
+            }
+
+            var fixtureIds = _fixtureCollection.Find(LeagueClientsUpdate.FixturesOfLeague(message)).Project(f => f.FiId).ToList();
+
+            var fixtureCollection = _fixtureCollection.WithWriteConcern(WriteConcern.Acknowledged);
+            var marketCollection = _marketCollection.WithWriteConcern(WriteConcern.Acknowledged);
+            long fixturesChanged = 0;
+            long marketsChanged = 0;
+
+            foreach (var batch in fixtureIds.Chunk(LeagueClientsUpdate.BatchSize))
+            {
+                fixturesChanged += fixtureCollection.UpdateMany(LeagueClientsUpdate.FixtureFilter(batch), LeagueClientsUpdate.FixtureUpdate(message.ClientCodes)).ModifiedCount;
+                marketsChanged += marketCollection.UpdateMany(LeagueClientsUpdate.MarketFilter(batch), LeagueClientsUpdate.MarketUpdate(message.ClientCodes)).ModifiedCount;
+            }
+
+            _logger.LogInformationEx($"League {message.SportId}:{message.SegmentId}:{message.LeagueId} OnLeagueClientsChange: {fixtureIds.Count} fixtures found, {fixturesChanged} fixtures and {marketsChanged} markets changed, clients \"{message.ClientCodes}\"");
+        }
+
         public void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message)
         {
             if (message.PurgeAll)

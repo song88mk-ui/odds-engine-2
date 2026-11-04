@@ -27,7 +27,8 @@ src/OddsEngine/               OddsEngine.sln + all projects
                               Helper (sharding), message DTOs, Mongo models. Cross-repo
                               wire contract - do not change casually.
   OE.Adapter.Service/         Ingests feed messages (r.bg.receiver.*, r.uof.#), routes each
-                              fixture to a Sportsbook shard via Helper.GetInstanceName
+                              fixture to a Sportsbook shard via Helper.GetInstanceName, and
+                              stamps ClCo (the clients allowed to see the league)
   OE.Sportsbook.Service/      Catalogue writer: MongoDB upserts + publishes r.oe.sb.engine.*
   OE.Websocket.Service/       SignalR client: consumes r.oe.sb.engine.* / r.bet.* /
                               r.wallet.* and calls Publish* methods on the /platform hub
@@ -294,7 +295,9 @@ Minimal real-time odds path:
 1. Infrastructure: RabbitMQ + MongoDB running, config overridden to point at them.
 2. `OE.Adapter.Service` - consumes feed messages from `e.central`
    (routing keys `r.bg.receiver.onbetstopfixture | r.uof.# | r.oe.ontranslationchange`)
-   and republishes as `r.oe.adapter.<type>.<NN>`.
+   and republishes as `r.oe.adapter.<type>.<NN>`. With `ConnectionStrings:Trading`, `API:PlatformAPI` and
+   `API:APIKey` set it also stamps `ClCo` on every fixture and market (Backoffice's saved league restrictions
+   and the Platform client list); without them `ClCo` stays as the provider sent it.
 3. `OE.Sportsbook.Service` - persists the catalogue and publishes `r.oe.sb.engine.*`.
 4. `OE.Websocket.Service` - consumes `r.oe.sb.engine.*` and pushes to the SignalR hub at
    `Custom:WebSocketAPI` (committed dev value: `http://localhost:3001/platform`).

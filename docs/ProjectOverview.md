@@ -26,7 +26,18 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Handles** (`Worker.cs:98-144`): `ON_FIXTURE_CHANGE`, `ON_MARKET_CHANGE`,
   `ON_MARKET_SETTLEMENT`, `ON_BET_SETTLEMENT`, `ON_BET_STOP_GLOBAL`, `ON_MARKET_CANCEL`,
   `ON_BET_STOP_FIXTURE`, `ON_PRICE_BOOST` (backoffice's `r.uof.onpriceboost`, forwarded as it is to the
-  fixture's shard, `r.oe.adapter.onpriceboost.<NN>`).
+  fixture's shard, `r.oe.adapter.onpriceboost.<NN>`), `ON_LEAGUE_CONFIG` (backoffice's `r.uof.onleagueconfig`,
+  BO-145: reloads the clients of the league, see **Client visibility**).
+- **Client visibility (BO-145):** stamps `ClCo` onto every `OnFixtureChange` and `OnMarketChange` (the fixture and
+  each market) with the clients allowed to see the league: every client of the Platform API list (`GET v1/clients`,
+  the list the Config page shows) minus the clients Backoffice restricted for the league
+  (`Trading.dbo.ClientLeagueConfig`, `IsActive = 0`), pipe-joined and ordered (`ClientVisibility/`). The lists load
+  before the first message is consumed (retried, then the service restarts), reload every
+  `Custom:ClientVisibilityRefreshSeconds` (60) and as soon as an `ON_LEAGUE_CONFIG` names a league, and a failed or
+  empty reload keeps the lists in use. Each league whose list changed, or that was named, is sent to shard 10
+  (`r.oe.adapter.onleagueclientschange.10`), which stamps it onto the stored fixtures and markets. With
+  `ConnectionStrings:Trading` or `API:PlatformAPI` empty nothing is stamped and `ClCo` stays as the provider sent it
+  (empty).
 - **Publishes:** `r.oe.adapter.<type>.<NN>` where `<NN>` = `Helper.GetInstanceName(ProviderFixtureId)`
   (`Repositories/TradingRepository.cs:58,121`); global bet-stop → `...on_bet_stop_global.10`
   (`:75`); errors → `r.error.oe.adapter` (`Worker.cs:210`).
@@ -53,7 +64,8 @@ Worker → Repository → (broker | DB) shape. All findings [Verified] unless ta
 - **Startup:** creates Mongo indexes (`MongoIndexBootstrapper.CreateIndexesAsync`,
   `Program.cs:21-25`), loads global bet-stop state from `BettingStatus` (`Worker.cs:68`).
 - **Handles** (`Worker.cs:100-144`): fixture/market change, market & bet settlement,
-  bet-stop global/fixture, `ON_PRICE_BOOST` (a client's price boost, see below) and
+  bet-stop global/fixture, `ON_PRICE_BOOST` (a client's price boost, see below), `ON_LEAGUE_CLIENTS_CHANGE` (BO-145:
+  the clients allowed to see a league, stamped onto its stored fixtures and markets as `ClCo`) and
   `ON_DYNAMIC_TRANSLATION_CHANGE` (cache purge).
 - **Writes (MongoDB `Sportsbook`):** Fixture, Market, Selection, BettingStatus — via unordered
   `BulkWrite` (histogram `bulkwrite.duration`). The price boost fields (`IsBo`, `ClBo`, `ClBoOd`,

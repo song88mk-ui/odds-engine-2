@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OE.Adapter.Service.ClientVisibility;
 using OE.Adapter.Service.Repositories;
 using OE.Adapter.Service.Telemetry;
 using OE.Shared.Constants;
@@ -27,6 +28,7 @@ namespace OE.Adapter.Service
         private readonly IMessageBroker _messageBroker;
         private readonly ITradingRepository _tradingRepository;
         private readonly ITranslationCache _translationCache;
+        private readonly IClientVisibility _clientVisibility;
         private readonly IConfiguration _configuration;
 
         // Preload must succeed before consuming starts (messages would otherwise flow through
@@ -46,12 +48,13 @@ namespace OE.Adapter.Service
 
         #region Ctor
 
-        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, ITranslationCache translationCache, IConfiguration configuration, Instrumentation instrumentation)
+        public Worker(ILogger<Worker> logger, IMessageBroker messageBroker, ITradingRepository tradingRepository, ITranslationCache translationCache, IClientVisibility clientVisibility, IConfiguration configuration, Instrumentation instrumentation)
         {
             _logger = logger;
             _messageBroker = messageBroker;
             _tradingRepository = tradingRepository;
             _translationCache = translationCache;
+            _clientVisibility = clientVisibility;
             _configuration = configuration;
             _processedMessagesCounter = instrumentation.ProcessedMessagesCounter;
             _activitySource = instrumentation.ActivitySource;
@@ -78,6 +81,9 @@ namespace OE.Adapter.Service
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await PreloadTranslationCache(stoppingToken);
+
+            // Messages are stamped with the clients of their league, so the lists load before the first one is consumed
+            await _clientVisibility.PreloadAsync(stoppingToken);
 
             try
             {
@@ -191,6 +197,13 @@ namespace OE.Adapter.Service
                             ProcessMessage<OnPriceBoostMessage>(
                                 payload,
                                 (msg) => _tradingRepository.ProcessOnPriceBoostMessage(_messageBroker, msg, correlationId)
+                            );
+                            break;
+                        case MessageType.ON_LEAGUE_CONFIG:
+                            _logger.LogInformationEx($"OEAdapter {messageType}: {payload}");
+                            ProcessMessage<OnLeagueConfigMessage>(
+                                payload,
+                                (msg) => _tradingRepository.ProcessOnLeagueConfigMessage(_messageBroker, msg, correlationId)
                             );
                             break;
                         case MessageType.ON_TRANSLATION_CHANGE:

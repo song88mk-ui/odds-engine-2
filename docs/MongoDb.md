@@ -76,6 +76,11 @@ histogram. Writes are **`UpdateOneModel` upserts**:
 > lines must stay commented out: a fixture change carries no boost, so enabling them would erase the
 > boosts on every fixture update. The boost writes use an acknowledged write concern (the default
 > connection is `w=0`).
+>
+> **`ClCo` (Fixture and Market) is stamped by `OE.Adapter.Service` (BO-145).** Every fixture and market message carries
+> the clients allowed to see the league, so a document holds it after its next change, and `OnLeagueClientsChange`
+> rewrites it on the stored documents of a league when its restrictions change (acknowledged `UpdateMany`, reached
+> through the fixtures' league ids because neither collection has a league index).
 
 ## Read patterns — [Verified]
 | Where | Filter | Index used |
@@ -87,6 +92,8 @@ histogram. Writes are **`UpdateOneModel` upserts**:
 | `ProcessOnPriceBoostMessage`, fixture | `_id ∈ {"{ChTyId}:{PrFiId}"}` for each `ChannelType` (`PrFiId` has no index, so it is not used) | `_id` ✅ |
 | `ProcessOnPriceBoostMessage`, selection | `FiId == X && MaTeId == Y && SeSp == Z` | `idx_fiid_mastid_mateid` (prefix `FiId`) ✅ |
 | `ProcessOnPriceBoostMessage`, other boosted selections | `MaId == X` (market) or `FiId == X` (fixture), `ClBoOd` not empty, `_id != the selection`; projection `ClBoOd` | `idx_maid` / `idx_fiid_mastid_mateid` (prefix `FiId`) ✅ |
+| `ProcessOnLeagueClientsChangeMessage`, fixtures of the league | `SpId == X && SegId == Y && LeId == Z`, projection `FiId` | **none: scans `Fixture`** (the small collection; no league index) ⚠️ |
+| `ProcessOnLeagueClientsChangeMessage`, write | `UpdateMany` of `ClCo` on `Fixture` and on `Market` by `FiId ∈ {batch of 500}` (acknowledged) | `idx_fiid` / `idx_fiid_mastid_mateid` (prefix `FiId`) ✅ |
 | `GetActiveMarketIds` (`:876`) | `FiId == X && MaStId ∈ {Active,Suspended}` + **projection** (`MaId,PrFiId` → `MarketStatusProjection`) | `idx_fiid_mastid_mateid` ✅ |
 | `SetBetStopStatus` (`:869`) | `BeSo == "betstop"` | `_id` ✅ |
 

@@ -3,8 +3,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OE.Adapter.Service.ClientVisibility;
 using OE.Adapter.Service.Repositories;
 using OE.Adapter.Service.Telemetry;
+using OE.Shared.Data.Trading;
 using OE.Shared.Data.Translation;
 using OE.Shared.Utilities;
 using Serilog;
@@ -42,6 +44,20 @@ namespace OE.Adapter.Service
                             configuration.GetConnectionString("Translation"),
                             sqlOptions => sqlOptions.CommandTimeout(dbContextTimeout)
                         ));
+
+                    // Trading DB (ClientLeagueConfig) - read-only source of the leagues Backoffice restricted for a client,
+                    // worked into the ClCo stamped on every fixture and market. Skipped when no connection string is set.
+                    services.AddDbContextPool<TradingContext>(options =>
+                        options.UseSqlServer(
+                            configuration.GetConnectionString("Trading"),
+                            sqlOptions => sqlOptions.CommandTimeout(dbContextTimeout)
+                        ));
+
+                    services.AddSingleton<IClientVisibilitySource, ClientVisibilitySource>();
+                    services.AddSingleton<IClientVisibility, ClientVisibilityCache>();
+                    services.AddSingleton<ClientVisibilityRefresher>();
+                    services.AddSingleton<ILeagueRefreshRequests>(provider => provider.GetRequiredService<ClientVisibilityRefresher>());
+                    services.AddHostedService(provider => provider.GetRequiredService<ClientVisibilityRefresher>());
 
                     services.AddSingleton<IHelper, Helper>();
                     services.AddSingleton<IMessageBroker, MessageBroker>();

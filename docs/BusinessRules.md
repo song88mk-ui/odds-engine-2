@@ -43,6 +43,10 @@ that are **currently disabled** in code (intent uncertain — see [Unknowns.md](
   Backoffice sets a boost with `OnPriceBoost` (`r.uof.onpriceboost`); `OE.Sportsbook.Service` stamps it onto
   the documents (`PriceBoostMerger`): `ClBoOd` is `CODE:odds|CODE:odds` per selection, and a market's or
   fixture's `IsBo`/`ClBo` follow the boosts of the selections under it.
+- **BR-10a [Verified]** **A league is visible to every client unless Backoffice restricted it for that client (BO-139).**
+  `OE.Adapter.Service` stamps the clients allowed to see the league, pipe-joined, into `ClCo` of every fixture and
+  market (`ClientVisibilitySnapshot`): all clients of the Platform API list minus the restricted ones. An empty `ClCo`
+  means no client may see it, which is how `OE.BoostedOddsCap` reads it (`OddsChangeEvaluator`).
 - **BR-11 [Verified]** **Odds change is the highest-frequency event**; selections toggle `IsAc`
   rather than being deleted when unavailable.
 

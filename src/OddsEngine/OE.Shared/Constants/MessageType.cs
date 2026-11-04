@@ -24,6 +24,12 @@
         // forwards it to the OE.Sportsbook.Service shard of the fixture, which stamps the boost onto
         // the fixture, market and selection documents (see OnPriceBoostMessage).
         public const string ON_PRICE_BOOST = "OnPriceBoost";
+        // A league setting saved in Backoffice's Config page (r.uof.onleagueconfig, see OnLeagueConfigMessage). It makes
+        // OE.Adapter.Service reload which clients may see which league.
+        public const string ON_LEAGUE_CONFIG = "OnLeagueConfig";
+        // The clients allowed to see one league, sent by OE.Adapter.Service to the OE.Sportsbook.Service shard that stamps
+        // them onto the stored fixtures and markets of the league (see OnLeagueClientsChangeMessage).
+        public const string ON_LEAGUE_CLIENTS_CHANGE = "OnLeagueClientsChange";
 
         // Internal
         public const string ON_ODDS_CHANGE = "OnOddsChange";

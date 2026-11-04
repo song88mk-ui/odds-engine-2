@@ -13,11 +13,13 @@ namespace OE.Shared.Data.Trading
         {
             modelBuilder.Entity<ClientOddsFeedConfiguration>().HasKey(k => new { k.ClientId, k.SportId });
             modelBuilder.Entity<ClientOddsFeedLiveFixture>().HasKey(k => new { k.ClientId, k.SportId, k.FixtureSpecifier });
+            modelBuilder.Entity<ClientLeagueConfig>().HasNoKey().ToTable("ClientLeagueConfig");
 
         }
 
         public DbSet<ClientOddsFeedConfiguration> ClientOddsFeedConfiguration { get; set; }
         public DbSet<ClientOddsFeedLiveFixture> ClientOddsFeedLiveFixture { get; set; }
+        public DbSet<ClientLeagueConfig> ClientLeagueConfig { get; set; }
 
     }
 }

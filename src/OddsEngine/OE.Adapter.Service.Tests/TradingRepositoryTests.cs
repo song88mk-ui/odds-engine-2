@@ -24,6 +24,8 @@ namespace OE.Adapter.Service.Tests
         private readonly FakeMessageBroker _broker = new();
         private readonly TranslationCache _cache;
         private readonly TradingRepository _repository;
+        private readonly FakeClientVisibility _clientVisibility = new();
+        private readonly FakeLeagueRefreshRequests _leagueRefreshRequests = new();
         private readonly string _instanceName;
 
         public TradingRepositoryTests()
@@ -49,6 +51,8 @@ namespace OE.Adapter.Service.Tests
                 new Helper(),
                 NullLogger<TradingRepository>.Instance,
                 _cache,
+                _clientVisibility,
+                _leagueRefreshRequests,
                 new Instrumentation());
 
             _instanceName = new Helper().GetInstanceName(PROVIDER_FIXTURE_ID);
@@ -379,7 +383,7 @@ namespace OE.Adapter.Service.Tests
             var cache = new TranslationCache(NullLogger<TranslationCache>.Instance, provider.GetRequiredService<IServiceScopeFactory>());
             cache.Preload();
 
-            var repository = new TradingRepository(new Helper(), NullLogger<TradingRepository>.Instance, cache, new Instrumentation());
+            var repository = new TradingRepository(new Helper(), NullLogger<TradingRepository>.Instance, cache, new FakeClientVisibility(), new FakeLeagueRefreshRequests(), new Instrumentation());
 
             var message = new OnMarketChangeMessage
             {

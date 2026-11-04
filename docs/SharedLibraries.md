@@ -64,7 +64,7 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 - **BetGenius provider:** `OnProcessMessage`, `OnFixtureClose`, `OnMarketClose`, `OnMatchSummary`, `OnOtherMessage`.
 - **Adapter (primary trading events):** `OnFixtureChange`, `OnMarketChange`, `OnMarketSettlement`,
   `OnMarketCancel`, `OnBetStopFixture`, `OnBetStopGlobal`, `OnHeartBeat`, `OnDynamicTranslationChange`,
-  `OnPriceBoost`.
+  `OnPriceBoost`, `OnLeagueConfig`, `OnLeagueClientsChange` (BO-145).
 - **Internal sportsbook:** `OnOddsChange`, `OnBetSettlement`, `OnBetCancellation`.
 
 ### `Messages/OutgoingAdapterMessages/`
@@ -79,6 +79,8 @@ compound `idx_fiid_mastid_mateid` on Market & Selection; `idx_maid` on Selection
 | `OnBetStopGlobalMessage` | ON_BET_STOP_GLOBAL | `IsBetStop` |
 | `OnBetSettlementMessage` | ON_BET_SETTLEMENT | `Selections[]` with `Result`, `VoidFactor`, `DeadHeatFactor` (full property names, not abbreviated) |
 | `OnPriceBoostMessage` | ON_PRICE_BOOST | one client's boost on one selection: `ClientCode`, `ProviderFixtureId`, `MarketTemplateId`, `SelectionSpecifier`, `BoostedOdds` (0 removes it), `IsBoosted`, names and translations. Not derived from the base class: it is backoffice's JSON, full property names |
+| `OnLeagueConfigMessage` | ON_LEAGUE_CONFIG | backoffice's league setting change: `ClientId`, `ClientCode`, `SportId`, `SegmentId`, `LeagueId`, `IsActive`. Only the ids are used. Backoffice's JSON, so a rename drops the field |
+| `OnLeagueClientsChangeMessage` | ON_LEAGUE_CLIENTS_CHANGE | the clients allowed to see one league: `SportId`, `SegmentId`, `LeagueId`, `ClientCodes` (pipe-joined, the `ClCo` format, empty = nobody) |
 
 ### `Messages/OutgoingSportsbookMessages/`
 | Message | Maps to | Notes |

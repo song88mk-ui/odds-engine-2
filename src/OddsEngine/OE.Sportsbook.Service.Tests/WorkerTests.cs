@@ -94,6 +94,7 @@ namespace OE.Sportsbook.Service.Tests
         [InlineData(MessageType.ON_BET_STOP_GLOBAL)]
         [InlineData(MessageType.ON_BET_STOP_FIXTURE)]
         [InlineData(MessageType.ON_PRICE_BOOST)]
+        [InlineData(MessageType.ON_LEAGUE_CLIENTS_CHANGE)]
         public async Task MessageReceived_DispatchesEachKnownTypeToTheMatchingHandler(string messageType)
         {
             var broker = new FakeMessageBroker();
@@ -314,6 +315,9 @@ namespace OE.Sportsbook.Service.Tests
                 Invocations.Add(MessageType.ON_PRICE_BOOST);
                 PriceBoostCalls.Add(message);
             }
+
+            public void ProcessOnLeagueClientsChangeMessage(IMessageBroker messageBroker, OnLeagueClientsChangeMessage message, string correlationId)
+                => Invocations.Add(MessageType.ON_LEAGUE_CLIENTS_CHANGE);
 
             public void ProcessCacheInvalidationMessage(OnDeleteCacheMessage message)
             {
